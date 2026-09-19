@@ -33,14 +33,14 @@ The two supplied images are preserved at the repository root and copied into the
 5. In Apps Script **Project Settings → Script properties**, create `APPS_SCRIPT_SECRET` using a cryptographically random value of at least 32 bytes.
 6. Deploy as a Web App, execute as the owner, and copy its deployment URL. See `apps-script/README.md`.
 
-The Apps Script endpoint rejects every request without the shared secret. Public browsers communicate with Cloudflare only. Order IDs are generated server-side as `ZEV-YYMMDD-0001`; writes and stock transitions use `LockService`.
+The Apps Script endpoint rejects every request without the shared secret. Public browsers communicate with Vercel Functions only. Order IDs are generated server-side as `ZEV-YYMMDD-0001`; writes and stock transitions use `LockService`.
 
-## 4. Configure Cloudflare Pages
+## 4. Configure Vercel
 
-Create a Pages project from this repository with:
+Create a Vercel project from this repository with:
 
 - Build command: `npm run build`
-- Build output: `dist`
+- Output directory: `dist`
 - Node version: 20 or newer
 
 Add these encrypted environment variables in **Settings → Environment variables** for Production and Preview:
@@ -65,7 +65,7 @@ $hash = [Security.Cryptography.SHA256]::HashData($bytes)
 [Convert]::ToBase64String($hash).TrimEnd('=').Replace('+','-').Replace('/','_')
 ```
 
-Never prefix a secret with `VITE_`. The functions set an HttpOnly, Secure, SameSite=Strict, eight-hour signed cookie. Mutations validate Origin. Admin API actions also validate the server session before Apps Script is called.
+Also set `VITE_API_BASE=/api` and `VITE_DEMO_MODE=false`. Never prefix a server secret with `VITE_`. The Vercel Functions set an HttpOnly, Secure, SameSite=Strict, eight-hour signed cookie. Mutations validate Origin. Admin API actions also validate the server session before Apps Script is called.
 
 ## 5. Configure Cloudinary
 
