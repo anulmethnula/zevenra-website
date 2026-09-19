@@ -1,0 +1,1 @@
+import {useEffect} from 'react'; export function Seo({title,description}:{title:string;description?:string}){useEffect(()=>{document.title=`${title} — ZEVENRA`;const meta=document.querySelector('meta[name="description"]');meta?.setAttribute('content',description||'Selected beyond borders. Curated for here.')},[title,description]);return null}

@@ -1,0 +1,2 @@
+export const siteConfig={name:'ZEVENRA',tagline:'THE ART OF BECOMING.',description:'Selected beyond borders. Curated for here.',currency:'LKR',locale:'en-LK',whatsapp:'94770000000',announcement:'ISLANDWIDE DELIVERY · CURATED IN SRI LANKA',deliveryFee:450,freeDeliveryThreshold:15000,bank:{bank:'Configured after launch',accountName:'Visible when configured',accountNumber:'—',branch:'—'},social:{instagram:'#',tiktok:'#'}};
+export const money=(value:number)=>new Intl.NumberFormat('en-LK',{style:'currency',currency:'LKR',maximumFractionDigits:0}).format(value);

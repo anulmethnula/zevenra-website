@@ -1,0 +1,1 @@
+import {Link,Outlet} from 'react-router-dom';export function CheckoutLayout(){return <div className="min-h-dvh bg-paper"><header className="border-b hairline"><div className="container flex h-20 items-center justify-center"><Link to="/"><img src="/brand/logo.svg" alt="ZEVENRA" className="w-52"/></Link></div></header><Outlet/></div>}
