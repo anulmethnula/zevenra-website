@@ -1,0 +1,1 @@
+import{callScript,json,type Env}from'../_shared';export const onRequestGet:PagesFunction<Env>=async({env,params})=>{try{const data=await callScript(env,'getProduct',{slug:String(params.slug)});return data?json(data,200,{'Cache-Control':'public, max-age=60'}):json({error:'Not found'},404)}catch{return json({error:'Product temporarily unavailable'},503)}};
