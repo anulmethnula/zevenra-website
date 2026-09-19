@@ -14,3 +14,5 @@ export type CartItem={productId:string;variantId:string;slug:string;name:string;
 export type PaymentMethod='cod'|'bank';
 export type CheckoutData={customerName:string;phone:string;whatsapp?:string;email?:string;address1:string;address2?:string;city:string;district:string;postalCode?:string;deliveryNotes?:string;paymentMethod:PaymentMethod;items:CartItem[]};
 export type Order={orderId:string;createdAt:string;customerName:string;phone:string;city:string;district:string;paymentMethod:PaymentMethod;subtotal:number;deliveryFee:number;total:number;orderStatus:string;paymentStatus:string;items:CartItem[]};
+export type DeliveryRate={id:string;district:string;fee:number;active:boolean};
+export type DashboardData={ordersToday:number;pending:number;confirmed:number;packed:number;shipped:number;delivered:number;cancelled:number;revenue:number;recent:Order[]};
