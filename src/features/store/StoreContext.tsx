@@ -12,7 +12,7 @@ type PublicPayload={products:unknown[];categories:unknown[];collections:unknown[
 
 const demo=import.meta.env.VITE_DEMO_MODE==='true',adminRoute=location.pathname.startsWith('/admin'),storageKey='zevenra-admin-data-v2',Context=createContext<Value|null>(null);
 const emptyAdmin:AdminState={dashboard:null,orders:[],deliveryRates:[]};
-const defaultHero={...initialStoreData.settings.hero,videoEnabled:true,desktopVideo:'/media/hero-desktop.mp4',mobileVideo:'/media/hero-desktop.mp4'};
+const defaultHero={...initialStoreData.settings.hero,videoEnabled:true,desktopVideo:'/media/hero-trim-v1.mp4',mobileVideo:'/media/hero-trim-v1.mp4'};
 const bool=(value:unknown)=>value===true||String(value).toLowerCase()==='true';
 const number=(value:unknown)=>Number(value)||0;
 const json=<T,>(value:unknown,fallback:T):T=>{if(Array.isArray(value)||value&&typeof value==='object')return value as T;try{return JSON.parse(String(value||'')) as T}catch{return fallback}};
