@@ -147,3 +147,4 @@ textarea.field{padding-block:1rem}
 @media(max-width:899px){.about-hero__image::after{background:linear-gradient(180deg,rgba(241,235,225,.22),rgba(241,235,225,.94) 66%,#f1ebe1)}.about-hero__image img{object-position:67% center}.about-hero__copy{justify-content:flex-end;width:100%;padding-top:160px}.about-hero__copy h1{max-width:720px}.about-story__mosaic{min-height:650px}.about-future{display:flex}.about-future__mark{display:none}}
 @media(max-width:560px){.about-hero__copy{padding-bottom:52px}.about-hero__copy h1{font-size:clamp(3rem,14vw,4.4rem)}.about-hero__tagline{max-width:280px;line-height:1.8}.about-story__mosaic{min-height:600px;grid-template-columns:38% 62%}.about-story__tile--place img{width:280%}.about-signature>span{display:none}.about-future__copy h2{font-size:3.7rem}}
 .about-hero__image>span{display:none!important}
+.about-page .about-future{display:none!important}
