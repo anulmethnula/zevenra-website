@@ -5,7 +5,7 @@ import {ArrowRight,ArrowUpRight,ChevronDown,Instagram,Menu,MessageCircle,Package
 import {CartDrawer} from '../components/CartDrawer';
 import {useCart} from '../features/cart/CartContext';
 import {navigationHref,useStore} from '../features/store/StoreContext';
-import {getNavigationCategories,type NavigationCategory} from '../services/navigation';
+import {getNavigationCategories} from '../services/navigation';
 import {useCustomerAuth} from '../features/account/CustomerAuthContext';
 import type {Category} from '../types';
 
