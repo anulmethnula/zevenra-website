@@ -6,6 +6,7 @@ import {
   callScript,
   customerCookie,
   customerLoginSchema,
+  customerProfileSchema,
   customerRegisterSchema,
   hashCustomerPassword,
   json,
@@ -91,11 +92,28 @@ const ROUTES: Record<string, RouteHandler> = {
     },
   },
   profile: {
-    methods: ['GET'],
+    methods: ['GET', 'POST'],
     async run(req: VercelRequest, res: VercelResponse) {
-      const identity = readCustomerSession(req);
+      const config = appsScriptEnv();
+      const identity = readCustomerSession(req, req.method === 'POST');
       if (!identity) return json(res, {user: null});
-      const customer = await callScript(appsScriptEnv(), 'getCustomerById', {id: identity.id}) as CustomerRecord | null;
+      if (req.method === 'POST') {
+        if (!validOrigin(req, config)) return json(res, {error: 'Invalid request origin'}, 403);
+        const input = customerProfileSchema.parse(body(req));
+        const customer = await callScript(config, 'updateCustomerProfile', {
+          id: identity.id,
+          firstName: input.firstName,
+          lastName: input.lastName,
+          mobile: input.mobile || '',
+          address1: input.address1 || '',
+          address2: input.address2 || '',
+          city: input.city || '',
+          district: input.district || '',
+          postalCode: input.postalCode || '',
+        }) as CustomerRecord;
+        return json(res, {user: safeCustomer(customer)});
+      }
+      const customer = await callScript(config, 'getCustomerById', {id: identity.id}) as CustomerRecord | null;
       if (!customer || customer.status !== 'active') return json(res, {user: null});
       return json(res, {user: safeCustomer(customer)});
     },
@@ -164,6 +182,11 @@ function safeCustomer(customer: CustomerRecord) {
     lastName: customer.lastName,
     email: customer.email,
     mobile: customer.mobile || '',
+    address1: customer.address1 || '',
+    address2: customer.address2 || '',
+    city: customer.city || '',
+    district: customer.district || '',
+    postalCode: customer.postalCode || '',
   };
 }
 
