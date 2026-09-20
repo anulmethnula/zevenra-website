@@ -23,6 +23,9 @@ type RouteHandler = {
   run: (req: VercelRequest, res: VercelResponse) => Promise<VercelResponse>;
 };
 
+const loginAttempts=new Map<string,{count:number;reset:number}>(),LOGIN_WINDOW=15*60*1000,LOGIN_LIMIT=10;
+function loginLimited(key:string){const now=Date.now(),entry=loginAttempts.get(key);if(!entry||entry.reset<=now){loginAttempts.set(key,{count:1,reset:now+LOGIN_WINDOW});return false}entry.count+=1;return entry.count>LOGIN_LIMIT}
+
 const ROUTES: Record<string, RouteHandler> = {
   register: {
     methods: ['POST'],
@@ -56,6 +59,8 @@ const ROUTES: Record<string, RouteHandler> = {
     async run(req: VercelRequest, res: VercelResponse) {
       const config = appsScriptEnv();
       if (!validOrigin(req, config)) return json(res, {error: 'Invalid request origin'}, 403);
+      const ip=String(req.headers['x-forwarded-for']||req.socket.remoteAddress||'unknown').split(',')[0].trim();
+      if(loginLimited(ip))return json(res,{error:'Too many sign-in attempts. Please try again later.'},429);
       const input = customerLoginSchema.parse(body(req));
       const customer = await callScript(config, 'getCustomerByEmail', {email: input.email}) as CustomerRecord | null;
       let valid = false;
@@ -69,6 +74,7 @@ const ROUTES: Record<string, RouteHandler> = {
       const secret = process.env.CUSTOMER_SESSION_SECRET;
       if (!secret) throw new Error('CUSTOMER_CONFIG');
       res.setHeader('Set-Cookie', customerCookie(makeCustomerSession(secret, {id: customer.id, email: customer.email})));
+      loginAttempts.delete(ip);
       return json(res, {user: safeCustomer(customer)});
     },
   },
