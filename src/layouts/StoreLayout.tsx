@@ -33,7 +33,7 @@ function Footer(){
  const{data}=useStore(),settings=data.settings;
  const instagram=validExternalUrl(settings.instagram||''),tiktok=validExternalUrl(settings.tiktok||''),whatsapp=whatsappUrl(settings.whatsapp||'');
  const topCategories=data.categories.filter(category=>category.active&&!category.parentId).sort((a,b)=>a.sortOrder-b.sortOrder);
- const supportContent=<><MessageCircle/><span><b>WhatsApp support</b><small>Need help before ordering? Talk to us.</small></span></>;
+ const supportContent=<><MessageCircle/><span><b>{whatsapp?'WhatsApp support':'Customer care'}</b><small>{whatsapp?'Need help before ordering? Talk to us.':'Need help before ordering? Visit our contact page.'}</small></span></>;
  return <>
   <section className="footer-assurances" aria-label="Shopping assurances"><div className="container">
    <div><Truck/><span><b>Islandwide delivery</b><small>Delivery across Sri Lanka.</small></span></div>
