@@ -9,12 +9,14 @@ function logMigration_(action,description){const ss=SpreadsheetApp.getActive(),s
 function seedSettings_(){const sh=sheet_('SiteSettings');if(sh.getLastRow()>1)return;[['announcement','Islandwide Delivery'],['deliveryFlatFee','450'],['freeDeliveryThreshold','15000'],['deliveryEnabled','true'],['codEnabled','true'],['bankTransferEnabled','true'],['whatsapp',''],['bankName',''],['bankAccountName',''],['bankAccountNumber',''],['bankBranch','']].forEach(r=>sh.appendRow(r))}
 function seedSampleCatalog_(){
  const now=new Date().toISOString(),categories=read_('Categories');
- let women=categories.find(c=>String(c.slug).toLowerCase()==='women'&&!String(c.parentId||''));
+ let women=categories.find(c=>!String(c.parentId||'')&&(String(c.slug).toLowerCase()==='women'||String(c.name).trim().toLowerCase()==='women'));
  if(!women){
   women={id:'sample-cat-women',name:'WOMEN',slug:'women',description:'Sample main category for testing. Edit or remove later.',imageUrl:'/brand/about-hero.webp',mobileImageUrl:'/brand/about-hero.webp',videoUrl:'',active:true,featured:true,showInNavigation:true,showOnHomepage:true,parentId:'',sortOrder:10};
   upsert_('Categories','id',women);
  }else{
-  patch_('Categories','id',women.id,{active:true,showInNavigation:true});
+  const slugTaken=categories.some(c=>String(c.id)!==String(women.id)&&String(c.slug).toLowerCase()==='women');
+  patch_('Categories','id',women.id,{name:'WOMEN',slug:slugTaken?women.slug:'women',active:true,showInNavigation:true});
+  women=Object.assign({},women,{name:'WOMEN',slug:slugTaken?women.slug:'women',active:true,showInNavigation:true});
  }
  const cropExisting=read_('Categories').find(c=>String(c.slug).toLowerCase()==='crop-tops'&&String(c.parentId)===String(women.id));
  const pantsExisting=read_('Categories').find(c=>String(c.slug).toLowerCase()==='pants'&&String(c.parentId)===String(women.id));
@@ -44,7 +46,7 @@ function seedSampleCatalog_(){
 function clearSampleCatalog_(){
  const sampleProducts=read_('Products').filter(p=>String(p.id).indexOf('sample-product-')===0);
  sampleProducts.forEach(p=>{remove_('Variants','productId',p.id);remove_('ProductCollections','productId',p.id);remove_('Products','id',p.id)});
- ['sample-size-women-tops','sample-size-women-pants'].forEach(id=>remove_('SizeCharts','id',id));
+ ['sample-size-women-tops','sample-size-women-pants'].forEach(id=>{if(!read_('Products').some(product=>String(product.id).indexOf('sample-product-')!==0&&String(product.sizeChartId)===id))remove_('SizeCharts','id',id)});
  remove_('Navigation','id','sample-nav-women');
  ['sample-cat-crop-tops','sample-cat-pants'].forEach(id=>remove_('Categories','id',id));
  const sampleWomen=read_('Categories').find(c=>String(c.id)==='sample-cat-women');
