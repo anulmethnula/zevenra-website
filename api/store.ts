@@ -1,4 +1,20 @@
 import type {VercelRequest,VercelResponse} from '@vercel/node';
 import{appsScriptEnv,callScript,json,methodNotAllowed}from'./_shared.js';
 
-export default async function handler(req:VercelRequest,res:VercelResponse){if(req.method!=='GET')return methodNotAllowed(res,['GET']);try{const config=appsScriptEnv();const[products,categories,collections,sizeCharts,navigation,homepageSections,settings]=await Promise.all([callScript(config,'listPublishedProducts',{}),callScript(config,'listCategories',{}),callScript(config,'listCollections',{}),callScript(config,'listSizeCharts',{}),callScript(config,'listNavigation',{}),callScript(config,'listHomepageSections',{}),callScript(config,'getSettings',{})]);return json(res,{products,categories,collections,sizeCharts,navigation,homepageSections,settings},200,{'Cache-Control':'public, max-age=30, stale-while-revalidate=120'})}catch{return json(res,{error:'Store data temporarily unavailable'},503)}}
+export default async function handler(req:VercelRequest,res:VercelResponse){
+ if(req.method!=='GET')return methodNotAllowed(res,['GET']);
+ try{
+  const config=appsScriptEnv();
+  const[products,categories,collections,sizeCharts,navigation,homepageSections,settings,deliveryRates]=await Promise.all([
+   callScript(config,'listPublishedProducts',{}),
+   callScript(config,'listCategories',{}),
+   callScript(config,'listCollections',{}),
+   callScript(config,'listSizeCharts',{}),
+   callScript(config,'listNavigation',{}),
+   callScript(config,'listHomepageSections',{}),
+   callScript(config,'getSettings',{}),
+   callScript(config,'listDeliveryRates',{})
+  ]);
+  return json(res,{products,categories,collections,sizeCharts,navigation,homepageSections,settings,deliveryRates},200,{'Cache-Control':'public, max-age=30, stale-while-revalidate=120'});
+ }catch{return json(res,{error:'Store data temporarily unavailable'},503)}
+}
