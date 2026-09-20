@@ -1,0 +1,26 @@
+name: Final site validation
+on:
+  push:
+    branches:
+      - final/site-completion
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Inspect hero video
+        run: |
+          file "video - Trim.mp4"
+          file public/media/hero-trim-v1.mp4
+          if command -v ffprobe >/dev/null 2>&1; then
+            ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,codec_long_name,width,height,pix_fmt -of default=noprint_wrappers=1 "video - Trim.mp4"
+          fi
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run build
