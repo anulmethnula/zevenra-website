@@ -4,7 +4,7 @@ import {NavLink,Outlet,useLocation,useNavigate} from 'react-router-dom';
 import {BarChart3,Boxes,FolderKanban,Gauge,Home,Image,LogOut,Menu,Ruler,Settings,Truck,X} from 'lucide-react';
 import {useStore} from '../features/store/StoreContext';
 
-const links=[['/admin',Gauge,'Dashboard'],['/admin/products',Boxes,'Products'],['/admin/categories',FolderKanban,'Categories'],['/admin/orders',BarChart3,'Orders'],['/admin/homepage',Home,'Homepage'],['/admin/media',Image,'Media'],['/admin/size-charts',Ruler,'Size Charts'],['/admin/delivery',Truck,'Delivery'],['/admin/settings',Settings,'Settings']] as const;
+const links=[['/admin',Gauge,'Dashboard'],['/admin/products',Boxes,'Products'],['/admin/categories',FolderKanban,'Categories'],['/admin/collections',FolderKanban,'Collections'],['/admin/navigation',Menu,'Navigation'],['/admin/orders',BarChart3,'Orders'],['/admin/homepage',Home,'Homepage'],['/admin/media',Image,'Media'],['/admin/size-charts',Ruler,'Size Charts'],['/admin/delivery',Truck,'Delivery'],['/admin/settings',Settings,'Settings']] as const;
 
 export function AdminLayout(){
  const[open,setOpen]=useState(false),[checking,setChecking]=useState(true),[sessionError,setSessionError]=useState(''),navigate=useNavigate(),location=useLocation(),store=useStore();
