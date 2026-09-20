@@ -57,8 +57,8 @@ textarea.field{padding-block:1rem}
 /* Home */
 .home-hero{position:relative;height:100svh;min-height:620px;overflow:hidden;background:#080807}
 .home-hero__video,.home-hero__fallback{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.home-hero__fallback{opacity:1;transform:scale(1)}
-.home-hero__video{opacity:0;transform:scale(1.012);transition:opacity .65s ease,transform 1.2s ease}
+.home-hero__fallback{z-index:0;opacity:1;transform:scale(1)}
+.home-hero__video{z-index:1;opacity:0;transform:scale(1.012);transition:opacity .65s ease,transform 1.2s ease}
 .home-hero--ready .home-hero__video{opacity:1;transform:scale(1)}
 .home-hero__shade{position:absolute;z-index:2;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.08),rgba(0,0,0,.02) 55%,rgba(0,0,0,.28));pointer-events:none}
 .home-hero__cta{position:absolute;z-index:3;bottom:max(8svh,64px);left:50%;display:grid;min-width:190px;min-height:52px;place-items:center;padding:0 26px;transform:translateX(-50%);background:var(--paper);color:var(--ink);font-size:9px;font-weight:500;letter-spacing:.22em;transition:background .25s,letter-spacing .25s}
@@ -133,4 +133,4 @@ textarea.field{padding-block:1rem}
 @media(max-width:767px){.home-hero__fallback{object-position:center}.section{padding-block:68px}.section-heading{margin-bottom:26px}.section-heading h2{font-size:2.7rem}.product-card__details{display:block;font-size:11px}.product-card__details>div{margin-top:5px;text-align:left}.product-card__media>span{top:7px;left:7px}.footer-bottom{align-items:start}}
 @media(max-width:420px){.container{width:calc(100% - 24px)}.site-header__inner{width:calc(100% - 16px);padding-inline:8px}.site-logo{width:112px}.nav-icon{width:38px;min-width:38px}.store-product-grid{gap:32px 8px}.btn{min-height:48px;padding-inline:1.1rem}.field{min-height:48px}.category-grid span{padding:16px}}
 @media(hover:none){.product-card__secondary{display:none}}
-@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}.home-hero__video{display:none!important}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}}
