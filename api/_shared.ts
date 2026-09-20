@@ -10,7 +10,7 @@ export type CustomerIdentity={id:string;email:string};
 export type CustomerRecord={id:string;firstName:string;lastName:string;email:string;mobile?:string;passwordHash:string;passwordSalt:string;status:string;createdAt:string;updatedAt:string;lastLoginAt?:string};
 
 export class ConfigurationError extends Error{constructor(name:string){super(`Missing environment variable: ${name}`);this.name='ConfigurationError'}}
-function required(name:string){const value=process.env[name];if(!value)throw new ConfigurationError(name);return value}
+export function required(name:string){const value=process.env[name];if(!value)throw new ConfigurationError(name);return value}
 export function authEnv():AuthEnv{return{SESSION_SECRET:required('SESSION_SECRET'),ADMIN_USERNAME:required('ADMIN_USERNAME'),ADMIN_PASSWORD_HASH:required('ADMIN_PASSWORD_HASH'),ALLOWED_ORIGIN:required('ALLOWED_ORIGIN')}}
 export function appsScriptEnv():AppsScriptEnv{return{...authEnv(),APPS_SCRIPT_URL:required('APPS_SCRIPT_URL'),APPS_SCRIPT_SECRET:required('APPS_SCRIPT_SECRET')}}
 export function cloudinaryEnv():CloudinaryEnv{return{...authEnv(),CLOUDINARY_CLOUD_NAME:required('CLOUDINARY_CLOUD_NAME'),CLOUDINARY_API_KEY:required('CLOUDINARY_API_KEY'),CLOUDINARY_API_SECRET:required('CLOUDINARY_API_SECRET')}}
