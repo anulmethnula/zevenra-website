@@ -1,4 +1,4 @@
-import {useEffect,useState,type FormEvent} from 'react';
+import {useEffect,useMemo,useState,type FormEvent} from 'react';
 import {Navigate,useNavigate} from 'react-router-dom';
 import {z} from 'zod';
 import {Seo} from '../components/Seo';
@@ -13,7 +13,7 @@ const districts=['Ampara','Anuradhapura','Badulla','Batticaloa','Colombo','Galle
 
 export default function CheckoutPage(){
  const cart=useCart(),navigate=useNavigate(),{data}=useStore(),settings=data.settings;
- const availablePayments:PaymentMethod[]=[...(settings.codEnabled?['cod' as const]:[]),...(settings.bankEnabled?['bank' as const]:[])];
+ const availablePayments=useMemo<PaymentMethod[]>(()=>[...(settings.codEnabled?['cod' as const]:[]),...(settings.bankEnabled?['bank' as const]:[])],[settings.codEnabled,settings.bankEnabled]);
  const[payment,setPayment]=useState<PaymentMethod>(availablePayments[0]||'cod'),[error,setError]=useState(''),[busy,setBusy]=useState(false);
  useEffect(()=>{if(!availablePayments.includes(payment)&&availablePayments[0])setPayment(availablePayments[0])},[availablePayments,payment]);
  if(!cart.items.length)return <Navigate to="/cart" replace/>;

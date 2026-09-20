@@ -50,6 +50,6 @@ main>section:first-child a{min-height:44px}
 @media(prefers-reduced-motion:reduce){.product-card__media img,.desktop-nav>a::after,.desktop-category>a::after{transition:none!important}}
 
 /* Reveal the current hero only when it can render; prevents the retired poster flashing first. */
-.home-hero__video,.home-hero__fallback{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transform:scale(1.01);animation:none!important;transition:opacity .45s ease,transform .8s ease}.home-hero--ready .home-hero__video,.home-hero--ready .home-hero__fallback{opacity:1;transform:scale(1)}
+.home-hero__video,.home-hero__fallback{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;animation:none!important}.home-hero__fallback{opacity:1;transform:scale(1)}.home-hero__video{opacity:0;transform:scale(1.01);transition:opacity .45s ease,transform .8s ease}.home-hero--ready .home-hero__video{opacity:1;transform:scale(1)}
 @media(max-width:767px){.site-footer::before{background-position:58% center}.site-footer::after{background:rgba(7,7,6,.9)}}
 @media(prefers-reduced-motion:reduce){.home-hero__video{display:block!important}.home-hero__video,.home-hero__fallback{transition:none}}

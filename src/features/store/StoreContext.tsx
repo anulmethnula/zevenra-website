@@ -10,7 +10,7 @@ type Value={data:StoreData;loading:boolean;error:string;adminLoading:boolean;adm
 type SettingsRow={key:string;value:unknown};
 type PublicPayload={products:unknown[];categories:unknown[];collections:unknown[];sizeCharts:unknown[];navigation:unknown[];homepageSections:unknown[];settings:SettingsRow[]|Record<string,unknown>};
 
-const demo=import.meta.env.VITE_DEMO_MODE!=='false',adminRoute=location.pathname.startsWith('/admin'),storageKey='zevenra-admin-data-v2',Context=createContext<Value|null>(null);
+const demo=import.meta.env.VITE_DEMO_MODE==='true',adminRoute=location.pathname.startsWith('/admin'),storageKey='zevenra-admin-data-v2',Context=createContext<Value|null>(null);
 const emptyAdmin:AdminState={dashboard:null,orders:[],deliveryRates:[]};
 const bool=(value:unknown)=>value===true||String(value).toLowerCase()==='true';
 const number=(value:unknown)=>Number(value)||0;
