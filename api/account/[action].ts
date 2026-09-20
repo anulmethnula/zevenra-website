@@ -11,7 +11,6 @@ import {
   hashCustomerPassword,
   json,
   makeCustomerSession,
-  methodNotAllowed,
   readCustomerSession,
   validOrigin,
   verifyCustomerPassword,
