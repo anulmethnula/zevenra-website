@@ -12,7 +12,7 @@ export default function ProductEditor(){
  const{id}=useParams(),nav=useNavigate(),store=useStore(),found=store.data.products.find(x=>x.id===id);
  const[product,setProduct]=useState<Product>(found?structuredClone(found):{...blank,id:crypto.randomUUID(),sortOrder:store.data.products.length+1}),[dirty,setDirty]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
  useEffect(()=>{const warn=(event:BeforeUnloadEvent)=>{if(dirty){event.preventDefault();event.returnValue=''}};addEventListener('beforeunload',warn);return()=>removeEventListener('beforeunload',warn)},[dirty]);
- useEffect(()=>{if(found&&!dirty)setProduct(structuredClone(found))},[found?.id]);
+ useEffect(()=>{if(found&&!dirty)setProduct(structuredClone(found))},[found,dirty]);
  const set=<K extends keyof Product>(key:K,value:Product[K])=>{setDirty(true);setProduct(x=>({...x,[key]:value}))};
  const setName=(value:string)=>{setDirty(true);setProduct(x=>({...x,name:value,slug:!x.slug||x.slug===slugify(x.name)?slugify(value):x.slug}))};
  const variant=(variantId:string,patch:Partial<Variant>)=>set('variants',product.variants.map(v=>v.id===variantId?{...v,...patch}:v));
