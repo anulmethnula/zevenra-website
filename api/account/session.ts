@@ -1,3 +1,0 @@
-import type {VercelRequest,VercelResponse} from '@vercel/node';
-import{appsScriptEnv,callScript,json,methodNotAllowed,readCustomerSession,type CustomerRecord}from'../_shared.js';
-export default async function handler(req:VercelRequest,res:VercelResponse){if(req.method!=='GET')return methodNotAllowed(res,['GET']);try{const identity=readCustomerSession(req);if(!identity)return json(res,{user:null});const customer=await callScript(appsScriptEnv(),'getCustomerById',{id:identity.id}) as CustomerRecord|null;if(!customer||customer.status!=='active')return json(res,{user:null});return json(res,{user:{id:customer.id,firstName:customer.firstName,lastName:customer.lastName,email:customer.email,mobile:customer.mobile||''}})}catch{return json(res,{user:null})}}
