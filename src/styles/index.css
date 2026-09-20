@@ -72,6 +72,7 @@ textarea.field{padding-block:1rem}
 
 /* Home */
 .home-hero{position:relative;height:100svh;min-height:620px;overflow:hidden;background:#080807}
+.home-hero__video,.home-hero__fallback{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .home-hero__video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .home-hero__fallback{z-index:0;opacity:1;transform:scale(1);transition:opacity .35s ease}
 .home-hero__video{z-index:1}
