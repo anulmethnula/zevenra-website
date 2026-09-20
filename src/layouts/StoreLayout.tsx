@@ -31,12 +31,11 @@ function Footer(){
    {whatsapp?<a href={whatsapp} target="_blank" rel="noreferrer noopener">{supportContent}</a>:<div>{supportContent}</div>}
   </div></section>
   <footer className="site-footer"><div className="container footer-main">
-   <div className="footer-brand"><img src={settings.logoLight} alt={settings.brandName||'ZEVENRA'} className="footer-logo"/><p className="footer-title">The art of<br/><em>becoming.</em></p><p className="footer-description">Selected beyond borders.<br/>Curated for here.</p><p className="footer-supporting">Fashion, people, stories — always becoming.</p></div>
+   <div className="footer-brand"><img src={settings.logoLight} alt={settings.brandName||'ZEVENRA'} className="footer-logo"/><p className="footer-title">The art of<br/><em>becoming.</em></p><p className="footer-description">Selected beyond borders.<br/>Curated for here.</p><p className="footer-supporting">Fashion, people, stories — always becoming.</p><Link className="footer-brand-cta" to="/shop"><span>Explore the collection</span><ArrowRight size={16}/></Link></div>
    <div className="footer-column footer-shop"><p className="footer-label">Shop</p><Link to="/shop">Shop All</Link><Link to="/shop?new=true">New Arrivals</Link>{topCategories.map(category=><Link key={category.id} to={`/category/${category.slug}`}>{category.name}</Link>)}<Link to="/about">About</Link></div>
    <div className="footer-column footer-care"><p className="footer-label">Customer Care</p><Link to="/delivery">Delivery</Link><Link to="/returns">Returns &amp; Exchanges</Link><Link to="/contact">Contact</Link></div>
    {(instagram||tiktok||whatsapp)&&<div className="footer-column footer-follow"><p className="footer-label">Follow ZEVENRA</p>{instagram&&<a href={instagram} target="_blank" rel="noreferrer noopener"><Instagram size={16}/>Instagram</a>}{tiktok&&<a href={tiktok} target="_blank" rel="noreferrer noopener"><TikTokIcon/>TikTok</a>}{whatsapp&&<a href={whatsapp} target="_blank" rel="noreferrer noopener"><MessageCircle size={16}/>WhatsApp</a>}</div>}
    <div className="footer-column footer-legal"><p className="footer-label">Legal</p><Link to="/privacy">Privacy</Link><Link to="/terms">Terms &amp; Conditions</Link></div>
-   <div className="footer-cta"><Link to="/shop">Explore the collection <ArrowRight size={16}/></Link></div>
   </div><div className="container footer-bottom"><span>© {new Date().getFullYear()} ZEVENRA. ALL RIGHTS RESERVED.</span><span>SRI LANKA</span><span><Link to="/privacy">PRIVACY</Link><Link to="/terms">TERMS</Link></span></div></footer>
  </>
 }
