@@ -125,9 +125,9 @@ npm run build
 
 Push the verified build to the branch connected to Cloudflare Pages. Add a custom domain under **Pages → Custom domains**, update `ALLOWED_ORIGIN`, `robots.txt`, `sitemap.xml` and canonical/OG production URLs, then redeploy. Enforce HTTPS. Rotate any secret that was ever pasted into source or chat.
 
-## 10. Migration path
+## 10. Future data-store migration
 
-All data access is behind `src/services/api.ts` and Cloudflare Functions. To move to PostgreSQL/Supabase, preserve the public JSON types and replace `callScript()` with parameterized database queries. Migrate tables matching the current sheets, add real transactions/row locking, unique constraints on slugs/SKUs/order IDs, and role-based admin auth. No UI redesign is required.
+All data access is behind `src/services/api.ts` and the Vercel Functions. If the data store changes in the future, preserve the public JSON types and replace `callScript()` with parameterized database queries. Migrate tables matching the current sheets, add real transactions/row locking, unique constraints on slugs/SKUs/order IDs, and role-based admin auth. No UI redesign is required.
 
 To add PayHere or card payments later, implement a `PaymentProvider` service beside the existing COD/bank methods. Create payments server-side, verify webhook signatures, make callbacks idempotent, and transition `paymentStatus` only from verified server events. Never trust a browser success redirect as proof of payment.
 
