@@ -67,6 +67,19 @@ $hash = [Security.Cryptography.SHA256]::HashData($bytes)
 
 Also set `VITE_API_BASE=/api` and `VITE_DEMO_MODE=false`. Never prefix a server secret with `VITE_`. The Vercel Functions set an HttpOnly, Secure, SameSite=Strict, eight-hour signed cookie. Mutations validate Origin. Admin API actions also validate the server session before Apps Script is called.
 
+### Optional customer accounts
+
+Customer accounts use Supabase Auth and remain completely separate from the custom admin session. Add these public-safe values to the build environment:
+
+| Name | Purpose |
+| --- | --- |
+| `VITE_SUPABASE_URL` | Supabase project URL used by the browser auth client |
+| `VITE_SUPABASE_ANON_KEY` | Public Supabase anon key; never use a service-role key |
+
+Add `SUPABASE_URL` and `SUPABASE_ANON_KEY` with the same public values to the Vercel Functions runtime. The server uses them to validate access tokens with Supabase before reading a customer's orders. Enable Email/Password in Supabase Auth and add the production `/account/login` URL to the allowed redirect URLs for password recovery. Email confirmation is required for account-linked order history.
+
+Copy the updated `apps-script/Code.gs` into Apps Script and redeploy the web app so the server-only `listCustomerOrders` action is available. No Sheet columns or schema migration are required. Guest orders and checkout continue to work without Supabase configuration.
+
 ## 5. Configure Cloudinary
 
 1. Create a Cloudinary account and add the three Cloudinary variables above to Cloudflare.
