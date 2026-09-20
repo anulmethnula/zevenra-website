@@ -38,7 +38,7 @@ function Footer(){
   <section className="footer-assurances" aria-label="Shopping assurances"><div className="container">
    <div><Truck/><span><b>Islandwide delivery</b><small>Delivery across Sri Lanka.</small></span></div>
    <div><PackageCheck/><span><b>Sourced with care</b><small>Selected pieces from trusted sources.</small></span></div>
-   {whatsapp?<a href={whatsapp} target="_blank" rel="noreferrer noopener">{supportContent}</a>:<div>{supportContent}</div>}
+   {whatsapp?<a href={whatsapp} target="_blank" rel="noreferrer noopener">{supportContent}</a>:<Link to="/contact">{supportContent}</Link>}
   </div></section>
   <footer className="site-footer"><div className="container footer-main">
    <div className="footer-brand"><img src={settings.logoLight} alt={settings.brandName||'ZEVENRA'} className="footer-logo"/><p className="footer-title">The art of<br/><em>becoming.</em></p><p className="footer-description">Selected beyond borders.<br/>Curated for here.</p><p className="footer-supporting">Fashion, people, stories — always becoming.</p><Link className="footer-brand-cta" to="/shop"><span>Explore the collection</span><ArrowRight size={16}/></Link></div>
