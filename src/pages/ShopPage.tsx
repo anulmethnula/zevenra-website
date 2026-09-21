@@ -11,12 +11,12 @@ export default function ShopPage(){
  const{slug}=useParams(),[params,setParams]=useSearchParams(),{data}=useStore();
  const all=data.products.filter(p=>p.status==='published');
  const activeCategories=data.categories.filter(c=>c.active);
- const populatedCategories=activeCategories.filter(c=>all.some(p=>getDescendantCategoryIds(c.id,data.categories).includes(p.categoryId)));
- const activeCollections=data.collections.filter(c=>c.active);
- const collections=activeCollections.filter(c=>all.some(p=>p.collectionIds.includes(c.id)));
+ const shopCategories=activeCategories.filter(c=>!c.parentId).sort((a,b)=>a.sortOrder-b.sortOrder);
+ const activeCollections=data.collections.filter(c=>c.active).sort((a,b)=>a.sortOrder-b.sortOrder);
+ const collections=activeCollections;
  const routeCategory=activeCategories.find(c=>c.slug===slug);
  const routeCollection=activeCollections.find(c=>c.slug===slug);
- const categories=routeCategory&&!populatedCategories.some(c=>c.id===routeCategory.id)?[routeCategory,...populatedCategories]:populatedCategories;
+ const categories=routeCategory&&!shopCategories.some(c=>c.id===routeCategory.id)?[routeCategory,...shopCategories]:shopCategories;
  const priceCeiling=Math.max(1000,Math.ceil(Math.max(0,...all.map(p=>p.price))/1000)*1000);
  const[cat,setCat]=useState(routeCategory?.slug||'all'),[collection,setCollection]=useState(routeCollection?.id||'all'),[sort,setSort]=useState('newest'),[available,setAvailable]=useState(false),[size,setSize]=useState('all'),[color,setColor]=useState('all'),[maxPrice,setMaxPrice]=useState(priceCeiling),[filters,setFilters]=useState(false),[search,setSearch]=useState(params.get('q')||'');
  const query=(params.get('q')||'').trim().toLowerCase();
