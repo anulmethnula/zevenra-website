@@ -2,6 +2,7 @@ import {useEffect,useState,type FormEvent} from 'react';
 import {useNavigate,useParams} from 'react-router-dom';
 import {ArrowLeft,ArrowRight,Copy,ImagePlus,Plus,Star,Trash2} from 'lucide-react';
 import {useStore} from '../../features/store/StoreContext';
+import {uploadAdminMedia} from '../../services/cloudinaryUpload';
 import type {Media,Product,Variant} from '../../types';
 
 const blank:Product={id:'',slug:'',name:'',shortDescription:'',description:'',price:0,categoryId:'',collectionIds:[],media:[],material:'',fit:'',care:'',tags:[],featured:false,newArrival:false,status:'draft',sortOrder:0,variants:[]};
@@ -10,7 +11,7 @@ const mediaType=(url:string):Media['type']=>/\.(mp4|webm|mov)(\?|$)/i.test(url)?
 
 export default function ProductEditor(){
  const{id}=useParams(),nav=useNavigate(),store=useStore(),found=store.data.products.find(x=>x.id===id);
- const[product,setProduct]=useState<Product>(found?structuredClone(found):{...blank,id:crypto.randomUUID(),sortOrder:store.data.products.length+1}),[dirty,setDirty]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ const[product,setProduct]=useState<Product>(found?structuredClone(found):{...blank,id:crypto.randomUUID(),sortOrder:store.data.products.length+1}),[dirty,setDirty]=useState(false),[busy,setBusy]=useState(false),[mediaBusy,setMediaBusy]=useState(false),[error,setError]=useState('');
  useEffect(()=>{const warn=(event:BeforeUnloadEvent)=>{if(dirty){event.preventDefault();event.returnValue=''}};addEventListener('beforeunload',warn);return()=>removeEventListener('beforeunload',warn)},[dirty]);
  useEffect(()=>{if(found&&!dirty)setProduct(structuredClone(found))},[found,dirty]);
  const set=<K extends keyof Product>(key:K,value:Product[K])=>{setDirty(true);setProduct(x=>({...x,[key]:value}))};
@@ -32,6 +33,18 @@ export default function ProductEditor(){
   const additions=sizes.filter(size=>!existing.has(color.toLowerCase()+'|'+size.toLowerCase())).map(size=>({id:crypto.randomUUID(),sku:'',color,size,stock:0,lowStockThreshold:1,active:true}));
   if(!additions.length){setError('Those sizes already exist for the current colour.');return}
   setError('');set('variants',[...product.variants,...additions])
+ }
+ async function uploadMedia(files:FileList|null){
+  if(!files?.length)return;
+  setMediaBusy(true);setError('');
+  try{
+   const uploaded:Media[]=[];
+   for(const file of Array.from(files)){
+    const url=await uploadAdminMedia(file);
+    uploaded.push({url,alt:product.name||'ZEVENRA product',type:file.type.startsWith('video/')?'video':'image'});
+   }
+   set('media',[...product.media,...uploaded]);
+  }catch(reason){setError(reason instanceof Error?reason.message:'Could not upload media.')}finally{setMediaBusy(false)}
  }
  function addMedia(){
   const url=prompt('Paste an image or video URL');
@@ -75,9 +88,13 @@ export default function ProductEditor(){
        <div className="absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/55 to-transparent p-2 text-white"><span className="text-[8px] tracking-[.14em]">{index===0?'PRIMARY':media.type.toUpperCase()}</span>{index!==0&&<button type="button" onClick={()=>makePrimary(index)} title="Make primary image" className="grid h-9 w-9 place-items-center bg-black/35"><Star size={14}/></button>}</div>
        <div className="absolute inset-x-2 bottom-2 flex justify-between gap-1"><div className="flex gap-1"><button type="button" disabled={index===0} onClick={()=>moveMedia(index,-1)} aria-label="Move media left" className="grid h-9 w-9 place-items-center bg-white/95 disabled:opacity-40"><ArrowLeft size={14}/></button><button type="button" disabled={index===product.media.length-1} onClick={()=>moveMedia(index,1)} aria-label="Move media right" className="grid h-9 w-9 place-items-center bg-white/95 disabled:opacity-40"><ArrowRight size={14}/></button></div><button type="button" aria-label="Remove media" onClick={()=>set('media',product.media.filter((_,i)=>i!==index))} className="grid h-9 w-9 place-items-center bg-white/95 text-red-800"><Trash2 size={15}/></button></div>
       </div>)}
-      <button type="button" onClick={addMedia} className="grid aspect-[4/5] place-content-center border border-dashed border-black/25 bg-black/[.02] text-xs"><ImagePlus className="mx-auto mb-2"/>Add media URL</button>
+      <label className="grid aspect-[4/5] cursor-pointer place-content-center border border-dashed border-black/25 bg-black/[.02] text-center text-xs">
+       <ImagePlus className="mx-auto mb-2"/>{mediaBusy?'Uploading…':'Upload images / video'}
+       <input className="sr-only" type="file" multiple accept="image/jpeg,image/png,image/webp,image/avif,video/mp4,video/webm" disabled={mediaBusy} onChange={e=>{void uploadMedia(e.target.files);e.currentTarget.value=''}}/>
+      </label>
      </div>
-     <p className="text-xs leading-6 text-black/45">Use portrait product images where possible. The first tile is the main storefront image. Drag-style ordering is simplified with the arrow buttons; Cloudinary uploads can still be copied from Media.</p>
+     <div className="flex flex-wrap items-center gap-3"><button type="button" onClick={addMedia} className="text-xs underline underline-offset-4">Or paste media URL</button>{mediaBusy&&<span className="text-xs text-black/45">Uploading securely to Cloudinary…</span>}</div>
+     <p className="text-xs leading-6 text-black/45">Upload product images here directly. The first tile is the main storefront image; use the star or arrow controls to reorder.</p>
     </Card>
 
     <Card title="Product details"><div className="grid gap-3 sm:grid-cols-3"><Field label="Material" value={product.material} set={value=>set('material',value)}/><Field label="Fit" value={product.fit} set={value=>set('fit',value)}/><Field label="Care" value={product.care} set={value=>set('care',value)}/></div></Card>
