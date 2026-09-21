@@ -55,9 +55,9 @@ const pageContent={
  terms:{eyebrow:'Legal',title:'Terms & Conditions',intro:'These terms explain how ZEVENRA order requests, confirmation, sourcing, delivery and customer support are handled.',sections:termsSections}
 };
 
-function externalUrl(value:string){try{const url=new URL(value.trim());return url.protocol==='https:'||url.protocol==='http:'?url.toString():''}catch{return''}}
-function whatsAppUrl(value:string){const digits=value.replace(/\D/g,'');return digits.length>=8?`https://wa.me/${digits}`:''}
-function phoneUrl(value:string){const digits=value.replace(/\D/g,'');return digits.length>=8?`tel:${value.trim().replace(/\s/g,'')}`:''}
+function externalUrl(value:unknown){try{const url=new URL(String(value??'').trim());return url.protocol==='https:'||url.protocol==='http:'?url.toString():''}catch{return''}}
+function whatsAppUrl(value:unknown){const digits=String(value??'').replace(/\D/g,'');return digits.length>=8?`https://wa.me/${digits}`:''}
+function phoneUrl(value:unknown){const text=String(value??'');const digits=text.replace(/\D/g,'');return digits.length>=8?`tel:${text.trim().replace(/\s/g,'')}`:''}
 function TikTokIcon({size=22}:{size?:number}){return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 4v10.2a4.8 4.8 0 1 1-4.1-4.75"/><path d="M15 4c.55 2.75 2.15 4.35 5 5"/></svg>}
 
 export default function ContentPage(){const key=useLocation().pathname.slice(1);if(key==='about')return <AboutPage/>;if(key==='contact')return <ContactPage/>;const page=pageContent[key as keyof typeof pageContent];if(!page)return null;return <CarePage {...page} legal={key==='privacy'||key==='terms'}/>}
