@@ -31,8 +31,8 @@ function DesktopNavigation({items}:{items:NavEntry[]}){return <nav className="de
 
 function MobileMenu({items,close,logo,instagram,tiktok}:{items:NavEntry[];close:()=>void;logo:string;instagram:string;tiktok:string}){return <motion.div className="mobile-menu" initial={{clipPath:'inset(0 0 100% 0)'}} animate={{clipPath:'inset(0 0 0% 0)'}} exit={{clipPath:'inset(0 0 100% 0)'}} transition={{duration:.55,ease:[.76,0,.24,1]}}><div className="mobile-menu__top"><img src={logo} alt="ZEVENRA"/><button onClick={close} aria-label="Close menu"><X/></button></div><nav>{items.map((item,index)=><motion.div key={item.id} initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{delay:.15+index*.045}}>{item.external?<a href={item.to} target="_blank" rel="noreferrer noopener"><span>{String(index+1).padStart(2,'0')}</span>{item.label}<ArrowUpRight/></a>:<Link to={item.to}><span>{String(index+1).padStart(2,'0')}</span>{item.label}<ArrowUpRight/></Link>}{item.children&&item.children.length>0&&<div className="mobile-subcategories">{item.children.map(child=><Link key={child.id} to={'/category/'+child.slug}>{child.name.toUpperCase()}</Link>)}</div>}</motion.div>)}</nav><div className="mobile-menu__foot">{instagram&&<a href={instagram} target="_blank" rel="noreferrer noopener">INSTAGRAM</a>}{tiktok&&<a href={tiktok} target="_blank" rel="noreferrer noopener">TIKTOK</a>}<Link to="/contact">CONTACT</Link></div></motion.div>}
 
-function validExternalUrl(value:string){try{const url=new URL(value.trim());return url.protocol==='https:'||url.protocol==='http:'?url.toString():''}catch{return''}}
-function whatsappUrl(value:string){const digits=value.replace(/\D/g,'');return digits.length>=8?`https://wa.me/${digits}`:''}
+function validExternalUrl(value:unknown){try{const url=new URL(String(value??'').trim());return url.protocol==='https:'||url.protocol==='http:'?url.toString():''}catch{return''}}
+function whatsappUrl(value:unknown){const digits=String(value??'').replace(/\D/g,'');return digits.length>=8?`https://wa.me/${digits}`:''}
 
 function Footer(){
  const{data}=useStore(),settings=data.settings;
