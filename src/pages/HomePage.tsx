@@ -4,7 +4,7 @@ import {ProductCard} from '../components/ProductCard';
 import {Seo} from '../components/Seo';
 import {useStore} from '../features/store/StoreContext';
 
-const defaultVideo='/media/hero-desktop.mp4';
+const defaultVideo='/media/hero-final-v2.mp4';
 
 export default function HomePage(){
  const{data}=useStore(),hero=data.settings.hero,videoRef=useRef<HTMLVideoElement>(null),[videoFailed,setVideoFailed]=useState(false),[videoReady,setVideoReady]=useState(false),products=data.products.filter(product=>product.status==='published'),newArrivals=products.filter(product=>product.newArrival).slice(0,4),featured=products.filter(product=>product.featured).slice(0,4),categories=data.categories.filter(category=>category.active&&!category.parentId&&(category.showOnHomepage||category.featured)).sort((a,b)=>a.sortOrder-b.sortOrder),banner=data.homepageSections.find(section=>section.enabled&&(section.type==='full-width-campaign'||section.type==='editorial-image')),desktopVideo=hero.desktopVideo||defaultVideo,mobileVideo=hero.mobileVideo||desktopVideo,fallback=hero.fallbackImage||hero.poster||'/brand/hero.jpg',showVideo=hero.videoEnabled!==false&&!videoFailed;
