@@ -37,7 +37,8 @@ export default function ProductPage(){
   primaryImage=product.media.find(media=>media.type==='image')?.url||'',
   inCart=variant?cart.items.find(item=>item.variantId===variant.id)?.quantity||0:0,
   maxAdd=variant?Math.max(0,variant.stock-inCart):0,
-  media=product.media,
+  galleryMedia=product.media.filter(media=>!chart?.imageUrl||media.url!==chart.imageUrl),
+  media=galleryMedia.length?galleryMedia:product.media,
   current=media[activeMedia];
 
  const add=()=>variant&&maxAdd>0&&cart.add({productId:product.id,variantId:variant.id,slug:product.slug,name:product.name,image:primaryImage,color,size,quantity:Math.min(qty,maxAdd),unitPrice:product.price,sku:variant.sku,maxStock:variant.stock});
@@ -49,11 +50,11 @@ export default function ProductPage(){
  return <>
   <Seo title={product.name} description={product.shortDescription}/>
   <div className="product-page pb-28 pt-[102px] lg:container lg:pt-36">
-   <div className="grid gap-10 lg:grid-cols-[minmax(0,1.5fr)_minmax(360px,.9fr)]">
+   <div className="product-detail-grid">
     <ProductGallery media={media} current={current} active={activeMedia} setActive={setActiveMedia} previous={previous} next={next} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} name={product.name}/>
-    <div className="px-4 lg:sticky lg:top-32 lg:self-start lg:px-8 xl:px-10">
+    <div className="product-detail-panel">
      <p className="eyebrow text-bronze">{product.newArrival?'New arrival':'Chosen piece'}</p>
-     <h1 className="display mt-4 text-[clamp(2.7rem,5vw,5rem)] leading-[.98]">{product.name}</h1>
+     <h1 className="display mt-4 text-[clamp(2.6rem,4.2vw,4.35rem)] leading-[.96]">{product.name}</h1>
      <div className="mt-5 flex gap-3"><p>{money(product.price)}</p>{product.compareAtPrice&&product.compareAtPrice>product.price&&<del className="text-ink/40">{money(product.compareAtPrice)}</del>}</div>
      <p className="mt-7 text-sm leading-7 text-ink/60">{product.shortDescription}</p>
 
@@ -92,7 +93,7 @@ export default function ProductPage(){
 function ProductGallery({media,current,active,setActive,previous,next,onTouchStart,onTouchEnd,name}:{media:Media[];current?:Media;active:number;setActive:(index:number)=>void;previous:()=>void;next:()=>void;onTouchStart:(x:number)=>void;onTouchEnd:(x:number)=>void;name:string}){
  return <div className="product-gallery">
   <div className="product-gallery__stage" onTouchStart={event=>onTouchStart(event.changedTouches[0].clientX)} onTouchEnd={event=>onTouchEnd(event.changedTouches[0].clientX)}>
-   {current?current.type==='video'?<video key={current.url} src={current.url} aria-label={current.alt||name} muted playsInline controls className="product-gallery__media"/>:<img key={current.url} src={current.url} alt={current.alt||name} className="product-gallery__media"/>:<div className="product-gallery__empty">Image coming soon</div>}
+   {current?current.type==='video'?<video key={current.url} src={current.url} aria-label={current.alt||name} muted playsInline controls className="product-gallery__media"/>:<motion.img key={current.url} src={current.url} alt={current.alt||name} className="product-gallery__media" initial={{opacity:0,scale:.992}} animate={{opacity:1,scale:1}} transition={{duration:.25}}/>:<div className="product-gallery__empty">Image coming soon</div>}
    {media.length>1&&<>
     <button type="button" onClick={previous} className="product-gallery__arrow product-gallery__arrow--left" aria-label="Previous image"><ArrowLeft size={17}/></button>
     <button type="button" onClick={next} className="product-gallery__arrow product-gallery__arrow--right" aria-label="Next image"><ArrowRight size={17}/></button>
