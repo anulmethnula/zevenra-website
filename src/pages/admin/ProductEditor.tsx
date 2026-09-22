@@ -3,7 +3,7 @@ import {useNavigate,useParams} from 'react-router-dom';
 import {ArrowLeft,ArrowRight,Copy,ImagePlus,Plus,Star,Trash2} from 'lucide-react';
 import {useStore} from '../../features/store/StoreContext';
 import {uploadAdminMedia} from '../../services/cloudinaryUpload';
-import type {Media,Product,Variant} from '../../types';
+import type {Media,Product,SizeChart,Variant} from '../../types';
 
 const blank:Product={id:'',slug:'',name:'',shortDescription:'',description:'',price:0,categoryId:'',collectionIds:[],media:[],material:'',fit:'',care:'',tags:[],featured:false,newArrival:false,status:'draft',sortOrder:0,variants:[]};
 const slugify=(value:string)=>value.toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
@@ -11,7 +11,7 @@ const mediaType=(url:string):Media['type']=>/\.(mp4|webm|mov)(\?|$)/i.test(url)?
 
 export default function ProductEditor(){
  const{id}=useParams(),nav=useNavigate(),store=useStore(),found=store.data.products.find(x=>x.id===id);
- const[product,setProduct]=useState<Product>(found?structuredClone(found):{...blank,id:crypto.randomUUID(),sortOrder:store.data.products.length+1}),[dirty,setDirty]=useState(false),[busy,setBusy]=useState(false),[mediaBusy,setMediaBusy]=useState(false),[error,setError]=useState('');
+ const[product,setProduct]=useState<Product>(found?structuredClone(found):{...blank,id:crypto.randomUUID(),sortOrder:store.data.products.length+1}),[dirty,setDirty]=useState(false),[busy,setBusy]=useState(false),[mediaBusy,setMediaBusy]=useState(false),[chartBusy,setChartBusy]=useState(false),[error,setError]=useState('');
  useEffect(()=>{const warn=(event:BeforeUnloadEvent)=>{if(dirty){event.preventDefault();event.returnValue=''}};addEventListener('beforeunload',warn);return()=>removeEventListener('beforeunload',warn)},[dirty]);
  useEffect(()=>{if(found&&!dirty)setProduct(structuredClone(found))},[found,dirty]);
  const set=<K extends keyof Product>(key:K,value:Product[K])=>{setDirty(true);setProduct(x=>({...x,[key]:value}))};
@@ -25,14 +25,15 @@ export default function ProductEditor(){
 
  function selectMain(id:string){set('categoryId',id)}
  function selectSub(id:string){set('categoryId',id||mainCategoryId)}
- function addSizesFromChart(){
-  if(!selectedChart){setError('Choose a size chart first.');return}
-  const sizes=selectedChart.rows.map(row=>String(row[0]||'').trim()).filter(Boolean);
-  if(!sizes.length){setError('This size chart has no size rows yet.');return}
-  const color=product.variants.find(v=>v.color.trim())?.color||'Default',existing=new Set(product.variants.map(v=>v.color.toLowerCase()+'|'+v.size.toLowerCase()));
-  const additions=sizes.filter(size=>!existing.has(color.toLowerCase()+'|'+size.toLowerCase())).map(size=>({id:crypto.randomUUID(),sku:'',color,size,stock:0,lowStockThreshold:1,active:true}));
-  if(!additions.length){setError('Those sizes already exist for the current colour.');return}
-  setError('');set('variants',[...product.variants,...additions])
+ async function uploadSizeChart(file?:File){
+  if(!file)return;
+  setChartBusy(true);setError('');
+  try{
+   const imageUrl=await uploadAdminMedia(file);
+   const chart:SizeChart=selectedChart?{...selectedChart,imageUrl,columns:[],rows:[],unit:'',notes:''}:{id:crypto.randomUUID(),name:(product.name||'Product')+' — Size Chart',unit:'',columns:[],rows:[],imageUrl,notes:''};
+   await store.commit('sizeCharts',chart);
+   set('sizeChartId',chart.id);
+  }catch(reason){setError(reason instanceof Error?reason.message:'Could not upload size chart.')}finally{setChartBusy(false)}
  }
  async function uploadMedia(files:FileList|null){
   if(!files?.length)return;
@@ -100,9 +101,9 @@ export default function ProductEditor(){
     <Card title="Product details"><div className="grid gap-3 sm:grid-cols-3"><Field label="Material" value={product.material} set={value=>set('material',value)}/><Field label="Fit" value={product.fit} set={value=>set('fit',value)}/><Field label="Care" value={product.care} set={value=>set('care',value)}/></div></Card>
 
     <Card title="Size, colour & stock">
-     <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-black/10 bg-white/45 p-4"><div><p className="text-sm">Stock is controlled per colour + size.</p><p className="mt-1 text-xs text-black/45">{selectedChart?'Selected chart: '+selectedChart.name:'Choose a product size chart to generate its size rows quickly.'}</p></div><div className="flex flex-wrap gap-2"><button type="button" disabled={!selectedChart} onClick={addSizesFromChart} className="btn disabled:opacity-40"><Plus size={14}/> Add sizes from chart</button><button type="button" onClick={addVariant} className="btn"><Plus size={14}/> Add one variant</button></div></div>
+     <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-black/10 bg-white/45 p-4"><div><p className="text-sm">Stock is controlled per colour + size.</p><p className="mt-1 text-xs text-black/45">Add each real size you sell and its available stock. The size-chart image is only a customer reference.</p></div><button type="button" onClick={addVariant} className="btn"><Plus size={14}/> Add variant</button></div>
      <div className="overflow-x-auto"><table className="w-full min-w-[780px] text-sm"><thead><tr>{['Colour','Size','SKU','Stock','Low stock','Active',''].map(x=><th key={x} className="p-2 text-left text-xs font-normal">{x}</th>)}</tr></thead><tbody>{product.variants.map(v=><tr key={v.id} className="border-t border-black/10"><td><input className="field my-2" value={v.color} placeholder="Black" onChange={e=>variant(v.id,{color:e.target.value})}/></td><td><input className="field" value={v.size} placeholder="S" onChange={e=>variant(v.id,{size:e.target.value})}/></td><td><input className="field" value={v.sku} placeholder="Optional" onChange={e=>variant(v.id,{sku:e.target.value})}/></td><td><input className="field w-24" type="number" min="0" value={v.stock} onChange={e=>variant(v.id,{stock:Math.max(0,Number(e.target.value))})}/></td><td><input className="field w-24" type="number" min="0" value={v.lowStockThreshold} onChange={e=>variant(v.id,{lowStockThreshold:Math.max(0,Number(e.target.value))})}/></td><td><input type="checkbox" checked={v.active} onChange={e=>variant(v.id,{active:e.target.checked})}/></td><td><div className="flex"><button type="button" title="Duplicate variant" onClick={()=>set('variants',[...product.variants,{...v,id:crypto.randomUUID(),sku:v.sku?v.sku+'-COPY':''}])}><Copy size={15}/></button><button type="button" title="Remove variant" onClick={()=>set('variants',product.variants.filter(x=>x.id!==v.id))} className="ml-3 text-red-800"><Trash2 size={16}/></button></div></td></tr>)}</tbody></table></div>
-     {!product.variants.length&&<p className="py-8 text-center text-sm text-black/45">No variants yet. Choose a size chart and add its sizes, or add a single variant manually.</p>}
+     {!product.variants.length&&<p className="py-8 text-center text-sm text-black/45">No variants yet. Add the actual colour, size and stock combinations you are selling.</p>}
     </Card>
    </div>
 
@@ -120,7 +121,12 @@ export default function ProductEditor(){
 
     <Card title="Pricing"><Field label="Selling price (LKR)" value={String(product.price||'')} set={value=>set('price',Number(value))}/><Field label="Compare-at price" value={String(product.compareAtPrice||'')} set={value=>set('compareAtPrice',value?Number(value):undefined)}/></Card>
 
-    <Card title="Product-specific size chart"><select className="field" value={product.sizeChartId||''} onChange={e=>set('sizeChartId',e.target.value||undefined)}><option value="">None</option>{store.data.sizeCharts.map(chart=><option key={chart.id} value={chart.id}>{chart.name}</option>)}</select>{selectedChart&&<div className="mt-3 border border-black/10 bg-white/45 p-3 text-xs leading-5 text-black/55"><b className="text-black/75">{selectedChart.name}</b><br/>{selectedChart.rows.map(row=>row[0]).filter(Boolean).join(' · ')||'No size rows yet.'}</div>}<p className="text-xs leading-5 text-black/45">Attach the exact supplier chart for this product. Different SHEIN items can use different charts.</p></Card>
+    <Card title="Size chart image">
+     <label className="btn btn-dark cursor-pointer justify-center">{chartBusy?'Uploading…':selectedChart?.imageUrl?'Replace size chart image':'Upload size chart image'}<input className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,image/avif" disabled={chartBusy} onChange={e=>{void uploadSizeChart(e.target.files?.[0]);e.currentTarget.value=''}}/></label>
+     {selectedChart?.imageUrl&&<div className="border border-black/10 bg-white p-2"><img src={selectedChart.imageUrl} alt={selectedChart.name} className="mx-auto max-h-64 w-full object-contain"/></div>}
+     {product.sizeChartId&&<button type="button" className="text-left text-xs underline underline-offset-4" onClick={()=>set('sizeChartId',undefined)}>Remove size chart from this product</button>}
+     <p className="text-xs leading-5 text-black/45">Upload the supplier's size-chart image only. No measurement table needs to be typed manually.</p>
+    </Card>
    </aside>
   </div>
  </form>
