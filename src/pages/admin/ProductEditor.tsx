@@ -5,7 +5,7 @@ import {useStore} from '../../features/store/StoreContext';
 import {uploadAdminMedia} from '../../services/cloudinaryUpload';
 import type {Media,Product,SizeChart,Variant} from '../../types';
 
-const blank:Product={id:'',slug:'',name:'',shortDescription:'',description:'',price:0,categoryId:'',collectionIds:[],media:[],material:'',fit:'',care:'',tags:[],featured:false,newArrival:false,status:'draft',sortOrder:0,variants:[]};
+const blank:Product={id:'',slug:'',name:'',shortDescription:'',description:'',price:0,categoryId:'',collectionIds:[],media:[],material:'',fit:'',care:'',tags:[],featured:false,newArrival:false,preorderEnabled:false,preorderMessage:'Available for pre-order. We will confirm the expected delivery time after your order.',status:'draft',sortOrder:0,variants:[]};
 const slugify=(value:string)=>value.toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
 const mediaType=(url:string):Media['type']=>/\.(mp4|webm|mov)(\?|$)/i.test(url)?'video':'image';
 
@@ -108,7 +108,7 @@ export default function ProductEditor(){
    </div>
 
    <aside className="space-y-6">
-    <Card title="Status"><label className="text-xs">Publication status<select className="field mt-2" value={product.status} onChange={e=>set('status',e.target.value as Product['status'])}><option>draft</option><option>published</option><option>archived</option></select></label><Check label="Featured" checked={product.featured} set={value=>set('featured',value)}/><Check label="New arrival" checked={product.newArrival} set={value=>set('newArrival',value)}/></Card>
+    <Card title="Status"><label className="text-xs">Publication status<select className="field mt-2" value={product.status} onChange={e=>set('status',e.target.value as Product['status'])}><option>draft</option><option>published</option><option>archived</option></select></label><Check label="Featured" checked={product.featured} set={value=>set('featured',value)}/><Check label="New arrival" checked={product.newArrival} set={value=>set('newArrival',value)}/><Check label="Allow pre-order when a size is out of stock" checked={product.preorderEnabled} set={value=>set('preorderEnabled',value)}/>{product.preorderEnabled&&<Field label="Pre-order message" value={product.preorderMessage||''} set={value=>set('preorderMessage',value)}/>}</Card>
 
     <Card title="Category">
      <label className="text-xs">Main category<select required className="field mt-2" value={mainCategoryId} onChange={e=>selectMain(e.target.value)}><option value="">Select main category</option>{mainCategories.map(cat=><option key={cat.id} value={cat.id}>{cat.name}</option>)}</select></label>
