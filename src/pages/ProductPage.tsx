@@ -41,7 +41,7 @@ export default function ProductPage(){
   media=galleryMedia.length?galleryMedia:product.media,
   current=media[activeMedia];
 
- const add=()=>variant&&maxAdd>0&&cart.add({productId:product.id,variantId:variant.id,slug:product.slug,name:product.name,image:primaryImage,color,size,quantity:Math.min(qty,maxAdd),unitPrice:product.price,sku:variant.sku,maxStock:variant.stock});
+ const add=()=>{if(variant&&maxAdd>0)cart.add({productId:product.id,variantId:variant.id,slug:product.slug,name:product.name,image:primaryImage,color,size,quantity:Math.min(qty,maxAdd),unitPrice:product.price,sku:variant.sku,maxStock:variant.stock})};
  const previous=()=>media.length&&setActiveMedia(index=>(index-1+media.length)%media.length);
  const next=()=>media.length&&setActiveMedia(index=>(index+1)%media.length);
  const onTouchStart=(x:number)=>{touchStart.current=x};
