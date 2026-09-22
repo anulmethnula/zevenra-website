@@ -44,7 +44,46 @@ export function StoreProvider({children}:{children:ReactNode}){const[data,setDat
  const loadPublic=useCallback(async()=>{if(demo||adminRoute)return;setLoading(true);setError('');try{const response=await fetch(`${import.meta.env.VITE_API_BASE||'/api'}/store`),payload=await response.json() as PublicPayload&{error?:string};if(!response.ok)throw new Error(payload.error||'Live store data could not be loaded.');applyPublic(payload)}catch(reason){setError(message(reason))}finally{setLoading(false)}},[applyPublic]);
  useEffect(()=>{const pending=timers.current;void loadPublic();return()=>Object.values(pending).forEach(clearTimeout)},[loadPublic]);
  const refreshEntity=useCallback(async(entity:Entity)=>{if(entity==='products'){const rows=await adminApi.get<unknown[]>('listProducts');setData(x=>({...x,products:rows.map(normalizeProduct).filter(p=>!isLegacySampleProduct(p))}))}else if(entity==='categories'){const rows=await adminApi.get<unknown[]>('listCategories');setData(x=>{const normalized=rows.map(normalizeCategory),used=new Set(x.products.map(p=>p.categoryId));return{...x,categories:normalized.filter(category=>!isSampleId(category.id,'sample-cat-')||used.has(category.id)||normalized.some(child=>used.has(child.id)&&child.parentId===category.id))}})}else if(entity==='collections'){const rows=await adminApi.get<unknown[]>('listCollections');setData(x=>({...x,collections:rows.map(normalizeCollection)}))}else if(entity==='sizeCharts'){const rows=await adminApi.get<unknown[]>('listSizeCharts');setData(x=>{const used=new Set(x.products.map(p=>p.sizeChartId).filter(Boolean));return{...x,sizeCharts:rows.map(normalizeSizeChart).filter(chart=>!isSampleId(chart.id,'sample-size-')||used.has(chart.id))}})}else if(entity==='navigation'){const rows=await adminApi.get<unknown[]>('listNavigation');setData(x=>({...x,navigation:rows.map(normalizeNavigation).filter(item=>!isSampleId(item.id,'sample-nav-'))}))}else if(entity==='homepageSections'){const rows=await adminApi.get<unknown[]>('listHomepageSections');setData(x=>({...x,homepageSections:rows.map(normalizeHomepage)}))}},[]);
- const loadAdmin=useCallback(async()=>{if(demo)return;setAdminLoading(true);setAdminError('');try{const[dashboard,products,categories,collections,sizeCharts,navigation,homepageSections,orders,settings,deliveryRates]=await Promise.all([adminApi.get<DashboardData>('dashboard'),adminApi.get<unknown[]>('listProducts'),adminApi.get<unknown[]>('listCategories'),adminApi.get<unknown[]>('listCollections'),adminApi.get<unknown[]>('listSizeCharts'),adminApi.get<unknown[]>('listNavigation'),adminApi.get<unknown[]>('listHomepageSections'),adminApi.get<Order[]>('listOrders'),adminApi.get<SettingsRow[]>('getSettings'),adminApi.get<DeliveryRate[]>('listDeliveryRates')]);const clean=cleanCatalogue({products:products.map(normalizeProduct),categories:categories.map(normalizeCategory),collections:collections.map(normalizeCollection),sizeCharts:sizeCharts.map(normalizeSizeChart),navigation:navigation.map(normalizeNavigation),homepageSections:homepageSections.map(normalizeHomepage)});setData(x=>({...x,...clean,settings:normalizeSettings(settings),deliveryRates:deliveryRates.map(normalizeDeliveryRate)}));setAdmin({dashboard,orders,deliveryRates:deliveryRates.map(normalizeDeliveryRate)})}catch(reason){setAdminError(message(reason))}finally{setAdminLoading(false)}},[]);
+ const loadAdmin=useCallback(async()=>{
+  if(demo)return;
+  setAdminLoading(true);
+  setAdminError('');
+  const labels=['Dashboard','Products','Categories','Collections','Size charts','Navigation','Homepage','Orders','Settings','Delivery'];
+  try{
+   const results=await Promise.allSettled([
+    adminApi.get<DashboardData>('dashboard'),
+    adminApi.get<unknown[]>('listProducts'),
+    adminApi.get<unknown[]>('listCategories'),
+    adminApi.get<unknown[]>('listCollections'),
+    adminApi.get<unknown[]>('listSizeCharts'),
+    adminApi.get<unknown[]>('listNavigation'),
+    adminApi.get<unknown[]>('listHomepageSections'),
+    adminApi.get<Order[]>('listOrders'),
+    adminApi.get<SettingsRow[]>('getSettings'),
+    adminApi.get<DeliveryRate[]>('listDeliveryRates')
+   ]);
+   const pick=<T,>(index:number):T|undefined=>results[index].status==='fulfilled'?(results[index] as PromiseFulfilledResult<T>).value:undefined;
+   const failures=results.flatMap((entry,index)=>entry.status==='rejected'?[labels[index]]:[]);
+   const rawProducts=pick<unknown[]>(1),rawCategories=pick<unknown[]>(2),rawCollections=pick<unknown[]>(3),rawCharts=pick<unknown[]>(4),rawNavigation=pick<unknown[]>(5),rawHomepage=pick<unknown[]>(6),settings=pick<SettingsRow[]>(8),deliveryRates=pick<DeliveryRate[]>(9);
+   setData(current=>{
+    const clean=cleanCatalogue({
+     products:rawProducts?rawProducts.map(normalizeProduct):current.products,
+     categories:rawCategories?rawCategories.map(normalizeCategory):current.categories,
+     collections:rawCollections?rawCollections.map(normalizeCollection):current.collections,
+     sizeCharts:rawCharts?rawCharts.map(normalizeSizeChart):current.sizeCharts,
+     navigation:rawNavigation?rawNavigation.map(normalizeNavigation):current.navigation,
+     homepageSections:rawHomepage?rawHomepage.map(normalizeHomepage):current.homepageSections
+    });
+    return{...current,...clean,settings:settings?normalizeSettings(settings):current.settings,deliveryRates:deliveryRates?deliveryRates.map(normalizeDeliveryRate):current.deliveryRates};
+   });
+   setAdmin(current=>({
+    dashboard:pick<DashboardData>(0)??current.dashboard,
+    orders:pick<Order[]>(7)??current.orders,
+    deliveryRates:deliveryRates?deliveryRates.map(normalizeDeliveryRate):current.deliveryRates
+   }));
+   if(failures.length)setAdminError(`Some admin sections could not refresh: ${failures.join(', ')}. The working sections are still available.`);
+  }finally{setAdminLoading(false)}
+ },[]);
  const demoCommit=(next:StoreData)=>{setData(next);localStorage.setItem(storageKey,JSON.stringify(next))};
  const queue=useCallback((key:string,work:()=>Promise<void>)=>{clearTimeout(timers.current[key]);timers.current[key]=setTimeout(()=>{void work().catch(reason=>setAdminError(message(reason)))},450)},[]);
  const save=useCallback(<T extends EntityValue>(entity:Entity,item:T)=>{const update=(current:StoreData)=>{const list=current[entity] as EntityValue[];return{...current,[entity]:list.some(x=>x.id===item.id)?list.map(x=>x.id===item.id?item:x):[...list,item]} as StoreData};if(demo){demoCommit(update(data));return}setData(update);const actions:Partial<Record<Entity,string>>={products:'saveProduct',categories:'saveCategory',collections:'saveCollection',sizeCharts:'saveSizeChart',navigation:'saveNavigation',homepageSections:'saveHomepageSection'},action=actions[entity];if(!action){setAdminError(`${entity} is not available in the live backend.`);return}setAdminError('');queue(`${entity}:${item.id}`,async()=>{await adminApi.post(action,item);await refreshEntity(entity)})},[data,queue,refreshEntity]);
