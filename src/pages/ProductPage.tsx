@@ -12,7 +12,7 @@ import type {Media} from '../types';
 export default function ProductPage(){
  const {slug}=useParams(),cart=useCart(),{data}=useStore();
  const products=data.products.filter(p=>p.status==='published'),product=products.find(p=>p.slug===slug);
- const[color,setColor]=useState(product?.variants.find(v=>v.active&&v.stock>0)?.color||''),
+ const[color,setColor]=useState(product?.variants.find(v=>v.active&&(v.stock>0||product?.preorderEnabled))?.color||''),
   [size,setSize]=useState(''),
   [qty,setQty]=useState(1),
   [guide,setGuide]=useState(false),
@@ -20,7 +20,7 @@ export default function ProductPage(){
  const touchStart=useRef<number|null>(null);
 
  useEffect(()=>{
-  setColor(product?.variants.find(v=>v.active&&v.stock>0)?.color||'');
+  setColor(product?.variants.find(v=>v.active&&(v.stock>0||product?.preorderEnabled))?.color||'');
   setSize('');
   setQty(1);
   setGuide(false);
@@ -32,16 +32,17 @@ export default function ProductPage(){
  const colors=[...new Set(product.variants.filter(v=>v.active).map(v=>v.color))],
   options=product.variants.filter(v=>v.active&&v.color===color),
   variant=options.find(v=>v.size===size),
-  sold=product.variants.filter(v=>v.active).every(v=>v.stock<1),
+  sold=product.variants.filter(v=>v.active).every(v=>v.stock<1)&&!product.preorderEnabled,
   chart=product.sizeChartId?data.sizeCharts.find(x=>x.id===product.sizeChartId):undefined,
   primaryImage=product.media.find(media=>media.type==='image')?.url||'',
   inCart=variant?cart.items.find(item=>item.variantId===variant.id)?.quantity||0:0,
-  maxAdd=variant?Math.max(0,variant.stock-inCart):0,
+  selectedPreorder=Boolean(variant&&variant.stock<1&&product.preorderEnabled),
+  maxAdd=variant?(selectedPreorder?Math.max(0,10-inCart):Math.max(0,variant.stock-inCart)):0,
   galleryMedia=product.media.filter(media=>!chart?.imageUrl||media.url!==chart.imageUrl),
   media=galleryMedia.length?galleryMedia:product.media,
   current=media[activeMedia];
 
- const add=()=>variant&&maxAdd>0&&cart.add({productId:product.id,variantId:variant.id,slug:product.slug,name:product.name,image:primaryImage,color,size,quantity:Math.min(qty,maxAdd),unitPrice:product.price,sku:variant.sku,maxStock:variant.stock});
+ const add=()=>variant&&maxAdd>0&&cart.add({productId:product.id,variantId:variant.id,slug:product.slug,name:product.name,image:primaryImage,color,size,quantity:Math.min(qty,maxAdd),unitPrice:product.price,sku:variant.sku,maxStock:selectedPreorder?10:variant.stock,isPreorder:selectedPreorder});
  const previous=()=>media.length&&setActiveMedia(index=>(index-1+media.length)%media.length);
  const next=()=>media.length&&setActiveMedia(index=>(index+1)%media.length);
  const onTouchStart=(x:number)=>{touchStart.current=x};
@@ -65,12 +66,12 @@ export default function ProductPage(){
        <span className="eyebrow">Size</span>
        {chart?.imageUrl&&<button onClick={()=>setGuide(true)} className="size-guide-link"><Ruler size={14}/> Size guide</button>}
       </div>
-      <div className="flex flex-wrap gap-2">{options.map(v=><button key={v.id} disabled={v.stock<1} onClick={()=>{setSize(v.size);setQty(1)}} className={`min-h-12 min-w-14 border px-4 text-xs ${size===v.size?'border-ink bg-ink text-paper':'border-line'} disabled:opacity-25 disabled:line-through`}>{v.size}</button>)}</div>
+      <div className="flex flex-wrap gap-2">{options.map(v=>{const canChoose=v.stock>0||product.preorderEnabled;return <button key={v.id} disabled={!canChoose} onClick={()=>{setSize(v.size);setQty(1)}} className={`min-h-12 min-w-14 border px-4 text-xs ${size===v.size?'border-ink bg-ink text-paper':'border-line'} disabled:opacity-25 disabled:line-through`}>{v.size}{v.stock<1&&product.preorderEnabled?' · PRE':''}</button>})}</div>{selectedPreorder&&<p className="mt-3 border-l-2 border-bronze pl-3 text-xs leading-5 text-ink/60">{product.preorderMessage||'This size is available for pre-order. We will confirm the expected delivery time after your order.'}</p>}
      </div>
 
      <div className="mt-7 flex gap-3">
       <div className="flex min-h-12 items-center border border-line"><button className="px-3" onClick={()=>setQty(Math.max(1,qty-1))}><Minus size={15}/></button><span className="w-8 text-center text-sm">{qty}</span><button className="px-3" disabled={!variant||qty>=Math.max(1,maxAdd)} onClick={()=>setQty(Math.min(Math.max(1,maxAdd),qty+1))}><Plus size={15}/></button></div>
-      <button disabled={sold||!variant||maxAdd<1} onClick={add} className="btn btn-dark flex-1 disabled:opacity-35">{sold?'Sold out':!size?'Select a size':maxAdd<1?'Already in bag':'Add to bag'}</button>
+      <button disabled={sold||!variant||maxAdd<1} onClick={add} className="btn btn-dark flex-1 disabled:opacity-35">{sold?'Sold out':!size?'Select a size':maxAdd<1?'Already in bag':selectedPreorder?'Pre-order':'Add to bag'}</button>
      </div>
 
      <div className="mt-9 divide-y divide-line border-y border-line">{[['DETAILS',product.description],['FIT',product.fit],['CARE',product.care],['DELIVERY & RETURNS','Delivery fee is calculated at checkout. See the current delivery and returns policies for full terms.']].map(([a,b])=><details key={a} className="group py-5"><summary className="flex cursor-pointer list-none items-center justify-between text-[10px] tracking-[.2em]">{a}<ChevronDown size={15} className="transition group-open:rotate-180"/></summary><p className="pt-4 text-sm leading-7 text-ink/55">{b}</p></details>)}</div>
@@ -84,7 +85,7 @@ export default function ProductPage(){
    </section>
   </div>
 
-  <div className="fixed inset-x-0 bottom-0 z-30 border-t hairline bg-paper p-3 lg:hidden"><button disabled={sold||!variant||maxAdd<1} onClick={add} className="btn btn-dark w-full disabled:opacity-40">{sold?'Sold out':!size?'Select a size':maxAdd<1?'Already in bag':`Add to bag · ${money(product.price)}`}</button></div>
+  <div className="fixed inset-x-0 bottom-0 z-30 border-t hairline bg-paper p-3 lg:hidden"><button disabled={sold||!variant||maxAdd<1} onClick={add} className="btn btn-dark w-full disabled:opacity-40">{sold?'Sold out':!size?'Select a size':maxAdd<1?'Already in bag':selectedPreorder?`Pre-order · ${money(product.price)}`:`Add to bag · ${money(product.price)}`}</button></div>
 
   <AnimatePresence>{guide&&chart?.imageUrl&&<SizeGuide chart={chart} close={()=>setGuide(false)}/>}</AnimatePresence>
  </>;
