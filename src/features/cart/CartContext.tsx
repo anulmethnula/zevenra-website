@@ -9,7 +9,7 @@ export function CartProvider({children}:{children:ReactNode}){
  const[items,setItems]=useState<CartItem[]>(()=>{try{const parsed=JSON.parse(localStorage.getItem(key)||'[]');return Array.isArray(parsed)?parsed:[]}catch{return[]}}),[open,setOpen]=useState(false);
  useEffect(()=>localStorage.setItem(key,JSON.stringify(items)),[items]);
  const value=useMemo<CartState>(()=>({items,count:items.reduce((n,i)=>n+i.quantity,0),subtotal:items.reduce((n,i)=>n+i.unitPrice*i.quantity,0),open,setOpen,
-  add:i=>{setItems(old=>{const found=old.find(x=>x.variantId===i.variantId);return found?old.map(x=>x.variantId===i.variantId?{...x,maxStock:i.maxStock??x.maxStock,quantity:clamp({...x,maxStock:i.maxStock??x.maxStock},x.quantity+i.quantity)}:x):[...old,{...i,quantity:clamp(i,i.quantity)}]});setOpen(true)},
+  add:i=>{setItems(old=>{const found=old.find(x=>x.variantId===i.variantId);return found?old.map(x=>{if(x.variantId!==i.variantId)return x;const next={...x,...i};return{...next,quantity:clamp(next,x.quantity+i.quantity)}}):[...old,{...i,quantity:clamp(i,i.quantity)}]});setOpen(true)},
   remove:id=>setItems(old=>old.filter(i=>i.variantId!==id)),
   quantity:(id,n)=>setItems(old=>old.map(i=>i.variantId===id?{...i,quantity:clamp(i,n)}:i)),
   clear:()=>setItems([])
