@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import {Link,useParams} from 'react-router-dom';
-import {ArrowLeft,ArrowRight,ChevronDown,Minus,Plus,Ruler,X} from 'lucide-react';
+import {ArrowLeft,ArrowRight,ChevronDown,Minus,Plus,RotateCcw,Ruler,X,ZoomIn,ZoomOut} from 'lucide-react';
 import {AnimatePresence,motion} from 'framer-motion';
 import {money} from '../config/site';
 import {useCart} from '../features/cart/CartContext';
@@ -106,6 +106,8 @@ function ProductGallery({media,current,active,setActive,previous,next,onTouchSta
 }
 
 function SizeGuide({chart,close}:{chart:{name:string;imageUrl?:string};close:()=>void}){
+ const[zoom,setZoom]=useState(1);
+ const adjust=(delta:number)=>setZoom(value=>Math.min(3,Math.max(1,Math.round((value+delta)*10)/10)));
  return <>
   <motion.button className="fixed inset-0 z-50 bg-black/55 backdrop-blur-[2px]" onClick={close} initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} aria-label="Close size guide"/>
   <motion.aside role="dialog" aria-modal="true" aria-label="Size guide" className="size-guide-panel size-guide-panel--image" initial={{x:'100%'}} animate={{x:0}} exit={{x:'100%'}} transition={{duration:.38,ease:[.22,1,.36,1]}}>
@@ -113,8 +115,11 @@ function SizeGuide({chart,close}:{chart:{name:string;imageUrl?:string};close:()=
     <div><p className="eyebrow text-bronze">Product sizing</p><h2 className="display mt-2 text-4xl sm:text-5xl">Size guide.</h2></div>
     <button onClick={close} className="size-guide-panel__close" aria-label="Close size guide"><X/></button>
    </div>
-   <p className="mt-5 text-sm text-ink/55">{chart.name}</p>
-   <div className="size-guide-panel__image size-guide-panel__image--only"><img src={chart.imageUrl} alt={chart.name+' size chart'}/></div>
+   <div className="mt-5 flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-ink/55">{chart.name}</p><div className="flex items-center gap-1"><button type="button" className="grid h-10 w-10 place-items-center border border-line disabled:opacity-30" disabled={zoom<=1} onClick={()=>adjust(-.25)} aria-label="Zoom out"><ZoomOut size={16}/></button><span className="min-w-14 text-center text-xs">{Math.round(zoom*100)}%</span><button type="button" className="grid h-10 w-10 place-items-center border border-line disabled:opacity-30" disabled={zoom>=3} onClick={()=>adjust(.25)} aria-label="Zoom in"><ZoomIn size={16}/></button><button type="button" className="grid h-10 w-10 place-items-center border border-line" onClick={()=>setZoom(1)} aria-label="Reset zoom"><RotateCcw size={15}/></button></div></div>
+   <p className="mt-2 text-[10px] tracking-[.12em] text-ink/40">MOUSE WHEEL OR + / − TO ZOOM · SCROLL TO MOVE AROUND</p>
+   <div className="size-guide-panel__image size-guide-panel__image--only overflow-auto" onWheel={event=>{event.preventDefault();adjust(event.deltaY<0?.15:-.15)}}>
+    <img src={chart.imageUrl} alt={chart.name+' size chart'} draggable={false} style={{width:`${zoom*100}%`,maxWidth:'none',height:'auto'}} className="mx-auto select-none"/>
+   </div>
   </motion.aside>
  </>;
 }

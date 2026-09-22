@@ -20,10 +20,11 @@ export default function ProductEditor(){
  const addVariant=()=>set('variants',[...product.variants,{id:crypto.randomUUID(),sku:'',color:product.variants[0]?.color||'Default',size:'',stock:0,lowStockThreshold:1,active:true}]);
 
  const activeCategories=store.data.categories.filter(category=>category.active),mainCategories=activeCategories.filter(category=>!category.parentId).sort((a,b)=>a.sortOrder-b.sortOrder),selectedCategory=activeCategories.find(category=>category.id===product.categoryId);
- const mainCategoryId=selectedCategory?.parentId||selectedCategory?.id||'';
+ const mainCategoryId=selectedCategory?.parentId||selectedCategory?.id||'',subcategories=activeCategories.filter(category=>category.parentId===mainCategoryId).sort((a,b)=>a.sortOrder-b.sortOrder),subcategoryId=selectedCategory?.parentId?selectedCategory.id:'';
  const selectedChart=store.data.sizeCharts.find(chart=>chart.id===product.sizeChartId);
 
  function selectMain(id:string){set('categoryId',id)}
+ function selectSub(id:string){set('categoryId',id||mainCategoryId)}
  async function uploadSizeChart(file?:File){
   if(!file)return;
   setChartBusy(true);setError('');
@@ -57,11 +58,11 @@ export default function ProductEditor(){
  async function submit(event:FormEvent<HTMLFormElement>){
   event.preventDefault();setError('');
   const activeVariants=product.variants.filter(v=>v.active);
-  if(!product.name.trim()||!mainCategoryId||product.price<=0){setError('Name, main category and a valid selling price are required.');return}
+  if(!product.name.trim()||!product.categoryId||product.price<=0){setError('Name, category and a valid selling price are required.');return}
   if(!activeVariants.length){setError('Add at least one active size / stock variant.');return}
   if(activeVariants.some(v=>!v.color.trim()||!v.size.trim()||v.stock<0)){setError('Every active variant needs a colour, size and valid stock quantity.');return}
   setBusy(true);
-  try{await store.commit('products',{...product,categoryId:mainCategoryId,slug:product.slug||slugify(product.name)});setDirty(false);nav('/admin/products')}catch(reason){setError(reason instanceof Error?reason.message:'Could not save product. Your changes are still here—try again.')}finally{setBusy(false)}
+  try{await store.commit('products',{...product,slug:product.slug||slugify(product.name)});setDirty(false);nav('/admin/products')}catch(reason){setError(reason instanceof Error?reason.message:'Could not save product. Your changes are still here—try again.')}finally{setBusy(false)}
  }
  function cancel(){if(!dirty||confirm('Discard unsaved changes?'))nav('/admin/products')}
 
@@ -110,8 +111,9 @@ export default function ProductEditor(){
     <Card title="Status"><label className="text-xs">Publication status<select className="field mt-2" value={product.status} onChange={e=>set('status',e.target.value as Product['status'])}><option>draft</option><option>published</option><option>archived</option></select></label><Check label="Featured" checked={product.featured} set={value=>set('featured',value)}/><Check label="New arrival" checked={product.newArrival} set={value=>set('newArrival',value)}/></Card>
 
     <Card title="Category">
-     <label className="text-xs">Main category<select required className="field mt-2" value={mainCategoryId} onChange={e=>selectMain(e.target.value)}><option value="">Select category</option>{mainCategories.map(cat=><option key={cat.id} value={cat.id}>{cat.name}</option>)}</select></label>
-     <p className="text-xs leading-5 text-black/45">Only your active main categories appear here. Published categories appear in the storefront menu automatically.</p>
+     <label className="text-xs">Main category<select required className="field mt-2" value={mainCategoryId} onChange={e=>selectMain(e.target.value)}><option value="">Select main category</option>{mainCategories.map(cat=><option key={cat.id} value={cat.id}>{cat.name}</option>)}</select></label>
+     {mainCategoryId&&<label className="text-xs">Subcategory<select className="field mt-2" value={subcategoryId} onChange={e=>selectSub(e.target.value)}><option value="">General / main category</option>{subcategories.map(cat=><option key={cat.id} value={cat.id}>{cat.name}</option>)}</select></label>}
+     <p className="text-xs leading-5 text-black/45">Choose the exact group when possible. Example: WOMEN → Crop Tops. If a product does not need a subcategory, leave it under the main category.</p>
      <Field label="Tags (optional, comma separated)" value={product.tags.join(', ')} set={value=>set('tags',value.split(',').map(x=>x.trim()).filter(Boolean))}/>
     </Card>
 

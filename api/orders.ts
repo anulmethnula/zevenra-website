@@ -2,7 +2,7 @@ import type {VercelRequest,VercelResponse} from '@vercel/node';
 import{appsScriptEnv,body,callScript,json,methodNotAllowed,orderSchema,readCustomerSession,validOrigin}from'./_shared.js';
 
 type ScriptOrderItem={productId?:unknown;variantId?:unknown;sku?:unknown;productName?:unknown;name?:unknown;color?:unknown;size?:unknown;quantity?:unknown;unitPrice?:unknown};
-type ScriptOrder={orderId?:unknown;createdAt?:unknown;customerName?:unknown;phone?:unknown;city?:unknown;district?:unknown;paymentMethod?:unknown;subtotal?:unknown;deliveryFee?:unknown;total?:unknown;orderStatus?:unknown;paymentStatus?:unknown;items?:ScriptOrderItem[]};
+type ScriptOrder={orderId?:unknown;createdAt?:unknown;customerName?:unknown;phone?:unknown;whatsapp?:unknown;email?:unknown;address1?:unknown;address2?:unknown;city?:unknown;district?:unknown;postalCode?:unknown;deliveryNotes?:unknown;paymentMethod?:unknown;paymentReference?:unknown;paymentReceiptUrl?:unknown;subtotal?:unknown;deliveryFee?:unknown;total?:unknown;orderStatus?:unknown;paymentStatus?:unknown;items?:ScriptOrderItem[]};
 
 export default async function handler(req:VercelRequest,res:VercelResponse){
  if(req.method!=='POST')return methodNotAllowed(res,['POST']);
@@ -17,9 +17,17 @@ export default async function handler(req:VercelRequest,res:VercelResponse){
    createdAt:String(raw.createdAt||new Date().toISOString()),
    customerName:String(raw.customerName||payload.customerName),
    phone:String(raw.phone||payload.phone),
+   whatsapp:String(raw.whatsapp||payload.whatsapp||''),
+   email:String(raw.email||payload.email||''),
+   address1:String(raw.address1||payload.address1||''),
+   address2:String(raw.address2||payload.address2||''),
    city:String(raw.city||payload.city),
    district:String(raw.district||payload.district),
+   postalCode:String(raw.postalCode||payload.postalCode||''),
+   deliveryNotes:String(raw.deliveryNotes||payload.deliveryNotes||''),
    paymentMethod:raw.paymentMethod==='bank'?'bank':'cod',
+   paymentReference:String(raw.paymentReference||payload.paymentReference||''),
+   paymentReceiptUrl:String(raw.paymentReceiptUrl||payload.paymentReceiptUrl||''),
    subtotal:Number(raw.subtotal)||0,
    deliveryFee:Number(raw.deliveryFee)||0,
    total:Number(raw.total)||0,
