@@ -20,11 +20,10 @@ export default function ProductEditor(){
  const addVariant=()=>set('variants',[...product.variants,{id:crypto.randomUUID(),sku:'',color:product.variants[0]?.color||'Default',size:'',stock:0,lowStockThreshold:1,active:true}]);
 
  const activeCategories=store.data.categories.filter(category=>category.active),mainCategories=activeCategories.filter(category=>!category.parentId).sort((a,b)=>a.sortOrder-b.sortOrder),selectedCategory=activeCategories.find(category=>category.id===product.categoryId);
- const mainCategoryId=selectedCategory?.parentId||selectedCategory?.id||'',subcategories=activeCategories.filter(category=>category.parentId===mainCategoryId).sort((a,b)=>a.sortOrder-b.sortOrder),subcategoryId=selectedCategory?.parentId?selectedCategory.id:'';
+ const mainCategoryId=selectedCategory?.parentId||selectedCategory?.id||'';
  const selectedChart=store.data.sizeCharts.find(chart=>chart.id===product.sizeChartId);
 
  function selectMain(id:string){set('categoryId',id)}
- function selectSub(id:string){set('categoryId',id||mainCategoryId)}
  async function uploadSizeChart(file?:File){
   if(!file)return;
   setChartBusy(true);setError('');
@@ -58,11 +57,11 @@ export default function ProductEditor(){
  async function submit(event:FormEvent<HTMLFormElement>){
   event.preventDefault();setError('');
   const activeVariants=product.variants.filter(v=>v.active);
-  if(!product.name.trim()||!product.categoryId||product.price<=0){setError('Name, category and a valid selling price are required.');return}
+  if(!product.name.trim()||!mainCategoryId||product.price<=0){setError('Name, main category and a valid selling price are required.');return}
   if(!activeVariants.length){setError('Add at least one active size / stock variant.');return}
   if(activeVariants.some(v=>!v.color.trim()||!v.size.trim()||v.stock<0)){setError('Every active variant needs a colour, size and valid stock quantity.');return}
   setBusy(true);
-  try{await store.commit('products',{...product,slug:product.slug||slugify(product.name)});setDirty(false);nav('/admin/products')}catch(reason){setError(reason instanceof Error?reason.message:'Could not save product. Your changes are still here—try again.')}finally{setBusy(false)}
+  try{await store.commit('products',{...product,categoryId:mainCategoryId,slug:product.slug||slugify(product.name)});setDirty(false);nav('/admin/products')}catch(reason){setError(reason instanceof Error?reason.message:'Could not save product. Your changes are still here—try again.')}finally{setBusy(false)}
  }
  function cancel(){if(!dirty||confirm('Discard unsaved changes?'))nav('/admin/products')}
 
@@ -85,7 +84,7 @@ export default function ProductEditor(){
     <Card title="Product images & video">
      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
       {product.media.map((media,index)=><div key={media.url+'-'+index} className="group relative overflow-hidden border border-black/10 bg-white">
-       {media.type==='video'?<video src={media.url} muted playsInline controls className="aspect-[4/5] w-full object-cover"/>:<img src={media.url} alt={media.alt||product.name} className="aspect-[4/5] w-full object-cover"/>}
+       {media.type==='video'?<video src={media.url} muted playsInline controls preload="metadata" className="aspect-[4/5] w-full object-cover"/>:<img src={media.url} alt={media.alt||product.name} className="aspect-[4/5] w-full object-cover" loading="lazy" decoding="async"/>}
        <div className="absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/55 to-transparent p-2 text-white"><span className="text-[8px] tracking-[.14em]">{index===0?'PRIMARY':media.type.toUpperCase()}</span>{index!==0&&<button type="button" onClick={()=>makePrimary(index)} title="Make primary image" className="grid h-9 w-9 place-items-center bg-black/35"><Star size={14}/></button>}</div>
        <div className="absolute inset-x-2 bottom-2 flex justify-between gap-1"><div className="flex gap-1"><button type="button" disabled={index===0} onClick={()=>moveMedia(index,-1)} aria-label="Move media left" className="grid h-9 w-9 place-items-center bg-white/95 disabled:opacity-40"><ArrowLeft size={14}/></button><button type="button" disabled={index===product.media.length-1} onClick={()=>moveMedia(index,1)} aria-label="Move media right" className="grid h-9 w-9 place-items-center bg-white/95 disabled:opacity-40"><ArrowRight size={14}/></button></div><button type="button" aria-label="Remove media" onClick={()=>set('media',product.media.filter((_,i)=>i!==index))} className="grid h-9 w-9 place-items-center bg-white/95 text-red-800"><Trash2 size={15}/></button></div>
       </div>)}
@@ -111,10 +110,9 @@ export default function ProductEditor(){
     <Card title="Status"><label className="text-xs">Publication status<select className="field mt-2" value={product.status} onChange={e=>set('status',e.target.value as Product['status'])}><option>draft</option><option>published</option><option>archived</option></select></label><Check label="Featured" checked={product.featured} set={value=>set('featured',value)}/><Check label="New arrival" checked={product.newArrival} set={value=>set('newArrival',value)}/></Card>
 
     <Card title="Category">
-     <label className="text-xs">Main category<select required className="field mt-2" value={mainCategoryId} onChange={e=>selectMain(e.target.value)}><option value="">Select main category</option>{mainCategories.map(cat=><option key={cat.id} value={cat.id}>{cat.name}</option>)}</select></label>
-     {mainCategoryId&&<label className="text-xs">Subcategory<select className="field mt-2" value={subcategoryId} onChange={e=>selectSub(e.target.value)}><option value="">General / main category</option>{subcategories.map(cat=><option key={cat.id} value={cat.id}>{cat.name}</option>)}</select></label>}
-     <p className="text-xs leading-5 text-black/45">For example: WOMEN → Crop Tops. The storefront filters and navigation use this hierarchy automatically.</p>
-     <Field label="Tags (comma separated)" value={product.tags.join(', ')} set={value=>set('tags',value.split(',').map(x=>x.trim()).filter(Boolean))}/>
+     <label className="text-xs">Main category<select required className="field mt-2" value={mainCategoryId} onChange={e=>selectMain(e.target.value)}><option value="">Select category</option>{mainCategories.map(cat=><option key={cat.id} value={cat.id}>{cat.name}</option>)}</select></label>
+     <p className="text-xs leading-5 text-black/45">Only your active main categories appear here. Published categories appear in the storefront menu automatically.</p>
+     <Field label="Tags (optional, comma separated)" value={product.tags.join(', ')} set={value=>set('tags',value.split(',').map(x=>x.trim()).filter(Boolean))}/>
     </Card>
 
     <Card title="Collections"><div className="grid gap-1">{store.data.collections.length?store.data.collections.map(col=><Check key={col.id} label={col.name} checked={product.collectionIds.includes(col.id)} set={yes=>set('collectionIds',yes?[...product.collectionIds,col.id]:product.collectionIds.filter(x=>x!==col.id))}/>):<p className="text-xs text-black/45">No collections yet.</p>}</div></Card>

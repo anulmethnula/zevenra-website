@@ -9,6 +9,7 @@ type AdminState={dashboard:DashboardData|null;orders:Order[];deliveryRates:Deliv
 type Value={data:StoreData;loading:boolean;error:string;adminLoading:boolean;adminError:string;admin:AdminState;live:boolean;loadAdmin:()=>Promise<void>;retry:()=>void;save:<T extends EntityValue>(entity:Entity,value:T)=>void;commit:<T extends EntityValue>(entity:Entity,value:T)=>Promise<void>;remove:(entity:Entity,id:string)=>void;duplicate:(entity:Entity,id:string)=>void;reorder:(entity:Entity,id:string,direction:-1|1)=>void;saveSettings:(patch:Partial<SiteSettings>)=>void;commitSettings:(patch:Partial<SiteSettings>)=>Promise<void>;saveDeliveryRates:(rates:DeliveryRate[])=>Promise<void>;updateOrder:(patch:Partial<Order>&{orderId:string})=>void;resetDemo:()=>void};
 type SettingsRow={key:string;value:unknown};
 type PublicPayload={products:unknown[];categories:unknown[];collections:unknown[];sizeCharts:unknown[];navigation:unknown[];homepageSections:unknown[];settings:SettingsRow[]|Record<string,unknown>;deliveryRates?:unknown[]};
+type AdminBootstrap={dashboard:DashboardData|null;products:unknown[];categories:unknown[];collections:unknown[];sizeCharts:unknown[];homepageSections:unknown[];orders:Order[];settings:SettingsRow[];deliveryRates:unknown[]};
 
 const demo=import.meta.env.VITE_DEMO_MODE==='true',adminRoute=location.pathname.startsWith('/admin'),storageKey='zevenra-admin-data-v2',Context=createContext<Value|null>(null);
 const emptyAdmin:AdminState={dashboard:null,orders:[],deliveryRates:[]};
@@ -48,41 +49,21 @@ export function StoreProvider({children}:{children:ReactNode}){const[data,setDat
   if(demo)return;
   setAdminLoading(true);
   setAdminError('');
-  const labels=['Dashboard','Products','Categories','Collections','Size charts','Navigation','Homepage','Orders','Settings','Delivery'];
   try{
-   const results=await Promise.allSettled([
-    adminApi.get<DashboardData>('dashboard'),
-    adminApi.get<unknown[]>('listProducts'),
-    adminApi.get<unknown[]>('listCategories'),
-    adminApi.get<unknown[]>('listCollections'),
-    adminApi.get<unknown[]>('listSizeCharts'),
-    adminApi.get<unknown[]>('listNavigation'),
-    adminApi.get<unknown[]>('listHomepageSections'),
-    adminApi.get<Order[]>('listOrders'),
-    adminApi.get<SettingsRow[]>('getSettings'),
-    adminApi.get<DeliveryRate[]>('listDeliveryRates')
-   ]);
-   const pick=<T,>(index:number):T|undefined=>results[index].status==='fulfilled'?(results[index] as PromiseFulfilledResult<T>).value:undefined;
-   const failures=results.flatMap((entry,index)=>entry.status==='rejected'?[labels[index]]:[]);
-   const rawProducts=pick<unknown[]>(1),rawCategories=pick<unknown[]>(2),rawCollections=pick<unknown[]>(3),rawCharts=pick<unknown[]>(4),rawNavigation=pick<unknown[]>(5),rawHomepage=pick<unknown[]>(6),settings=pick<SettingsRow[]>(8),deliveryRates=pick<DeliveryRate[]>(9);
-   setData(current=>{
-    const clean=cleanCatalogue({
-     products:rawProducts?rawProducts.map(normalizeProduct):current.products,
-     categories:rawCategories?rawCategories.map(normalizeCategory):current.categories,
-     collections:rawCollections?rawCollections.map(normalizeCollection):current.collections,
-     sizeCharts:rawCharts?rawCharts.map(normalizeSizeChart):current.sizeCharts,
-     navigation:rawNavigation?rawNavigation.map(normalizeNavigation):current.navigation,
-     homepageSections:rawHomepage?rawHomepage.map(normalizeHomepage):current.homepageSections
-    });
-    return{...current,...clean,settings:settings?normalizeSettings(settings):current.settings,deliveryRates:deliveryRates?deliveryRates.map(normalizeDeliveryRate):current.deliveryRates};
+   const payload=await adminApi.get<AdminBootstrap>('bootstrap');
+   const clean=cleanCatalogue({
+    products:(payload.products||[]).map(normalizeProduct),
+    categories:(payload.categories||[]).map(normalizeCategory),
+    collections:(payload.collections||[]).map(normalizeCollection),
+    sizeCharts:(payload.sizeCharts||[]).map(normalizeSizeChart),
+    navigation:[],
+    homepageSections:(payload.homepageSections||[]).map(normalizeHomepage)
    });
-   setAdmin(current=>({
-    dashboard:pick<DashboardData>(0)??current.dashboard,
-    orders:pick<Order[]>(7)??current.orders,
-    deliveryRates:deliveryRates?deliveryRates.map(normalizeDeliveryRate):current.deliveryRates
-   }));
-   if(failures.length)setAdminError(`Some admin sections could not refresh: ${failures.join(', ')}. The working sections are still available.`);
-  }finally{setAdminLoading(false)}
+   const deliveryRates=(payload.deliveryRates||[]).map(normalizeDeliveryRate);
+   setData(current=>({...current,...clean,navigation:current.navigation,settings:normalizeSettings(payload.settings||[]),deliveryRates}));
+   setAdmin({dashboard:payload.dashboard||null,orders:payload.orders||[],deliveryRates});
+  }catch(reason){setAdminError(message(reason))}
+  finally{setAdminLoading(false)}
  },[]);
  const demoCommit=(next:StoreData)=>{setData(next);localStorage.setItem(storageKey,JSON.stringify(next))};
  const queue=useCallback((key:string,work:()=>Promise<void>)=>{clearTimeout(timers.current[key]);timers.current[key]=setTimeout(()=>{void work().catch(reason=>setAdminError(message(reason)))},450)},[]);
