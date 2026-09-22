@@ -63,7 +63,7 @@ export default function ProductPage(){
      <div className="mt-7">
       <div className="mb-3 flex items-center justify-between">
        <span className="eyebrow">Size</span>
-       {chart&&<button onClick={()=>setGuide(true)} className="size-guide-link"><Ruler size={14}/> Size guide</button>}
+       {chart?.imageUrl&&<button onClick={()=>setGuide(true)} className="size-guide-link"><Ruler size={14}/> Size guide</button>}
       </div>
       <div className="flex flex-wrap gap-2">{options.map(v=><button key={v.id} disabled={v.stock<1} onClick={()=>{setSize(v.size);setQty(1)}} className={`min-h-12 min-w-14 border px-4 text-xs ${size===v.size?'border-ink bg-ink text-paper':'border-line'} disabled:opacity-25 disabled:line-through`}>{v.size}</button>)}</div>
      </div>
@@ -86,7 +86,7 @@ export default function ProductPage(){
 
   <div className="fixed inset-x-0 bottom-0 z-30 border-t hairline bg-paper p-3 lg:hidden"><button disabled={sold||!variant||maxAdd<1} onClick={add} className="btn btn-dark w-full disabled:opacity-40">{sold?'Sold out':!size?'Select a size':maxAdd<1?'Already in bag':`Add to bag · ${money(product.price)}`}</button></div>
 
-  <AnimatePresence>{guide&&chart&&<SizeGuide chart={chart} close={()=>setGuide(false)}/>}</AnimatePresence>
+  <AnimatePresence>{guide&&chart?.imageUrl&&<SizeGuide chart={chart} close={()=>setGuide(false)}/>}</AnimatePresence>
  </>;
 }
 
@@ -105,18 +105,16 @@ function ProductGallery({media,current,active,setActive,previous,next,onTouchSta
  </div>
 }
 
-function SizeGuide({chart,close}:{chart:{name:string;unit:string;imageUrl?:string;columns:string[];rows:string[][];notes?:string};close:()=>void}){
+function SizeGuide({chart,close}:{chart:{name:string;imageUrl?:string};close:()=>void}){
  return <>
   <motion.button className="fixed inset-0 z-50 bg-black/55 backdrop-blur-[2px]" onClick={close} initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} aria-label="Close size guide"/>
-  <motion.aside role="dialog" aria-modal="true" aria-label="Size guide" className="size-guide-panel" initial={{x:'100%'}} animate={{x:0}} exit={{x:'100%'}} transition={{duration:.38,ease:[.22,1,.36,1]}}>
+  <motion.aside role="dialog" aria-modal="true" aria-label="Size guide" className="size-guide-panel size-guide-panel--image" initial={{x:'100%'}} animate={{x:0}} exit={{x:'100%'}} transition={{duration:.38,ease:[.22,1,.36,1]}}>
    <div className="size-guide-panel__top">
-    <div><p className="eyebrow text-bronze">Product measurements</p><h2 className="display mt-2 text-4xl sm:text-5xl">Size &amp; fit.</h2></div>
+    <div><p className="eyebrow text-bronze">Product sizing</p><h2 className="display mt-2 text-4xl sm:text-5xl">Size guide.</h2></div>
     <button onClick={close} className="size-guide-panel__close" aria-label="Close size guide"><X/></button>
    </div>
-   <p className="mt-5 text-sm text-ink/55">{chart.name} · {chart.unit}</p>
-   {chart.imageUrl&&<div className="size-guide-panel__image"><img src={chart.imageUrl} alt={chart.name+' size chart'}/></div>}
-   {chart.columns.length>0&&chart.rows.length>0&&<div className="mt-6 overflow-x-auto"><table className="w-full min-w-[520px] text-left text-sm"><thead><tr>{chart.columns.map(x=><th key={x} className="border-b hairline p-3 text-[10px] font-medium uppercase tracking-[.14em]">{x}</th>)}</tr></thead><tbody>{chart.rows.map((row,i)=><tr key={i}>{row.map((x,j)=><td key={j} className="border-b hairline p-3">{x}</td>)}</tr>)}</tbody></table></div>}
-   {chart.notes&&<p className="mt-6 border-l border-bronze pl-4 text-xs leading-6 text-ink/50">{chart.notes}</p>}
+   <p className="mt-5 text-sm text-ink/55">{chart.name}</p>
+   <div className="size-guide-panel__image size-guide-panel__image--only"><img src={chart.imageUrl} alt={chart.name+' size chart'}/></div>
   </motion.aside>
  </>;
 }
