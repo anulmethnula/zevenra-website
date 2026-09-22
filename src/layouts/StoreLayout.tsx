@@ -4,7 +4,7 @@ import {AnimatePresence,motion} from 'framer-motion';
 import {ArrowRight,ArrowUpRight,ChevronDown,Instagram,Menu,MessageCircle,PackageCheck,Search,ShoppingBag,Truck,UserRound,X} from 'lucide-react';
 import {CartDrawer} from '../components/CartDrawer';
 import {useCart} from '../features/cart/CartContext';
-import {navigationHref,useStore} from '../features/store/StoreContext';
+import {useStore} from '../features/store/StoreContext';
 import {getNavigationCategories} from '../services/navigation';
 import {useCustomerAuth} from '../features/account/CustomerAuthContext';
 import type {Category} from '../types';
@@ -16,12 +16,8 @@ export function StoreLayout(){
  const cart=useCart(),{user}=useCustomerAuth(),{data}=useStore(),location=useLocation(),[menu,setMenu]=useState(false),[solid,setSolid]=useState(location.pathname!=='/');
  useEffect(()=>{window.scrollTo({top:0,left:0,behavior:'auto'});setMenu(false);const update=()=>setSolid(location.pathname!=='/'||scrollY>48);update();addEventListener('scroll',update,{passive:true});return()=>removeEventListener('scroll',update)},[location.pathname,location.search]);
  const categories=getNavigationCategories(data.categories,data.products);
- const configured=data.navigation.filter(item=>item.visible).sort((a,b)=>a.sortOrder-b.sortOrder);
- const categoryEntries:NavEntry[]=categories.map(category=>({id:'category-'+category.id,label:category.name.toUpperCase(),to:'/category/'+category.slug,children:category.children}));
- const reserved=new Set(['/shop','/about','/shop?new=true']);
- const extras:NavEntry[]=configured.filter(item=>item.linkType!=='category').map(item=>{const href=navigationHref(item,data.categories,data.collections);return{id:item.id,label:item.label.toUpperCase(),to:href,external:item.linkType==='url'&&/^https?:\/\//i.test(href)}}).filter(item=>!reserved.has(item.to));
- const seen=new Set<string>(),custom=extras.filter(item=>{const key=item.to+'|'+item.label;if(seen.has(key))return false;seen.add(key);return true});
- const nav:NavEntry[]=[{id:'core-new',label:'NEW',to:'/shop?new=true'},{id:'core-shop',label:'SHOP',to:'/shop'},...categoryEntries,...custom,{id:'core-about',label:'ABOUT',to:'/about'}];
+ const categoryEntries:NavEntry[]=categories.map(category=>({id:'category-'+category.id,label:category.name.toUpperCase(),to:'/category/'+category.slug}));
+ const nav:NavEntry[]=[{id:'core-new',label:'NEW',to:'/shop?new=true'},{id:'core-shop',label:'SHOP',to:'/shop'},...categoryEntries,{id:'core-about',label:'ABOUT',to:'/about'}];
  const instagram=validExternalUrl(data.settings.instagram||''),tiktok=validExternalUrl(data.settings.tiktok||'');
  return <div>{data.settings.announcement&&<div className="announcement">{data.settings.announcement}</div>}<header className={'site-header '+(solid?'site-header--solid':'site-header--hero')}><div className="site-header__inner"><button onClick={()=>setMenu(true)} aria-label="Open menu" className="nav-icon lg:hidden"><Menu size={20}/></button><Link to="/" className="site-logo" aria-label="ZEVENRA home"><img src="/brand/zevenraname.png" alt="ZEVENRA"/></Link><DesktopNavigation items={nav}/><div className="header-actions"><Link to="/shop?focusSearch=1" aria-label="Search products" className="nav-icon"><Search size={19}/></Link><Link to={user?'/account':'/account/login'} aria-label={user?'Your account':'Sign in or create account'} className={'nav-icon '+(user?'nav-icon--active':'')}><UserRound size={19}/></Link><button onClick={()=>cart.setOpen(true)} aria-label={'Bag with '+cart.count+' items'} className="nav-icon"><ShoppingBag size={19}/><span className="bag-count">{cart.count}</span></button></div></div></header><AnimatePresence>{menu&&<MobileMenu items={nav} close={()=>setMenu(false)} logo="/brand/zevenraname.png" instagram={instagram} tiktok={tiktok}/>}</AnimatePresence><main><Outlet/></main><Footer/><CartDrawer/></div>
 }
