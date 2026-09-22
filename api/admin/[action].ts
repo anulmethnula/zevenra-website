@@ -1,7 +1,7 @@
 import type {VercelRequest,VercelResponse} from '@vercel/node';
 import{appsScriptEnv,body,callScript,json,validOrigin,validSession}from'../_shared.js';
 
-const allowed=new Set(['dashboard','listProducts','saveProduct','archiveProduct','deleteProduct','listCategories','saveCategory','deleteCategory','listCollections','saveCollection','deleteCollection','listSizeCharts','saveSizeChart','deleteSizeChart','listNavigation','saveNavigation','deleteNavigation','listHomepageSections','saveHomepageSection','deleteHomepageSection','listOrders','getOrder','updateOrder','getSettings','saveSettings','listDeliveryRates','saveDeliveryRates']);
+const allowed=new Set(['adminBootstrap','dashboard','listProducts','saveProduct','archiveProduct','deleteProduct','listCategories','saveCategory','deleteCategory','listCollections','saveCollection','deleteCollection','listSizeCharts','saveSizeChart','deleteSizeChart','listNavigation','saveNavigation','deleteNavigation','listHomepageSections','saveHomepageSection','deleteHomepageSection','listOrders','getOrder','updateOrder','getSettings','saveSettings','listDeliveryRates','saveDeliveryRates']);
 
 export default async function handler(req:VercelRequest,res:VercelResponse){
  try{
