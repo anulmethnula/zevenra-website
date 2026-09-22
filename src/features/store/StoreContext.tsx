@@ -6,7 +6,7 @@ import type {Category,Collection,ContentPage,DashboardData,DeliveryRate,Homepage
 type Entity='products'|'categories'|'collections'|'navigation'|'homepageSections'|'sizeCharts'|'pages';
 type EntityValue=Product|Category|Collection|NavigationItem|HomepageSection|SizeChart|ContentPage;
 type AdminState={dashboard:DashboardData|null;orders:Order[];deliveryRates:DeliveryRate[]};
-type Value={data:StoreData;loading:boolean;error:string;adminLoading:boolean;adminError:string;admin:AdminState;live:boolean;loadAdmin:()=>Promise<void>;retry:()=>void;save:<T extends EntityValue>(entity:Entity,value:T)=>void;commit:<T extends EntityValue>(entity:Entity,value:T)=>Promise<void>;remove:(entity:Entity,id:string)=>void;duplicate:(entity:Entity,id:string)=>void;reorder:(entity:Entity,id:string,direction:-1|1)=>void;saveSettings:(patch:Partial<SiteSettings>)=>void;commitSettings:(patch:Partial<SiteSettings>)=>Promise<void>;saveDeliveryRates:(rates:DeliveryRate[])=>Promise<void>;updateOrder:(patch:Partial<Order>&{orderId:string})=>void;resetDemo:()=>void};
+type Value={data:StoreData;loading:boolean;error:string;adminLoading:boolean;adminLoaded:boolean;adminError:string;admin:AdminState;live:boolean;loadAdmin:()=>Promise<void>;retry:()=>void;save:<T extends EntityValue>(entity:Entity,value:T)=>void;commit:<T extends EntityValue>(entity:Entity,value:T)=>Promise<void>;remove:(entity:Entity,id:string)=>void;duplicate:(entity:Entity,id:string)=>void;reorder:(entity:Entity,id:string,direction:-1|1)=>void;saveSettings:(patch:Partial<SiteSettings>)=>void;commitSettings:(patch:Partial<SiteSettings>)=>Promise<void>;saveDeliveryRates:(rates:DeliveryRate[])=>Promise<void>;updateOrder:(patch:Partial<Order>&{orderId:string})=>void;resetDemo:()=>void};
 type SettingsRow={key:string;value:unknown};
 type PublicPayload={products:unknown[];categories:unknown[];collections:unknown[];sizeCharts:unknown[];navigation:unknown[];homepageSections:unknown[];settings:SettingsRow[]|Record<string,unknown>;deliveryRates?:unknown[]};
 
@@ -37,52 +37,55 @@ function cleanCatalogue(input:{products:Product[];categories:Category[];collecti
 }
 function settingsPayload(patch:Partial<SiteSettings>){const payload:Record<string,unknown>={...patch};if(patch.deliveryFee!==undefined){payload.deliveryFlatFee=patch.deliveryFee;delete payload.deliveryFee}if(patch.bankEnabled!==undefined){payload.bankTransferEnabled=patch.bankEnabled;delete payload.bankEnabled}if(patch.accountName!==undefined){payload.bankAccountName=patch.accountName;delete payload.accountName}if(patch.accountNumber!==undefined){payload.bankAccountNumber=patch.accountNumber;delete payload.accountNumber}if(patch.branch!==undefined){payload.bankBranch=patch.branch;delete payload.branch}return payload}
 function demoLoad():StoreData{try{const saved=localStorage.getItem(storageKey);return saved?{...initialStoreData,...JSON.parse(saved) as StoreData}:initialStoreData}catch{return initialStoreData}}
+function liveSeed():StoreData{const seed=structuredClone(initialStoreData);return{...seed,products:[],categories:[],collections:[],navigation:[],homepageSections:[],sizeCharts:[],deliveryRates:[]}}
 function message(error:unknown){return error instanceof Error?error.message:'The operation could not be completed.'}
 
-export function StoreProvider({children}:{children:ReactNode}){const[data,setData]=useState<StoreData>(()=>demo?demoLoad():initialStoreData),[loading,setLoading]=useState(!demo&&!adminRoute),[error,setError]=useState(''),[adminLoading,setAdminLoading]=useState(!demo),[adminError,setAdminError]=useState(''),[admin,setAdmin]=useState<AdminState>(emptyAdmin),timers=useRef<Record<string,ReturnType<typeof setTimeout>>>({});
+export function StoreProvider({children}:{children:ReactNode}){const[data,setData]=useState<StoreData>(()=>demo?demoLoad():liveSeed()),[loading,setLoading]=useState(!demo&&!adminRoute),[error,setError]=useState(''),[adminLoading,setAdminLoading]=useState(!demo),[adminLoaded,setAdminLoaded]=useState(demo),[adminError,setAdminError]=useState(''),[admin,setAdmin]=useState<AdminState>(emptyAdmin),timers=useRef<Record<string,ReturnType<typeof setTimeout>>>({});
  const applyPublic=useCallback((payload:PublicPayload)=>setData(current=>{const clean=cleanCatalogue({products:payload.products.map(normalizeProduct),categories:payload.categories.map(normalizeCategory),collections:payload.collections.map(normalizeCollection),sizeCharts:payload.sizeCharts.map(normalizeSizeChart),navigation:payload.navigation.map(normalizeNavigation),homepageSections:payload.homepageSections.map(normalizeHomepage)});return{...current,...clean,settings:normalizeSettings(payload.settings),deliveryRates:(payload.deliveryRates||[]).map(normalizeDeliveryRate)}}),[]);
  const loadPublic=useCallback(async()=>{if(demo||adminRoute)return;setLoading(true);setError('');try{const response=await fetch(`${import.meta.env.VITE_API_BASE||'/api'}/store`),payload=await response.json() as PublicPayload&{error?:string};if(!response.ok)throw new Error(payload.error||'Live store data could not be loaded.');applyPublic(payload)}catch(reason){setError(message(reason))}finally{setLoading(false)}},[applyPublic]);
  useEffect(()=>{const pending=timers.current;void loadPublic();return()=>Object.values(pending).forEach(clearTimeout)},[loadPublic]);
  const refreshEntity=useCallback(async(entity:Entity)=>{if(entity==='products'){const rows=await adminApi.get<unknown[]>('listProducts');setData(x=>({...x,products:rows.map(normalizeProduct).filter(p=>!isLegacySampleProduct(p))}))}else if(entity==='categories'){const rows=await adminApi.get<unknown[]>('listCategories');setData(x=>{const normalized=rows.map(normalizeCategory),used=new Set(x.products.map(p=>p.categoryId));return{...x,categories:normalized.filter(category=>!isSampleId(category.id,'sample-cat-')||used.has(category.id)||normalized.some(child=>used.has(child.id)&&child.parentId===category.id))}})}else if(entity==='collections'){const rows=await adminApi.get<unknown[]>('listCollections');setData(x=>({...x,collections:rows.map(normalizeCollection)}))}else if(entity==='sizeCharts'){const rows=await adminApi.get<unknown[]>('listSizeCharts');setData(x=>{const used=new Set(x.products.map(p=>p.sizeChartId).filter(Boolean));return{...x,sizeCharts:rows.map(normalizeSizeChart).filter(chart=>!isSampleId(chart.id,'sample-size-')||used.has(chart.id))}})}else if(entity==='navigation'){const rows=await adminApi.get<unknown[]>('listNavigation');setData(x=>({...x,navigation:rows.map(normalizeNavigation).filter(item=>!isSampleId(item.id,'sample-nav-'))}))}else if(entity==='homepageSections'){const rows=await adminApi.get<unknown[]>('listHomepageSections');setData(x=>({...x,homepageSections:rows.map(normalizeHomepage)}))}},[]);
  const loadAdmin=useCallback(async()=>{
-  if(demo)return;
-  setAdminLoading(true);
-  setAdminError('');
-  const labels=['Dashboard','Products','Categories','Collections','Size charts','Navigation','Homepage','Orders','Settings','Delivery'];
-  try{
-   const results=await Promise.allSettled([
-    adminApi.get<DashboardData>('dashboard'),
-    adminApi.get<unknown[]>('listProducts'),
-    adminApi.get<unknown[]>('listCategories'),
-    adminApi.get<unknown[]>('listCollections'),
-    adminApi.get<unknown[]>('listSizeCharts'),
-    adminApi.get<unknown[]>('listNavigation'),
-    adminApi.get<unknown[]>('listHomepageSections'),
-    adminApi.get<Order[]>('listOrders'),
-    adminApi.get<SettingsRow[]>('getSettings'),
-    adminApi.get<DeliveryRate[]>('listDeliveryRates')
-   ]);
-   const pick=<T,>(index:number):T|undefined=>results[index].status==='fulfilled'?(results[index] as PromiseFulfilledResult<T>).value:undefined;
-   const failures=results.flatMap((entry,index)=>entry.status==='rejected'?[labels[index]]:[]);
-   const rawProducts=pick<unknown[]>(1),rawCategories=pick<unknown[]>(2),rawCollections=pick<unknown[]>(3),rawCharts=pick<unknown[]>(4),rawNavigation=pick<unknown[]>(5),rawHomepage=pick<unknown[]>(6),settings=pick<SettingsRow[]>(8),deliveryRates=pick<DeliveryRate[]>(9);
+  if(demo){setAdminLoaded(true);return}
+  setAdminLoading(true);setAdminError('');
+  type Bootstrap={dashboard:DashboardData;products:unknown[];categories:unknown[];collections:unknown[];sizeCharts:unknown[];navigation:unknown[];homepageSections:unknown[];orders:Order[];settings:SettingsRow[];deliveryRates:DeliveryRate[]};
+  const apply=(payload:Partial<Bootstrap>)=>{
    setData(current=>{
     const clean=cleanCatalogue({
-     products:rawProducts?rawProducts.map(normalizeProduct):current.products,
-     categories:rawCategories?rawCategories.map(normalizeCategory):current.categories,
-     collections:rawCollections?rawCollections.map(normalizeCollection):current.collections,
-     sizeCharts:rawCharts?rawCharts.map(normalizeSizeChart):current.sizeCharts,
-     navigation:rawNavigation?rawNavigation.map(normalizeNavigation):current.navigation,
-     homepageSections:rawHomepage?rawHomepage.map(normalizeHomepage):current.homepageSections
+     products:payload.products?payload.products.map(normalizeProduct):current.products,
+     categories:payload.categories?payload.categories.map(normalizeCategory):current.categories,
+     collections:payload.collections?payload.collections.map(normalizeCollection):current.collections,
+     sizeCharts:payload.sizeCharts?payload.sizeCharts.map(normalizeSizeChart):current.sizeCharts,
+     navigation:payload.navigation?payload.navigation.map(normalizeNavigation):current.navigation,
+     homepageSections:payload.homepageSections?payload.homepageSections.map(normalizeHomepage):current.homepageSections
     });
-    return{...current,...clean,settings:settings?normalizeSettings(settings):current.settings,deliveryRates:deliveryRates?deliveryRates.map(normalizeDeliveryRate):current.deliveryRates};
+    return{...current,...clean,settings:payload.settings?normalizeSettings(payload.settings):current.settings,deliveryRates:payload.deliveryRates?payload.deliveryRates.map(normalizeDeliveryRate):current.deliveryRates};
    });
-   setAdmin(current=>({
-    dashboard:pick<DashboardData>(0)??current.dashboard,
-    orders:pick<Order[]>(7)??current.orders,
-    deliveryRates:deliveryRates?deliveryRates.map(normalizeDeliveryRate):current.deliveryRates
-   }));
-   if(failures.length)setAdminError(`Some admin sections could not refresh: ${failures.join(', ')}. The working sections are still available.`);
-  }finally{setAdminLoading(false)}
+   setAdmin(current=>({dashboard:payload.dashboard??current.dashboard,orders:payload.orders??current.orders,deliveryRates:payload.deliveryRates?payload.deliveryRates.map(normalizeDeliveryRate):current.deliveryRates}));
+  };
+  try{
+   try{apply(await adminApi.get<Bootstrap>('adminBootstrap'))}
+   catch{
+    const payload:Partial<Bootstrap>={};
+    const tasks:[keyof Bootstrap,()=>Promise<unknown>][]=[
+     ['dashboard',()=>adminApi.get<DashboardData>('dashboard')],
+     ['products',()=>adminApi.get<unknown[]>('listProducts')],
+     ['categories',()=>adminApi.get<unknown[]>('listCategories')],
+     ['collections',()=>adminApi.get<unknown[]>('listCollections')],
+     ['sizeCharts',()=>adminApi.get<unknown[]>('listSizeCharts')],
+     ['navigation',()=>adminApi.get<unknown[]>('listNavigation')],
+     ['homepageSections',()=>adminApi.get<unknown[]>('listHomepageSections')],
+     ['orders',()=>adminApi.get<Order[]>('listOrders')],
+     ['settings',()=>adminApi.get<SettingsRow[]>('getSettings')],
+     ['deliveryRates',()=>adminApi.get<DeliveryRate[]>('listDeliveryRates')]
+    ];
+    const failed:string[]=[];
+    for(const [key,task] of tasks){try{(payload as Record<string,unknown>)[key]=await task()}catch{failed.push(String(key))}}
+    apply(payload);
+    if(failed.length)setAdminError(`Some admin data could not refresh: ${failed.join(', ')}. Working data is still available.`);
+   }
+  }catch(reason){setAdminError(message(reason))}
+  finally{setAdminLoaded(true);setAdminLoading(false)}
  },[]);
  const demoCommit=(next:StoreData)=>{setData(next);localStorage.setItem(storageKey,JSON.stringify(next))};
  const queue=useCallback((key:string,work:()=>Promise<void>)=>{clearTimeout(timers.current[key]);timers.current[key]=setTimeout(()=>{void work().catch(reason=>setAdminError(message(reason)))},450)},[]);
@@ -96,7 +99,7 @@ export function StoreProvider({children}:{children:ReactNode}){const[data,setDat
  const saveDeliveryRates=useCallback(async(rates:DeliveryRate[])=>{if(demo){setAdmin(x=>({...x,deliveryRates:rates}));return}setAdminError('');try{const rows=await adminApi.post<DeliveryRate[]>('saveDeliveryRates',{rates});setAdmin(x=>({...x,deliveryRates:rows.map(rate=>({...rate,fee:number(rate.fee),active:bool(rate.active)}))}))}catch(reason){setAdminError(message(reason));throw reason}},[]);
  const updateOrder=useCallback((patch:Partial<Order>&{orderId:string})=>{if(demo)return;void adminApi.post<Order>('updateOrder',patch).then(()=>loadAdmin()).catch(reason=>setAdminError(message(reason)))},[loadAdmin]);
  const resetDemo=()=>{if(!demo)return;localStorage.removeItem(storageKey);setData(initialStoreData)};
- const value=useMemo<Value>(()=>({data,loading,error,adminLoading,adminError,admin,live:!demo,loadAdmin,retry:loadPublic,save,commit,remove,duplicate,reorder,saveSettings,commitSettings,saveDeliveryRates,updateOrder,resetDemo}),[data,loading,error,adminLoading,adminError,admin,loadAdmin,loadPublic,save,commit,remove,duplicate,reorder,saveSettings,commitSettings,saveDeliveryRates,updateOrder]);
+ const value=useMemo<Value>(()=>({data,loading,error,adminLoading,adminLoaded,adminError,admin,live:!demo,loadAdmin,retry:loadPublic,save,commit,remove,duplicate,reorder,saveSettings,commitSettings,saveDeliveryRates,updateOrder,resetDemo}),[data,loading,error,adminLoading,adminLoaded,adminError,admin,loadAdmin,loadPublic,save,commit,remove,duplicate,reorder,saveSettings,commitSettings,saveDeliveryRates,updateOrder]);
  if(!adminRoute&&loading)return <div className="grid min-h-dvh place-content-center bg-paper text-center"><p className="eyebrow">Loading live store data…</p></div>;
  if(!adminRoute&&error)return <div className="grid min-h-dvh place-content-center bg-paper px-6 text-center"><h1 className="display text-4xl">Store data unavailable.</h1><p className="mt-3 text-sm text-black/55">{error}</p><button className="btn btn-dark mx-auto mt-6" onClick={()=>void loadPublic()}>Try again</button></div>;
  return <Context.Provider value={value}>{children}</Context.Provider>}
