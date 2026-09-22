@@ -19,12 +19,8 @@ export default function ProductEditor(){
  const variant=(variantId:string,patch:Partial<Variant>)=>set('variants',product.variants.map(v=>v.id===variantId?{...v,...patch}:v));
  const addVariant=()=>set('variants',[...product.variants,{id:crypto.randomUUID(),sku:'',color:product.variants[0]?.color||'Default',size:'',stock:0,lowStockThreshold:1,active:true}]);
 
- const activeCategories=store.data.categories.filter(category=>category.active),mainCategories=activeCategories.filter(category=>!category.parentId).sort((a,b)=>a.sortOrder-b.sortOrder),selectedCategory=activeCategories.find(category=>category.id===product.categoryId);
- const mainCategoryId=selectedCategory?.parentId||selectedCategory?.id||'',subcategories=activeCategories.filter(category=>category.parentId===mainCategoryId).sort((a,b)=>a.sortOrder-b.sortOrder),subcategoryId=selectedCategory?.parentId?selectedCategory.id:'';
+ const categories=[...store.data.categories].sort((a,b)=>a.sortOrder-b.sortOrder||a.name.localeCompare(b.name)),selectedCategory=categories.find(category=>category.id===product.categoryId);
  const selectedChart=store.data.sizeCharts.find(chart=>chart.id===product.sizeChartId);
-
- function selectMain(id:string){set('categoryId',id)}
- function selectSub(id:string){set('categoryId',id||mainCategoryId)}
  async function uploadSizeChart(file?:File){
   if(!file)return;
   setChartBusy(true);setError('');
@@ -39,11 +35,10 @@ export default function ProductEditor(){
   if(!files?.length)return;
   setMediaBusy(true);setError('');
   try{
-   const uploaded:Media[]=[];
-   for(const file of Array.from(files)){
+   const uploaded=await Promise.all(Array.from(files).map(async file=>{
     const url=await uploadAdminMedia(file);
-    uploaded.push({url,alt:product.name||'ZEVENRA product',type:file.type.startsWith('video/')?'video':'image'});
-   }
+    return{url,alt:product.name||'ZEVENRA product',type:(file.type.startsWith('video/')?'video':'image') as Media['type']}
+   }));
    set('media',[...product.media,...uploaded]);
   }catch(reason){setError(reason instanceof Error?reason.message:'Could not upload media.')}finally{setMediaBusy(false)}
  }
@@ -59,12 +54,17 @@ export default function ProductEditor(){
   event.preventDefault();setError('');
   const activeVariants=product.variants.filter(v=>v.active);
   if(!product.name.trim()||!product.categoryId||product.price<=0){setError('Name, category and a valid selling price are required.');return}
+  if(product.status==='published'&&!product.media.some(media=>media.type==='image')){setError('Add at least one product image before publishing.');return}
   if(!activeVariants.length){setError('Add at least one active size / stock variant.');return}
   if(activeVariants.some(v=>!v.color.trim()||!v.size.trim()||v.stock<0)){setError('Every active variant needs a colour, size and valid stock quantity.');return}
+  const variantKeys=activeVariants.map(v=>v.color.trim().toLowerCase()+'|'+v.size.trim().toLowerCase());
+  if(new Set(variantKeys).size!==variantKeys.length){setError('Remove duplicate colour + size rows before saving.');return}
   setBusy(true);
   try{await store.commit('products',{...product,slug:product.slug||slugify(product.name)});setDirty(false);nav('/admin/products')}catch(reason){setError(reason instanceof Error?reason.message:'Could not save product. Your changes are still here—try again.')}finally{setBusy(false)}
  }
  function cancel(){if(!dirty||confirm('Discard unsaved changes?'))nav('/admin/products')}
+
+ if(id&&store.adminLoaded&&!found)return <div className="mx-auto max-w-xl bg-[#f6f3ed] p-8 text-center"><p className="eyebrow text-black/45">Catalogue</p><h1 className="display mt-3 text-4xl">Product not found.</h1><p className="mt-3 text-sm text-black/50">This product is not in the live catalogue. It may have been removed or the data needs a refresh.</p><div className="mt-6 flex justify-center gap-3"><button type="button" className="btn" onClick={()=>void store.loadAdmin()}>Retry data</button><button type="button" className="btn btn-dark" onClick={()=>nav('/admin/products')}>Back to products</button></div></div>;
 
  return <form onSubmit={submit}>
   <div className="sticky top-0 z-20 -mx-4 flex flex-wrap items-center justify-between gap-4 border-b border-black/10 bg-[#e9e5de]/95 px-4 py-4 backdrop-blur sm:-mx-7 sm:px-7 lg:-mx-10 lg:px-10">
@@ -77,7 +77,6 @@ export default function ProductEditor(){
    <div className="space-y-6">
     <Card title="Basic information">
      <Field label="Product name" value={product.name} set={setName} required/>
-     <Field label="Slug" value={product.slug} set={value=>set('slug',slugify(value))} placeholder={slugify(product.name)}/>
      <Field label="Short description" value={product.shortDescription} set={value=>set('shortDescription',value)}/>
      <label className="block text-xs">Full description<textarea rows={6} className="field mt-2" value={product.description} onChange={e=>set('description',e.target.value)}/></label>
     </Card>
@@ -108,13 +107,14 @@ export default function ProductEditor(){
    </div>
 
    <aside className="space-y-6">
-    <Card title="Status"><label className="text-xs">Publication status<select className="field mt-2" value={product.status} onChange={e=>set('status',e.target.value as Product['status'])}><option>draft</option><option>published</option><option>archived</option></select></label><Check label="Featured" checked={product.featured} set={value=>set('featured',value)}/><Check label="New arrival" checked={product.newArrival} set={value=>set('newArrival',value)}/></Card>
+    <Card title="Status"><label className="text-xs">Publication status<select className="field mt-2" value={product.status} onChange={e=>set('status',e.target.value as Product['status'])}><option>draft</option><option>published</option><option>archived</option></select></label><Check label="Featured on homepage" checked={product.featured} set={value=>set('featured',value)}/><Check label="New arrival" checked={product.newArrival} set={value=>set('newArrival',value)}/></Card>
 
     <Card title="Category">
-     <label className="text-xs">Main category<select required className="field mt-2" value={mainCategoryId} onChange={e=>selectMain(e.target.value)}><option value="">Select main category</option>{mainCategories.map(cat=><option key={cat.id} value={cat.id}>{cat.name}</option>)}</select></label>
-     {mainCategoryId&&<label className="text-xs">Subcategory<select className="field mt-2" value={subcategoryId} onChange={e=>selectSub(e.target.value)}><option value="">General / main category</option>{subcategories.map(cat=><option key={cat.id} value={cat.id}>{cat.name}</option>)}</select></label>}
-     <p className="text-xs leading-5 text-black/45">For example: WOMEN → Crop Tops. The storefront filters and navigation use this hierarchy automatically.</p>
-     <Field label="Tags (comma separated)" value={product.tags.join(', ')} set={value=>set('tags',value.split(',').map(x=>x.trim()).filter(Boolean))}/>
+     <label className="text-xs">Category<select required className="field mt-2" value={product.categoryId} onChange={e=>set('categoryId',e.target.value)}><option value="">Select category</option>{categories.map(cat=><option key={cat.id} value={cat.id}>{cat.name}{cat.active?'':' — hidden'}</option>)}</select></label>
+     {!categories.length&&<p className="text-xs leading-5 text-red-800">No real categories are available. Create a category first, then return to this product.</p>}
+     {selectedCategory&&!selectedCategory.active&&<p className="text-xs leading-5 text-amber-900">This category is hidden from the storefront. The product can be saved, but publish the category when you want customers to see it in navigation.</p>}
+     <p className="text-xs leading-5 text-black/45">Published categories appear in the storefront menu automatically. No separate navigation setup is needed.</p>
+     <Field label="Tags (optional, comma separated)" value={product.tags.join(', ')} set={value=>set('tags',value.split(',').map(x=>x.trim()).filter(Boolean))}/>
     </Card>
 
     <Card title="Collections"><div className="grid gap-1">{store.data.collections.length?store.data.collections.map(col=><Check key={col.id} label={col.name} checked={product.collectionIds.includes(col.id)} set={yes=>set('collectionIds',yes?[...product.collectionIds,col.id]:product.collectionIds.filter(x=>x!==col.id))}/>):<p className="text-xs text-black/45">No collections yet.</p>}</div></Card>
