@@ -1,7 +1,7 @@
 import type {VercelRequest,VercelResponse} from '@vercel/node';
 import{appsScriptEnv,body,callScript,json,methodNotAllowed,orderSchema,readCustomerSession,validOrigin}from'./_shared.js';
 
-type ScriptOrderItem={productId?:unknown;variantId?:unknown;sku?:unknown;productName?:unknown;name?:unknown;color?:unknown;size?:unknown;quantity?:unknown;unitPrice?:unknown};
+type ScriptOrderItem={productId?:unknown;variantId?:unknown;sku?:unknown;productName?:unknown;name?:unknown;color?:unknown;size?:unknown;quantity?:unknown;unitPrice?:unknown;isPreorder?:unknown};
 type ScriptOrder={orderId?:unknown;createdAt?:unknown;customerName?:unknown;phone?:unknown;whatsapp?:unknown;email?:unknown;address1?:unknown;address2?:unknown;city?:unknown;district?:unknown;postalCode?:unknown;deliveryNotes?:unknown;paymentMethod?:unknown;paymentReference?:unknown;paymentReceiptUrl?:unknown;subtotal?:unknown;deliveryFee?:unknown;total?:unknown;orderStatus?:unknown;paymentStatus?:unknown;items?:ScriptOrderItem[]};
 
 export default async function handler(req:VercelRequest,res:VercelResponse){
@@ -43,7 +43,8 @@ export default async function handler(req:VercelRequest,res:VercelResponse){
     size:String(item.size||''),
     quantity:Number(item.quantity)||1,
     unitPrice:Number(item.unitPrice)||0,
-    sku:String(item.sku||'')
+    sku:String(item.sku||''),
+    isPreorder:item.isPreorder===true||String(item.isPreorder).toLowerCase()==='true'
    }))
   };
   return json(res,order,201);
