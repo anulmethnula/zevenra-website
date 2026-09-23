@@ -1,5 +1,5 @@
 import type {VercelRequest,VercelResponse} from '@vercel/node';
-import{appsScriptEnv,body,callScript,json,validOrigin,validSession}from'../_shared.js';
+import{appsScriptEnv,body,callScript,json,manualOrderSchema,validOrigin,validSession}from'../_shared.js';
 
 const allowed=new Set(['bootstrap','dashboard','listProducts','saveProduct','archiveProduct','deleteProduct','listCategories','saveCategory','deleteCategory','listCollections','saveCollection','deleteCollection','listSizeCharts','saveSizeChart','deleteSizeChart','listNavigation','saveNavigation','deleteNavigation','listHomepageSections','saveHomepageSection','deleteHomepageSection','listOrders','getOrder','updateOrder','listPreorders','updatePreorder','createPreorderBatch','convertPreorderToOrder','createManualOrder','getSettings','saveSettings','listDeliveryRates','saveDeliveryRates']);
 
@@ -29,6 +29,7 @@ export default async function handler(req:VercelRequest,res:VercelResponse){
   const payload=req.method==='GET'
    ?Object.fromEntries(Object.entries(req.query).filter(([key])=>key!=='action').map(([key,item])=>[key,Array.isArray(item)?item[0]:item]))
    :body(req);
+  const validatedPayload=action==='createManualOrder'?manualOrderSchema.parse(payload):payload;
   if(action==='bootstrap'){
    try{return json(res,await callScript(config,'adminBootstrap',{}))}
    catch(error){
@@ -37,12 +38,13 @@ export default async function handler(req:VercelRequest,res:VercelResponse){
     return json(res,await legacyBootstrap(config));
    }
   }
-  return json(res,await callScript(config,action,payload));
+  return json(res,await callScript(config,action,validatedPayload));
  }catch(error){
   const message=error instanceof Error?error.message:'';
   if(message==='Upstream unavailable')return json(res,{error:'Google Sheets backend is temporarily unreachable. Please retry in a moment.'},503);
   if(message==='Unknown action')return json(res,{error:'The live Apps Script backend is out of date. Redeploy the latest apps-script/Code.gs version.'},503);
   if(message==='Unauthorized')return json(res,{error:'Apps Script authentication is not configured correctly.'},503);
-  return json(res,{error:'The operation could not be completed.'},400);
+  if(error instanceof Error&&error.name==='ZodError')return json(res,{error:'Please check the customer, delivery and item details.'},400);
+  return json(res,{error:message||'The operation could not be completed.'},400);
  }
 }

@@ -123,17 +123,62 @@ const ROUTES: Record<string, RouteHandler> = {
       return json(res, {user: safeCustomer(customer)});
     },
   },
+  preorders: {
+    methods: ['GET'],
+    async run(req: VercelRequest, res: VercelResponse) {
+      const config = appsScriptEnv();
+      const identity = readCustomerSession(req, true);
+      if (!identity) throw new Error('CUSTOMER_AUTH_REQUIRED');
+      const rows = await callScript(config, 'listCustomerPreorders', {customerId: identity.id, email: identity.email}) as Array<Record<string,unknown>>;
+      const safeRows=(Array.isArray(rows)?rows:[]).map(item=>({
+        requestId:String(item.requestId||''),
+        createdAt:String(item.createdAt||''),
+        customerName:String(item.customerName||''),
+        whatsapp:String(item.whatsapp||''),
+        address1:String(item.address1||''),
+        address2:String(item.address2||''),
+        city:String(item.city||''),
+        district:String(item.district||''),
+        postalCode:String(item.postalCode||''),
+        productId:String(item.productId||''),
+        variantId:String(item.variantId||''),
+        productName:String(item.productName||''),
+        sku:String(item.sku||''),
+        color:String(item.color||''),
+        size:String(item.size||''),
+        quantity:Number(item.quantity)||1,
+        requestedPrice:Number(item.requestedPrice)||0,
+        confirmedPrice:Number(item.confirmedPrice)||0,
+        status:normalizePreorderStatus(item.status),
+        batchId:String(item.batchId||''),
+        updatedAt:String(item.updatedAt||''),
+      }));
+      return json(res,safeRows);
+    },
+  },
   orders: {
     methods: ['GET'],
     async run(req: VercelRequest, res: VercelResponse) {
       const config = appsScriptEnv();
       const identity = readCustomerSession(req, true);
       if (!identity) throw new Error('CUSTOMER_AUTH_REQUIRED');
-      const rows = await callScript(config, 'listCustomerOrders', {customerId: identity.id, email: identity.email}) as Array<{orderId?: unknown; createdAt?: unknown; paymentMethod?: unknown; paymentStatus?: unknown; subtotal?: unknown; deliveryFee?: unknown; total?: unknown; orderStatus?: unknown; items?: Array<{variantId?: unknown; productName?: unknown; color?: unknown; size?: unknown; quantity?: unknown; unitPrice?: unknown; lineTotal?: unknown; isPreorder?: unknown}>}>;
+      const rows = await callScript(config, 'listCustomerOrders', {customerId: identity.id, email: identity.email}) as Array<{orderId?: unknown; createdAt?: unknown; customerName?:unknown; phone?:unknown; whatsapp?:unknown; email?:unknown; address1?:unknown; address2?:unknown; city?:unknown; district?:unknown; postalCode?:unknown; deliveryNotes?:unknown; paymentMethod?: unknown; paymentReference?:unknown; paymentReceiptUrl?:unknown; paymentStatus?: unknown; subtotal?: unknown; deliveryFee?: unknown; total?: unknown; orderStatus?: unknown; items?: Array<{variantId?: unknown; productName?: unknown; color?: unknown; size?: unknown; quantity?: unknown; unitPrice?: unknown; lineTotal?: unknown; isPreorder?: unknown}>}>;
       const safeOrders = (Array.isArray(rows) ? rows : []).map((order) => ({
         orderId: String(order.orderId || ''),
         createdAt: String(order.createdAt || ''),
+        customerName:String(order.customerName||''),
+        phone:String(order.phone||''),
+        whatsapp:String(order.whatsapp||''),
+        email:String(order.email||''),
+        address1:String(order.address1||''),
+        address2:String(order.address2||''),
+        city:String(order.city||''),
+        district:String(order.district||''),
+        postalCode:String(order.postalCode||''),
+        deliveryNotes:String(order.deliveryNotes||''),
         paymentMethod: order.paymentMethod === 'bank' ? 'bank' : 'cod',
+        paymentReference:String(order.paymentReference||''),
+        paymentReceiptUrl:String(order.paymentReceiptUrl||''),
         paymentStatus: String(order.paymentStatus || ''),
         subtotal: Number(order.subtotal) || 0,
         deliveryFee: Number(order.deliveryFee) || 0,
@@ -177,7 +222,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (action === 'login') return json(res, {error: 'Unable to sign in right now.'}, 500);
     if (action === 'register') return json(res, {error: 'We could not create your account right now.'}, 500);
     if (action === 'logout') return json(res, {error: 'Unable to sign out.'}, 500);
-    if (action === 'orders') return json(res, {error: 'Orders are temporarily unavailable.'}, 500);
+    if (action === 'orders' || action === 'preorders') return json(res, {error: 'Your order history is temporarily unavailable.'}, 500);
     return json(res, {error: 'The request could not be completed.'}, 500);
   }
 }
@@ -202,3 +247,5 @@ function normalizeStatus(value: unknown) {
   const allowed = ['pending', 'confirmed', 'sourcing', 'packed', 'shipped', 'delivered', 'cancelled'];
   return allowed.includes(normalized) ? normalized.charAt(0).toUpperCase() + normalized.slice(1) : 'Pending';
 }
+
+function normalizePreorderStatus(value:unknown){const normalized=String(value||'new').toLowerCase();const allowed=['new','contacted','confirmed','batched','ordered','in_transit','arrived','ready','converted','cancelled'];return allowed.includes(normalized)?normalized:'new'}
