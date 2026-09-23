@@ -1,5 +1,5 @@
 import {useEffect,useMemo,useState,type FormEvent} from 'react';
-import {Link,useParams,useSearchParams} from 'react-router-dom';
+import {useParams,useSearchParams} from 'react-router-dom';
 import {Search,SlidersHorizontal,X} from 'lucide-react';
 import {AnimatePresence,motion} from 'framer-motion';
 import {ProductCard} from '../components/ProductCard';
