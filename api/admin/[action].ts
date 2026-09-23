@@ -1,7 +1,7 @@
 import type {VercelRequest,VercelResponse} from '@vercel/node';
 import{appsScriptEnv,body,callScript,json,validOrigin,validSession}from'../_shared.js';
 
-const allowed=new Set(['bootstrap','dashboard','listProducts','saveProduct','archiveProduct','deleteProduct','listCategories','saveCategory','deleteCategory','listCollections','saveCollection','deleteCollection','listSizeCharts','saveSizeChart','deleteSizeChart','listNavigation','saveNavigation','deleteNavigation','listHomepageSections','saveHomepageSection','deleteHomepageSection','listOrders','getOrder','updateOrder','listPreorders','updatePreorder','createPreorderBatch','getSettings','saveSettings','listDeliveryRates','saveDeliveryRates']);
+const allowed=new Set(['bootstrap','dashboard','listProducts','saveProduct','archiveProduct','deleteProduct','listCategories','saveCategory','deleteCategory','listCollections','saveCollection','deleteCollection','listSizeCharts','saveSizeChart','deleteSizeChart','listNavigation','saveNavigation','deleteNavigation','listHomepageSections','saveHomepageSection','deleteHomepageSection','listOrders','getOrder','updateOrder','listPreorders','updatePreorder','createPreorderBatch','convertPreorderToOrder','createManualOrder','getSettings','saveSettings','listDeliveryRates','saveDeliveryRates']);
 
 async function legacyBootstrap(config:ReturnType<typeof appsScriptEnv>){
  const specs=[
