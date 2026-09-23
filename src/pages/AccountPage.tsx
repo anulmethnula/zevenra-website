@@ -13,17 +13,20 @@ export default function AccountPage(){
  async function logout(){await signOut();navigate('/')}
  async function save(event:FormEvent<HTMLFormElement>){
   event.preventDefault();setSaving(true);setStatus('');
-  const data=new FormData(event.currentTarget);
+  const data=new FormData(event.currentTarget),firstName=String(data.get('firstName')||'').trim(),lastName=String(data.get('lastName')||'').trim(),mobile=String(data.get('mobile')||'').trim(),postalCode=String(data.get('postalCode')||'').trim();
+  if(!firstName||!lastName){setSaving(false);setStatus('First and last name are required.');return}
+  if(mobile&&!/^[+\d][\d\s-]{8,14}$/.test(mobile)){setSaving(false);setStatus('Enter a valid mobile number.');return}
+  if(postalCode&&!/^\d{5}$/.test(postalCode)){setSaving(false);setStatus('Postal code must be 5 digits.');return}
   try{
    await updateProfile({
-    firstName:String(data.get('firstName')||'').trim(),
-    lastName:String(data.get('lastName')||'').trim(),
-    mobile:String(data.get('mobile')||'').trim(),
+    firstName,
+    lastName,
+    mobile,
     address1:String(data.get('address1')||'').trim(),
     address2:String(data.get('address2')||'').trim(),
     city:String(data.get('city')||'').trim(),
     district:String(data.get('district')||'').trim(),
-    postalCode:String(data.get('postalCode')||'').trim()
+    postalCode
    });
    setStatus('Saved. These details will be ready at checkout.');
   }catch(reason){setStatus(reason instanceof Error?reason.message:'Could not save your details.')}
@@ -50,7 +53,7 @@ export default function AccountPage(){
     <label className="text-xs sm:col-span-2">Address Line 2<input className="field mt-2" name="address2" autoComplete="address-line2" defaultValue={user.address2}/></label>
     <label className="text-xs">City<input className="field mt-2" name="city" autoComplete="address-level2" defaultValue={user.city}/></label>
     <label className="text-xs">District<select className="field mt-2" name="district" defaultValue={user.district}><option value="">Select district</option>{districts.map(d=><option key={d} value={d}>{d}</option>)}</select></label>
-    <label className="text-xs">Postal Code<input className="field mt-2" name="postalCode" autoComplete="postal-code" defaultValue={user.postalCode}/></label>
+    <label className="text-xs">Postal Code<input className="field mt-2" name="postalCode" autoComplete="postal-code" inputMode="numeric" pattern="[0-9]{5}" defaultValue={user.postalCode}/></label>
     <div className="flex items-end sm:justify-end"><button className="btn btn-dark w-full sm:w-auto" disabled={saving}>{saving?'Saving…':'Save details'}</button></div>
     {status&&<p role="status" className="sm:col-span-2 text-xs text-black/60">{status}</p>}
    </form>

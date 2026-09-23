@@ -1,0 +1,55 @@
+name: Release QA
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: TypeScript
+        run: npm run typecheck
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Production build
+        run: npm run build
+
+      - name: Production dependency audit
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Apps Script syntax
+        run: |
+          cp apps-script/Code.gs /tmp/Code.js
+          node --check /tmp/Code.js
+
+      - name: Required release assets
+        run: |
+          test -s public/media/hero-final-v2.mp4
+          test -s public/brand/logo.svg
+          test -s public/brand/logo-light.svg
+          test -s public/brand/zevenraname.png
+          test -s public/brand/footer-background.png
+          test -s public/brand/about-hero.webp
+          test -s public/brand/about-story.webp
+          test -s public/brand/og-image.jpg
+          test ! -d functions/api
