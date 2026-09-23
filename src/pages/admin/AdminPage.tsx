@@ -56,7 +56,7 @@ function CategoryCard({item,fresh=false,onCancel}:{item:Category;fresh?:boolean;
   if(!draft.name.trim())return setStatus('Name is required.');
   if(draft.parentId===draft.id)return setStatus('A category cannot be its own parent.');
   setBusy(true);setStatus('');
-  try{await s.commit('categories',{...draft,slug:draft.slug||slugify(draft.name),showInNavigation:!draft.parentId});setStatus('Category saved.');onCancel?.()}
+  try{await s.commit('categories',{...draft,slug:draft.slug||slugify(draft.name),showInNavigation:draft.parentId?false:draft.showInNavigation});setStatus('Category saved.');onCancel?.()}
   catch(reason){setStatus(reason instanceof Error?reason.message:'Could not save category. Try again.')}
   finally{setBusy(false)}
  }
@@ -65,7 +65,7 @@ function CategoryCard({item,fresh=false,onCancel}:{item:Category;fresh?:boolean;
   {parent&&<p className="mt-3 border-l-2 border-[#96724f] pl-3 text-xs text-black/50">Storefront path: {parent.name} → {draft.name||'Subcategory'}</p>}
   {childCount>0&&!draft.parentId&&<p className="mt-3 text-xs text-amber-900">This main category has {childCount} subcategories. Move them first before changing this category into a subcategory.</p>}
   <label className="mt-3 block text-xs">Description (optional)<textarea className="field mt-2" value={draft.description} onChange={e=>change('description',e.target.value)}/></label>
-  <Toggles items={[['Published',draft.active,v=>change('active',v)],['Featured',draft.featured,v=>change('featured',v)],['Show on homepage',draft.showOnHomepage,v=>change('showOnHomepage',v)]]}/>
+  <Toggles items={[['Published',draft.active,v=>change('active',v)],['Featured',draft.featured,v=>change('featured',v)],...(!draft.parentId?[['Show in navigation',draft.showInNavigation,(v:boolean)=>change('showInNavigation',v)] as [string,boolean,(v:boolean)=>void]]:[]),['Show on homepage',draft.showOnHomepage,v=>change('showOnHomepage',v)]]}/>{draft.parentId&&<p className="mt-2 text-xs leading-5 text-black/45">Published subcategories appear automatically inside their main category menu and on that category’s shop page.</p>}
   <EditorActions busy={busy} status={status} save={submit} cancel={()=>{setDraft(item);onCancel?.()}}>{!fresh&&<button onClick={()=>confirm('Delete "'+item.name+'"?')&&s.remove('categories',item.id)} className="btn border-red-800 text-red-800">Delete</button>}</EditorActions>
  </Panel>
 }
@@ -74,7 +74,7 @@ function CollectionCard({item,fresh=false,onCancel}:{item:Collection;fresh?:bool
 function Navigation(){
  const s=useStore(),[creating,setCreating]=useState(false);
  const blank:NavigationItem={id:crypto.randomUUID(),label:'',linkType:'page',target:'/shop',visible:true,sortOrder:s.data.navigation.length+1};
- return <><Head eyebrow="Storefront header" title="Navigation" action={<button onClick={()=>setCreating(true)} className="btn btn-dark"><Plus size={16}/> Add item</button>}/><p className="mt-4 max-w-2xl text-sm leading-7 text-black/55">NEW, SHOP and ABOUT are permanent storefront links. Main categories marked “Show in navigation” are inserted automatically between them. Use this editor only for optional collections, campaigns or custom links.</p>{creating&&<div className="mt-7"><NavRow item={blank} fresh onCancel={()=>setCreating(false)}/></div>}<div className="mt-7 grid gap-2">{[...s.data.navigation].sort((a,b)=>a.sortOrder-b.sortOrder).map(n=><NavRow key={n.id} item={n}/>)}</div></>
+ return <><Head eyebrow="Storefront header" title="Navigation" action={<button onClick={()=>setCreating(true)} className="btn btn-dark"><Plus size={16}/> Add item</button>}/><p className="mt-4 max-w-2xl text-sm leading-7 text-black/55">NEW, SHOP and ABOUT are permanent storefront links. Main categories marked “Show in navigation” are inserted automatically between them. Every published subcategory under that main category appears automatically in its dropdown. Use this editor only for optional collections, campaigns or custom links.</p>{creating&&<div className="mt-7"><NavRow item={blank} fresh onCancel={()=>setCreating(false)}/></div>}<div className="mt-7 grid gap-2">{[...s.data.navigation].sort((a,b)=>a.sortOrder-b.sortOrder).map(n=><NavRow key={n.id} item={n}/>)}</div></>
 }
 function NavRow({item,fresh=false,onCancel}:{item:NavigationItem;fresh?:boolean;onCancel?:()=>void}){
  const s=useStore(),[draft,setDraft]=useState(item),[busy,setBusy]=useState(false),[status,setStatus]=useState('');useEffect(()=>setDraft(item),[item]);
