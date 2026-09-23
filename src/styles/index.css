@@ -279,3 +279,29 @@ textarea.field{padding-block:1rem}
  .size-guide-panel__image--only{padding:8px}
  .size-guide-panel__image--only img{max-height:62svh}
 }
+
+
+/* Final mobile commerce polish */
+@media(max-width:480px){
+ .site-header__inner{width:calc(100% - 16px);height:56px;margin-top:8px;padding:0 6px;grid-template-columns:38px 1fr auto}
+ .site-header--solid .site-header__inner{height:54px}
+ .site-logo{width:108px;height:36px}
+ .nav-icon{width:36px;min-width:36px;height:36px}
+ .header-actions{gap:0}
+ .mobile-menu{padding:18px}
+ .mobile-menu__top img{width:136px;height:38px}
+ .mobile-menu nav{padding:24px 0}
+ .mobile-menu nav>div>a{padding:12px 0;font-size:clamp(1.9rem,10vw,3rem)}
+ .mobile-menu__foot{gap:14px;flex-wrap:wrap}
+ .product-detail-panel{padding-inline:14px}
+ .product-detail-panel h1{font-size:clamp(2.25rem,12vw,3.15rem)}
+ .product-gallery__stage{min-height:350px;height:min(55svh,500px)}
+ .product-page .btn{min-height:48px}
+ .admin-shell main{overflow-x:hidden}
+ .admin-shell .field{min-height:46px}
+ .admin-shell .btn{min-height:44px}
+}
+@media(max-width:380px){
+ .site-logo{width:102px}
+ .header-actions .nav-icon:nth-child(1),.header-actions .nav-icon:nth-child(2){display:none}
+}
