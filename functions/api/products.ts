@@ -1,1 +1,0 @@
-import{callScript,json,type Env}from'./_shared';export const onRequestGet:PagesFunction<Env>=async({env})=>{try{return json(await callScript(env,'listPublishedProducts',{}),200,{'Cache-Control':'public, max-age=60, stale-while-revalidate=300'})}catch{return json({error:'Catalogue temporarily unavailable'},503)}};

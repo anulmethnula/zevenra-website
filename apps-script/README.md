@@ -1,10 +1,25 @@
-# ZEVENRA Google Sheets API
+# ZEVENRA Apps Script backend
 
-1. Create a blank Google Sheet and open **Extensions → Apps Script**.
-2. Paste `Code.gs`, save, and run `setup()` once. Approve the requested spreadsheet permission.
-3. In **Project Settings → Script properties**, add `APPS_SCRIPT_SECRET` with a long random value (32+ bytes).
-4. Deploy as **Web app**, execute as yourself, and allow access to anyone. The shared secret protects every request; the browser never calls this URL directly.
-5. Copy the deployment URL into Cloudflare Pages as `APPS_SCRIPT_URL`; add the same secret as `APPS_SCRIPT_SECRET`.
-6. If columns change later, update `SCHEMA` first. Do not reorder live sheet columns manually.
+`Code.gs` is the temporary Google Sheets backend used by the Vercel API.
 
-`LockService` protects order IDs, order rows, stock validation, confirmation deductions, and cancellation restoration. Stock is deducted exactly once when an order changes to `confirmed`; a confirmed order changing to `cancelled` restores stock once.
+## Deploy/update
+
+1. Open the ZEVENRA Google Sheet → **Extensions → Apps Script**.
+2. Replace the existing `Code.gs` with the repository version.
+3. Save and run `setup()` after schema changes.
+4. Keep `APPS_SCRIPT_SECRET` in **Project Settings → Script properties**.
+5. Open **Deploy → Manage deployments → Edit**.
+6. Select **New version** and deploy. Keep the existing Web App URL.
+
+Do not manually reorder live sheet columns.
+
+## Current data behavior
+
+- Normal website/manual orders reserve stock immediately.
+- Cancelling a reserved order restores its stock once.
+- Pre-orders are stored separately in the `Preorders` sheet and take no payment at request time.
+- Confirmed pre-order pieces can be grouped into supplier batches.
+- Arrived/ready pre-orders can be converted into normal COD or bank orders.
+- `LockService` protects stock-sensitive writes and IDs.
+
+Vercel is the only public caller of the Apps Script URL; browsers call the Vercel `/api` routes instead.

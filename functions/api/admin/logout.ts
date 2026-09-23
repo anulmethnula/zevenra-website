@@ -1,1 +1,0 @@
-import{json,type Env,validOrigin}from'../_shared';export const onRequestPost:PagesFunction<Env>=async({request,env})=>validOrigin(request,env)?json({ok:true},200,{'Set-Cookie':'zevenra_session=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0'}):json({error:'Invalid request'},403);
