@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 Disallow: /admin
-Sitemap: https://zevenra.lk/sitemap.xml
+Sitemap: https://zevenra.vercel.app/sitemap.xml

@@ -52,6 +52,7 @@ export default async function handler(req:VercelRequest,res:VercelResponse){
   const message=error instanceof Error?error.message:'';
   if(message.startsWith('CUSTOMER_AUTH_'))return json(res,{error:'Your customer session is invalid. Please sign in again.'},401);
   if(error instanceof Error&&error.name==='ZodError')return json(res,{error:'Please review your order information.'},400);
+  if(/already submitted recently/i.test(message))return json(res,{error:'This order appears to have already been submitted. Check your confirmation or My Orders before trying again.'},409);
   if(/no longer available|insufficient stock/i.test(message))return json(res,{error:'One or more selected items are no longer available in that quantity. Please review your bag.'},409);
   if(/store|orders.*unavailable/i.test(message))return json(res,{error:'Online ordering is temporarily unavailable.'},503);
   return json(res,{error:'We could not place the order. Your bag has not been cleared.'},400);

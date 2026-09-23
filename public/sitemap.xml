@@ -1,1 +1,11 @@
-<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://zevenra.lk/</loc></url><url><loc>https://zevenra.lk/shop</loc></url><url><loc>https://zevenra.lk/about</loc></url><url><loc>https://zevenra.lk/delivery</loc></url><url><loc>https://zevenra.lk/returns</loc></url></urlset>
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://zevenra.vercel.app/</loc></url>
+  <url><loc>https://zevenra.vercel.app/shop</loc></url>
+  <url><loc>https://zevenra.vercel.app/about</loc></url>
+  <url><loc>https://zevenra.vercel.app/delivery</loc></url>
+  <url><loc>https://zevenra.vercel.app/returns</loc></url>
+  <url><loc>https://zevenra.vercel.app/contact</loc></url>
+  <url><loc>https://zevenra.vercel.app/privacy</loc></url>
+  <url><loc>https://zevenra.vercel.app/terms</loc></url>
+</urlset>
