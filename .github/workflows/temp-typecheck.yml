@@ -15,5 +15,8 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run build
+      - run: npm run lint
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
       - name: Check Apps Script syntax
         run: cp apps-script/Code.gs /tmp/zevenra-code.js && node --check /tmp/zevenra-code.js
