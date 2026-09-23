@@ -129,7 +129,7 @@ const ROUTES: Record<string, RouteHandler> = {
       const config = appsScriptEnv();
       const identity = readCustomerSession(req, true);
       if (!identity) throw new Error('CUSTOMER_AUTH_REQUIRED');
-      const rows = await callScript(config, 'listCustomerOrders', {customerId: identity.id, email: identity.email}) as Array<{orderId?: unknown; createdAt?: unknown; paymentMethod?: unknown; paymentStatus?: unknown; subtotal?: unknown; deliveryFee?: unknown; total?: unknown; orderStatus?: unknown; items?: Array<{variantId?: unknown; productName?: unknown; color?: unknown; size?: unknown; quantity?: unknown; unitPrice?: unknown; lineTotal?: unknown; isPreorder?: unknown}>}>;
+      const rows = await callScript(config, 'listCustomerOrders', {customerId: identity.id, email: identity.email}) as Array<{orderId?: unknown; createdAt?: unknown; paymentMethod?: unknown; paymentStatus?: unknown; subtotal?: unknown; deliveryFee?: unknown; total?: unknown; orderStatus?: unknown; items?: Array<{variantId?: unknown; productName?: unknown; color?: unknown; size?: unknown; quantity?: unknown; unitPrice?: unknown; lineTotal?: unknown}>}>;
       const safeOrders = (Array.isArray(rows) ? rows : []).map((order) => ({
         orderId: String(order.orderId || ''),
         createdAt: String(order.createdAt || ''),
@@ -147,7 +147,6 @@ const ROUTES: Record<string, RouteHandler> = {
           quantity: Number(item.quantity) || 0,
           unitPrice: Number(item.unitPrice) || 0,
           subtotal: Number(item.lineTotal) || 0,
-          isPreorder: item.isPreorder === true || String(item.isPreorder).toLowerCase() === 'true',
         })),
       }));
       return json(res, safeOrders);
