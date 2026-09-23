@@ -51,7 +51,7 @@ export default function ProductPage(){
  const previous=()=>media.length&&setActiveMedia(index=>(index-1+media.length)%media.length);
  const next=()=>media.length&&setActiveMedia(index=>(index+1)%media.length);
  const onTouchStart=(x:number)=>{touchStart.current=x};
- const onTouchEnd=(x:number)=>{if(touchStart.current==null)return;const delta=x-touchStart.current;touchStart.current=null;if(Math.abs(delta)<45)return;delta<0?next():previous()};
+ const onTouchEnd=(x:number)=>{if(touchStart.current==null)return;const delta=x-touchStart.current;touchStart.current=null;if(Math.abs(delta)<45)return;if(delta<0)next();else previous()};
 
  return <>
   <Seo title={product.name} description={product.shortDescription}/>
