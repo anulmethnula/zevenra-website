@@ -1,10 +1,10 @@
 /* eslint-disable react-hooks/exhaustive-deps -- loadAdmin is stable in the store provider. */
 import {useEffect,useState} from 'react';
 import {NavLink,Outlet,useLocation,useNavigate} from 'react-router-dom';
-import {BarChart3,Boxes,FolderKanban,Gauge,Home,LogOut,Menu,Settings,Truck,X} from 'lucide-react';
+import {BarChart3,Boxes,ClipboardList,FolderKanban,Gauge,Home,LogOut,Menu,Settings,Truck,X} from 'lucide-react';
 import {useStore} from '../features/store/StoreContext';
 
-const links=[['/admin',Gauge,'Dashboard'],['/admin/products',Boxes,'Products'],['/admin/categories',FolderKanban,'Categories'],['/admin/collections',FolderKanban,'Collections'],['/admin/orders',BarChart3,'Orders'],['/admin/homepage',Home,'Homepage'],['/admin/delivery',Truck,'Delivery'],['/admin/settings',Settings,'Settings']] as const;
+const links=[['/admin',Gauge,'Dashboard'],['/admin/products',Boxes,'Products'],['/admin/categories',FolderKanban,'Categories'],['/admin/collections',FolderKanban,'Collections'],['/admin/preorders',ClipboardList,'Pre-orders'],['/admin/orders',BarChart3,'Orders'],['/admin/homepage',Home,'Homepage'],['/admin/delivery',Truck,'Delivery'],['/admin/settings',Settings,'Settings']] as const;
 
 export function AdminLayout(){
  const[open,setOpen]=useState(false),[checking,setChecking]=useState(true),[sessionError,setSessionError]=useState(''),navigate=useNavigate(),location=useLocation(),store=useStore();
