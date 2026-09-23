@@ -33,6 +33,6 @@ export default async function handler(req:VercelRequest,res:VercelResponse){
   const config=appsScriptEnv();let payload:StoreBootstrap;
   try{payload=await callScript(config,'storeBootstrap',{}) as StoreBootstrap}
   catch(error){if(!(error instanceof Error)||error.message!=='Unknown action')throw error;payload=await legacyStore(config)}
-  return json(res,{...payload,settings:publicSettings(payload.settings)},200,{'Cache-Control':'public, max-age=30, stale-while-revalidate=120'});
+  return json(res,{...payload,settings:publicSettings(payload.settings)},200,{'Cache-Control':'public, max-age=10, stale-while-revalidate=30'});
  }catch{return json(res,{error:'Store data temporarily unavailable'},503)}
 }
