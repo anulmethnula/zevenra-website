@@ -1,0 +1,75 @@
+import {useEffect,useMemo,useState} from 'react';
+import {ChevronDown,ChevronLeft,ChevronRight,ExternalLink,MessageCircle,PackageCheck,Plus,Search} from 'lucide-react';
+import {Link} from 'react-router-dom';
+import {money} from '../../config/site';
+import {useStore} from '../../features/store/StoreContext';
+import type {PreorderBatch,PreorderRequest,PreorderStatus} from '../../types';
+
+const statuses:PreorderStatus[]=['new','contacted','confirmed','batched','ordered','in_transit','arrived','ready','converted','cancelled'];
+const labels:Record<PreorderStatus,string>={new:'New',contacted:'Contacted',confirmed:'Customer confirmed',batched:'In supplier batch',ordered:'Ordered from SHEIN',in_transit:'In transit',arrived:'Arrived',ready:'Ready for delivery',converted:'Converted to order',cancelled:'Cancelled'};
+const batchStatuses=['ready','ordered','in_transit','arrived','closed','cancelled'] as const;
+const cleanPhone=(value:string)=>value.replace(/\D/g,'').replace(/^0/,'94');
+
+export default function PreordersPage(){
+ const store=useStore(),requests=[...store.admin.preorders].sort((a,b)=>new Date(b.createdAt).getTime()-new Date(a.createdAt).getTime()),batches=store.admin.preorderBatches;
+ const[query,setQuery]=useState(''),[filter,setFilter]=useState('active'),[page,setPage]=useState(1),[open,setOpen]=useState(''),[batchOpen,setBatchOpen]=useState(''),[busy,setBusy]=useState(''),[message,setMessage]=useState(''),pageSize=20;
+ const needle=query.trim().toLowerCase(),unbatchedConfirmed=requests.filter(r=>r.status==='confirmed'&&!r.batchId),confirmedItems=unbatchedConfirmed.reduce((n,r)=>n+Number(r.quantity||0),0),target=6;
+ const filtered=requests.filter(r=>{const matchQuery=!needle||[r.requestId,r.customerName,r.phone,r.whatsapp,r.productName,r.color,r.size,r.district].some(v=>String(v||'').toLowerCase().includes(needle));const matchStatus=filter==='all'||(filter==='active'?!['converted','cancelled'].includes(r.status):r.status===filter);return matchQuery&&matchStatus});
+ const pages=Math.max(1,Math.ceil(filtered.length/pageSize)),safePage=Math.min(page,pages),visible=filtered.slice((safePage-1)*pageSize,safePage*pageSize);
+ useEffect(()=>setPage(1),[query,filter]);
+
+ async function update(request:PreorderRequest,patch:Partial<PreorderRequest>){
+  setBusy(request.requestId);setMessage('');
+  try{await store.updatePreorder({requestId:request.requestId,...patch});setMessage(request.requestId+' updated.')}
+  catch(reason){setMessage(reason instanceof Error?reason.message:'Could not update the pre-order.')}
+  finally{setBusy('')}
+ }
+ async function createBatch(){
+  if(!unbatchedConfirmed.length)return;
+  setBusy('batch-new');setMessage('');
+  try{const batch=await store.createPreorderBatch({targetItems:target,supplier:'SHEIN'});setMessage('Created '+batch.batchId+' with the confirmed requests.');setBatchOpen(batch.batchId)}
+  catch(reason){setMessage(reason instanceof Error?reason.message:'Could not create supplier batch.')}
+  finally{setBusy('')}
+ }
+
+ return <div>
+  <div className="flex flex-wrap items-end justify-between gap-5"><div><p className="eyebrow text-black/45">Supplier requests</p><h1 className="display mt-2 text-4xl md:text-5xl">Pre-orders</h1></div><button disabled={!unbatchedConfirmed.length||busy==='batch-new'} onClick={()=>void createBatch()} className="btn btn-dark disabled:opacity-40"><PackageCheck size={16}/> {busy==='batch-new'?'Creating…':'Create SHEIN batch'}</button></div>
+  <p className="mt-4 max-w-3xl text-sm leading-7 text-black/55">Pre-orders are requests, not sales. No payment or delivery fee is collected here. Contact the customer, confirm the final price, then group confirmed requests into a supplier batch.</p>
+
+  <div className="mt-7 grid grid-cols-2 gap-3 lg:grid-cols-4">
+   <Metric label="New requests" value={requests.filter(r=>r.status==='new').length}/>
+   <Metric label="Waiting confirmed items" value={confirmedItems}/>
+   <Metric label="Next batch target" value={target}/>
+   <Metric label="Active supplier batches" value={batches.filter(b=>!['closed','cancelled'].includes(String(b.status))).length}/>
+  </div>
+  <div className="mt-4 overflow-hidden border border-black/10 bg-[#f6f3ed]"><div className="h-2 bg-black/[.06]"><div className="h-full bg-[#96724f] transition-all" style={{width:Math.min(100,(confirmedItems/target)*100)+'%'}}/></div><div className="flex flex-wrap items-center justify-between gap-3 p-4 text-xs"><span><b>{confirmedItems}</b> confirmed pieces waiting for the next SHEIN batch.</span><span>{confirmedItems>=target?'Batch target reached — review before ordering.':Math.max(0,target-confirmedItems)+' more to reach target.'}</span></div></div>
+
+  {message&&<p className="mt-4 border-l-2 border-[#96724f] bg-white/40 px-4 py-3 text-xs text-black/60">{message}</p>}
+
+  {batches.length>0&&<section className="mt-7"><div className="mb-3 flex items-center justify-between"><p className="eyebrow">Supplier batches</p><span className="text-xs text-black/40">{batches.length} total</span></div><div className="grid gap-3">{batches.slice(0,8).map(batch=><BatchCard key={batch.batchId} batch={batch} requests={requests.filter(r=>r.batchId===batch.batchId)} open={batchOpen===batch.batchId} setOpen={()=>setBatchOpen(value=>value===batch.batchId?'':batch.batchId)} busy={busy} setBusy={setBusy} setMessage={setMessage}/>)}</div></section>}
+
+  <div className="mt-7 grid gap-3 rounded-sm bg-[#f6f3ed] p-4 md:grid-cols-[minmax(220px,1fr)_220px]"><div className="relative"><Search className="absolute left-3 top-3" size={18}/><input value={query} onChange={e=>setQuery(e.target.value)} className="field bg-white/55 pl-10" placeholder="Customer, WhatsApp, product, request…"/></div><select className="field bg-white/55" value={filter} onChange={e=>setFilter(e.target.value)}><option value="active">Active requests</option><option value="all">All requests</option>{statuses.map(status=><option key={status} value={status}>{labels[status]}</option>)}</select></div>
+
+  <div className="mt-4 overflow-hidden border border-black/10 bg-[#f6f3ed]">{visible.length?visible.map(request=><RequestCard key={request.requestId} request={request} open={open===request.requestId} toggle={()=>setOpen(value=>value===request.requestId?'':request.requestId)} busy={busy===request.requestId} update={update}/>):<div className="grid min-h-44 place-content-center px-5 text-center text-sm text-black/45">No pre-order requests match this view.</div>}</div>
+  <div className="mt-5 flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-black/45">Showing {filtered.length?((safePage-1)*pageSize)+1:0}–{Math.min(safePage*pageSize,filtered.length)} of {filtered.length}</p><div className="flex items-center gap-2"><button className="btn" disabled={safePage<=1} onClick={()=>setPage(v=>Math.max(1,v-1))}><ChevronLeft size={15}/> Previous</button><span className="px-2 text-xs">{safePage} / {pages}</span><button className="btn" disabled={safePage>=pages} onClick={()=>setPage(v=>Math.min(pages,v+1))}>Next <ChevronRight size={15}/></button></div></div>
+ </div>
+}
+
+function RequestCard({request,open,toggle,busy,update}:{request:PreorderRequest;open:boolean;toggle:()=>void;busy:boolean;update:(request:PreorderRequest,patch:Partial<PreorderRequest>)=>Promise<void>}){
+ const[status,setStatus]=useState<PreorderStatus>(request.status),[price,setPrice]=useState(String(request.confirmedPrice||request.requestedPrice||'')),[notes,setNotes]=useState(request.notes||'');
+ useEffect(()=>{setStatus(request.status);setPrice(String(request.confirmedPrice||request.requestedPrice||''));setNotes(request.notes||'')},[request]);
+ const phone=cleanPhone(request.whatsapp||request.phone),whatsappText=`Hi ${request.customerName}, this is ZEVENRA. You requested ${request.productName} in ${request.color}, size ${request.size}, qty ${request.quantity}. The current price is ${money(Number(price)||request.requestedPrice)}. We are preparing our next SHEIN order. Please confirm if you still want this item.`;
+ return <article className="border-b border-black/10 last:border-0">
+  <button onClick={toggle} className="grid w-full items-center gap-3 p-4 text-left sm:grid-cols-[1fr_1fr_110px_130px_auto]"><div className="min-w-0"><p className="text-sm font-medium">{request.requestId}</p><p className="mt-1 text-xs text-black/45">{new Date(request.createdAt).toLocaleString('en-LK',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</p></div><div className="min-w-0"><p className="truncate text-sm">{request.customerName}</p><p className="mt-1 truncate text-xs text-black/45">{request.productName} · {request.color}/{request.size} × {request.quantity}</p></div><span className="text-sm">{money(request.requestedPrice)}</span><span className="w-fit rounded-full border border-black/10 px-2.5 py-1 text-[9px] uppercase tracking-wider">{labels[request.status]}</span><ChevronDown className={open?'rotate-180':''} size={16}/></button>
+  {open&&<div className="border-t border-black/10 bg-white/45 p-4 sm:p-5"><div className="grid gap-6 xl:grid-cols-[1fr_.85fr]"><div className="grid gap-3 sm:grid-cols-2"><Info label="Customer" value={request.customerName}/><Info label="Mobile" value={request.phone}/><Info label="WhatsApp" value={request.whatsapp}/><Info label="Email" value={request.email||'—'}/><Info label="Location" value={[request.city,request.district].filter(Boolean).join(', ')}/><Info label="Requested" value={request.productName+' · '+request.color+' / '+request.size+' × '+request.quantity}/><Info label="Requested price" value={money(request.requestedPrice)}/><Info label="Batch" value={request.batchId||'Not batched yet'}/></div><div className="space-y-4"><a href={phone.length>=8?`https://wa.me/${phone}?text=${encodeURIComponent(whatsappText)}`:'#'} target="_blank" rel="noreferrer" className="btn btn-dark w-full justify-center"><MessageCircle size={15}/> WhatsApp customer</a><label className="block text-xs">Status<select className="field mt-2" value={status} onChange={e=>setStatus(e.target.value as PreorderStatus)}>{statuses.map(value=><option key={value} value={value}>{labels[value]}</option>)}</select></label><label className="block text-xs">Confirmed selling price<input className="field mt-2" type="number" min="0" value={price} onChange={e=>setPrice(e.target.value)}/></label><label className="block text-xs">Internal notes<textarea className="field mt-2 min-h-20 resize-none" value={notes} onChange={e=>setNotes(e.target.value)}/></label><button disabled={busy} onClick={()=>void update(request,{status,confirmedPrice:Number(price)||request.requestedPrice,notes})} className="btn w-full justify-center disabled:opacity-50">{busy?'Saving…':'Save request'}</button>{['arrived','ready'].includes(status)&&<Link to={'/admin/orders/new?pre='+encodeURIComponent(request.requestId)} className="btn btn-dark w-full justify-center">Create delivery order <ExternalLink size={14}/></Link>}</div></div></div>}
+ </article>
+}
+
+function BatchCard({batch,requests,open,setOpen,busy,setBusy,setMessage}:{batch:PreorderBatch;requests:PreorderRequest[];open:boolean;setOpen:()=>void;busy:string;setBusy:(value:string)=>void;setMessage:(value:string)=>void}){
+ const store=useStore(),[status,setStatus]=useState(batch.status),[supplierRef,setSupplierRef]=useState(batch.supplierOrderRef||''),[arrival,setArrival]=useState(batch.expectedArrival||''),[notes,setNotes]=useState(batch.notes||'');
+ useEffect(()=>{setStatus(batch.status);setSupplierRef(batch.supplierOrderRef||'');setArrival(batch.expectedArrival||'');setNotes(batch.notes||'')},[batch]);
+ async function save(){setBusy(batch.batchId);setMessage('');try{await store.updatePreorderBatch({batchId:batch.batchId,status,supplierOrderRef:supplierRef,expectedArrival:arrival,notes});setMessage(batch.batchId+' updated.')}catch(reason){setMessage(reason instanceof Error?reason.message:'Could not update supplier batch.')}finally{setBusy('')}}
+ return <article className="border border-black/10 bg-[#f6f3ed]"><button onClick={setOpen} className="grid w-full items-center gap-3 p-4 text-left sm:grid-cols-[1fr_130px_100px_140px_auto]"><div><p className="text-sm font-medium">{batch.batchId} · {batch.supplier||'SHEIN'}</p><p className="mt-1 text-xs text-black/45">{batch.requestCount} customers · {batch.itemCount} pieces · est. {money(batch.estimatedSales)}</p></div><span className="text-xs">{batch.itemCount}/{batch.targetItems} target</span><span className="text-xs uppercase">{batch.status}</span><span className="text-xs text-black/45">{batch.expectedArrival||'No ETA'}</span><ChevronDown size={16} className={open?'rotate-180':''}/></button>{open&&<div className="border-t border-black/10 p-4"><div className="grid gap-5 lg:grid-cols-[1fr_1fr]"><div><p className="eyebrow mb-3">Items in batch</p><div className="divide-y divide-black/10">{requests.map(r=><div key={r.requestId} className="flex justify-between gap-4 py-2 text-xs"><span>{r.productName} · {r.color}/{r.size} × {r.quantity}<small className="block text-black/40">{r.customerName}</small></span><span>{money(Number(r.confirmedPrice||r.requestedPrice)*Number(r.quantity))}</span></div>)}</div></div><div className="space-y-3"><label className="block text-xs">Batch status<select className="field mt-2" value={status} onChange={e=>setStatus(e.target.value as PreorderBatch['status'])}>{batchStatuses.map(value=><option key={value} value={value}>{value.replace('_',' ')}</option>)}</select></label><label className="block text-xs">SHEIN order / reference<input className="field mt-2" value={supplierRef} onChange={e=>setSupplierRef(e.target.value)}/></label><label className="block text-xs">Expected arrival<input className="field mt-2" type="date" value={arrival} onChange={e=>setArrival(e.target.value)}/></label><label className="block text-xs">Notes<textarea className="field mt-2 min-h-16 resize-none" value={notes} onChange={e=>setNotes(e.target.value)}/></label><button disabled={busy===batch.batchId} onClick={()=>void save()} className="btn btn-dark w-full justify-center disabled:opacity-50">{busy===batch.batchId?'Saving…':'Save batch'}</button></div></div></div>}</article>
+}
+function Metric({label,value}:{label:string;value:string|number}){return <div className="border border-black/10 bg-[#f6f3ed] p-4"><p className="text-xs text-black/45">{label}</p><p className="display mt-2 text-3xl">{value}</p></div>}
+function Info({label,value}:{label:string;value:React.ReactNode}){return <div><p className="text-[10px] uppercase tracking-[.14em] text-black/40">{label}</p><div className="mt-1 break-words text-sm leading-6 text-black/70">{value||'—'}</div></div>}
