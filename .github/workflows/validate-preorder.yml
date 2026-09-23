@@ -1,5 +1,6 @@
 name: Temporary preorder validation
 on:
+  pull_request:
   push:
     branches:
       - feature/preorder-operations-v2-20260923
