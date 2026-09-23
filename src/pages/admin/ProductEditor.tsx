@@ -133,6 +133,6 @@ export default function ProductEditor(){
  </form>
 }
 
-function Card({title,children}:{title:string;children:React.ReactNode}){return <section className="bg-[#f6f3ed] p-5 sm:p-6"><p className="eyebrow mb-5">{title}</p><div className="grid gap-4">{children}</div></section>}
+function Card({title,children}:{title:string;children:React.ReactNode}){return <section className="admin-panel p-5 sm:p-6"><p className="admin-panel__title mb-5">{title}</p><div className="grid gap-4">{children}</div></section>}
 function Field({label,value,set,required,placeholder}:{label:string;value:string;set:(value:string)=>void;required?:boolean;placeholder?:string}){return <label className="block text-xs">{label}<input required={required} placeholder={placeholder} className="field mt-2" value={value} onChange={e=>set(e.target.value)}/></label>}
 function Check({label,checked,set}:{label:string;checked:boolean;set:(value:boolean)=>void}){return <label className="flex min-h-11 items-center gap-3 text-xs"><input type="checkbox" className="h-5 w-5 accent-black" checked={checked} onChange={e=>set(e.target.checked)}/>{label}</label>}
