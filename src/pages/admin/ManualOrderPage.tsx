@@ -13,7 +13,7 @@ export default function ManualOrderPage(){
  const store=useStore(),[params]=useSearchParams(),preId=params.get('pre')||'',pre=store.admin.preorders.find(r=>r.requestId===preId);
  const initialLine=pre?{key:crypto.randomUUID(),productId:pre.productId,variantId:pre.variantId,quantity:pre.quantity,unitPrice:Number(pre.confirmedPrice||pre.requestedPrice)}:newLine();
  const[customerName,setCustomerName]=useState(pre?.customerName||''),[phone,setPhone]=useState(pre?.phone||''),[whatsapp,setWhatsapp]=useState(pre?.whatsapp||''),[email,setEmail]=useState(pre?.email||''),[address1,setAddress1]=useState(''),[address2,setAddress2]=useState(''),[city,setCity]=useState(pre?.city||''),[district,setDistrict]=useState(pre?.district||''),[postalCode,setPostalCode]=useState(''),[notes,setNotes]=useState(''),[source,setSource]=useState<OrderSource>(pre?'preorder':'instagram'),[paymentMethod,setPaymentMethod]=useState<PaymentMethod>('cod'),[paymentStatus,setPaymentStatus]=useState('COD'),[orderStatus,setOrderStatus]=useState('pending'),[lines,setLines]=useState<Line[]>([initialLine]),[busy,setBusy]=useState(false),[error,setError]=useState(''),[created,setCreated]=useState('');
- const products=useMemo(()=>store.data.products.filter(p=>p.status==='published').sort((a,b)=>a.name.localeCompare(b.name)),[store.data.products]);
+ const products=useMemo(()=>store.data.products.filter(p=>p.status!=='archived').sort((a,b)=>a.name.localeCompare(b.name)),[store.data.products]);
  const previewSubtotal=lines.reduce((sum,line)=>{const p=products.find(x=>x.id===line.productId);return sum+Number(line.unitPrice||p?.price||0)*line.quantity},0);
  function patchLine(key:string,patch:Partial<Line>){setLines(current=>current.map(line=>line.key===key?{...line,...patch}:line))}
  function chooseProduct(line:Line,productId:string){const product=products.find(p=>p.id===productId),variant=product?.variants.find(v=>v.active&&v.stock>0);patchLine(line.key,{productId,variantId:variant?.id||'',unitPrice:product?.price})}
@@ -23,8 +23,7 @@ export default function ManualOrderPage(){
   if(lines.some(line=>!line.productId||!line.variantId||line.quantity<1)){setError('Choose a product, size/colour and quantity for every item.');return}
   setBusy(true);
   try{
-   const order=await store.createManualOrder({customerName,phone,whatsapp,email,address1,address2,city,district,postalCode,deliveryNotes:notes,paymentMethod,paymentStatus,orderStatus,source,items:lines.map(({productId,variantId,quantity,unitPrice})=>({productId,variantId,quantity,unitPrice}))});
-   if(pre){await store.updatePreorder({requestId:pre.requestId,status:'converted',notes:[pre.notes,'Converted to '+order.orderId].filter(Boolean).join(' | ')})}
+   const order=await store.createManualOrder({customerName,phone,whatsapp,email,address1,address2,city,district,postalCode,deliveryNotes:notes,paymentMethod,paymentStatus,orderStatus,source,preorderRequestId:pre?.requestId||undefined,items:lines.map(({productId,variantId,quantity,unitPrice})=>({productId,variantId,quantity,unitPrice}))});
    setCreated(order.orderId);
   }catch(reason){setError(reason instanceof Error?reason.message:'Could not create the order.')}
   finally{setBusy(false)}
