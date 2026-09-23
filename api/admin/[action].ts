@@ -1,13 +1,13 @@
 import type {VercelRequest,VercelResponse} from '@vercel/node';
 import{appsScriptEnv,body,callScript,json,validOrigin,validSession}from'../_shared.js';
 
-const allowed=new Set(['bootstrap','dashboard','listProducts','saveProduct','archiveProduct','deleteProduct','listCategories','saveCategory','deleteCategory','listCollections','saveCollection','deleteCollection','listSizeCharts','saveSizeChart','deleteSizeChart','listNavigation','saveNavigation','deleteNavigation','listHomepageSections','saveHomepageSection','deleteHomepageSection','listOrders','getOrder','updateOrder','getSettings','saveSettings','listDeliveryRates','saveDeliveryRates']);
+const allowed=new Set(['bootstrap','dashboard','listProducts','saveProduct','archiveProduct','deleteProduct','listCategories','saveCategory','deleteCategory','listCollections','saveCollection','deleteCollection','listSizeCharts','saveSizeChart','deleteSizeChart','listNavigation','saveNavigation','deleteNavigation','listHomepageSections','saveHomepageSection','deleteHomepageSection','listOrders','getOrder','updateOrder','listPreorders','updatePreorder','createPreorderBatch','getSettings','saveSettings','listDeliveryRates','saveDeliveryRates']);
 
 async function legacyBootstrap(config:ReturnType<typeof appsScriptEnv>){
  const specs=[
   ['dashboard','dashboard'],['products','listProducts'],['categories','listCategories'],
   ['collections','listCollections'],['sizeCharts','listSizeCharts'],['homepageSections','listHomepageSections'],
-  ['orders','listOrders'],['settings','getSettings'],['deliveryRates','listDeliveryRates']
+  ['orders','listOrders'],['preorders','listPreorders'],['settings','getSettings'],['deliveryRates','listDeliveryRates']
  ] as const;
  const result:Record<string,unknown>={};
  for(let index=0;index<specs.length;index+=3){
