@@ -279,3 +279,45 @@ textarea.field{padding-block:1rem}
  .size-guide-panel__image--only{padding:8px}
  .size-guide-panel__image--only img{max-height:62svh}
 }
+
+
+/* Mobile commerce refinement */
+.mobile-menu__utility{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:auto;padding:18px 0 12px;border-top:1px solid rgba(255,255,255,.14)}
+.mobile-menu__utility a{display:flex;min-height:48px;align-items:center;justify-content:center;gap:8px;border:1px solid rgba(255,255,255,.16);font-size:8px;font-weight:600;letter-spacing:.16em}
+@media(max-width:767px){
+ html,body{max-width:100%;overflow-x:hidden}
+ .site-header__inner{height:56px;margin-top:8px;grid-template-columns:44px 1fr 44px;padding-inline:6px}
+ .site-header--solid .site-header__inner{height:54px;margin-top:7px}
+ .site-logo{width:108px;height:38px}
+ .header-actions{grid-column:3}
+ .nav-icon{width:42px;min-width:42px;height:42px}
+ .bag-count{top:0;right:-1px}
+ .mobile-menu{padding:16px 18px calc(20px + env(safe-area-inset-bottom))}
+ .mobile-menu__top img{width:132px}
+ .mobile-menu nav{margin:20px 0 auto;padding:10px 0 22px}
+ .mobile-menu nav>div>a{min-height:58px;padding:11px 0;font-size:clamp(1.9rem,10vw,3rem)}
+ .mobile-subcategories{padding-top:3px;padding-bottom:8px}
+ .mobile-subcategories a{min-height:40px;padding:11px 0}
+ .home-hero{min-height:560px}
+ .home-hero__cta{bottom:max(6svh,42px);min-width:190px;min-height:54px}
+ .store-product-grid{gap:30px 8px}
+ .product-card__details{padding-top:10px}
+ .product-card__details h3{font-size:11px;line-height:1.35}
+ .product-page{padding-bottom:112px}
+ .product-detail-panel{padding-bottom:18px}
+ .product-detail-panel .btn{min-height:52px}
+ .size-guide-link{min-height:44px}
+ .admin-shell main{padding:16px}
+ .admin-shell .field{font-size:16px}
+}
+@media(max-width:420px){
+ .announcement{height:26px;font-size:7px;letter-spacing:.18em}
+ .site-header{top:26px}
+ .site-header__inner{width:calc(100% - 12px)}
+ .site-logo{width:102px}
+ .mobile-menu nav>div>a{font-size:clamp(1.75rem,9.6vw,2.7rem)}
+ .mobile-menu__utility{grid-template-columns:1fr}
+ .store-product-grid{gap:26px 7px}
+ .product-gallery__stage{min-height:350px}
+ .product-detail-panel{padding-inline:13px}
+}
