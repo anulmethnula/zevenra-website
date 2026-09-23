@@ -1,18 +1,18 @@
 import {createContext,useCallback,useContext,useEffect,useMemo,useRef,useState,type ReactNode} from 'react';
 import {initialStoreData} from '../../data/demo';
 import {adminApi} from '../../services/adminApi';
-import type {Category,Collection,ContentPage,DashboardData,DeliveryRate,HomepageSection,NavigationItem,Order,Product,SiteSettings,SizeChart,StoreData} from '../../types';
+import type {Category,Collection,ContentPage,DashboardData,DeliveryRate,HomepageSection,NavigationItem,Order,PreorderRequest,Product,SiteSettings,SizeChart,StoreData} from '../../types';
 
 type Entity='products'|'categories'|'collections'|'navigation'|'homepageSections'|'sizeCharts'|'pages';
 type EntityValue=Product|Category|Collection|NavigationItem|HomepageSection|SizeChart|ContentPage;
-type AdminState={dashboard:DashboardData|null;orders:Order[];deliveryRates:DeliveryRate[]};
-type Value={data:StoreData;loading:boolean;error:string;adminLoading:boolean;adminError:string;admin:AdminState;live:boolean;loadAdmin:()=>Promise<void>;retry:()=>void;save:<T extends EntityValue>(entity:Entity,value:T)=>void;commit:<T extends EntityValue>(entity:Entity,value:T)=>Promise<void>;remove:(entity:Entity,id:string)=>void;duplicate:(entity:Entity,id:string)=>void;reorder:(entity:Entity,id:string,direction:-1|1)=>void;saveSettings:(patch:Partial<SiteSettings>)=>void;commitSettings:(patch:Partial<SiteSettings>)=>Promise<void>;saveDeliveryRates:(rates:DeliveryRate[])=>Promise<void>;updateOrder:(patch:Partial<Order>&{orderId:string})=>Promise<Order>;resetDemo:()=>void};
+type AdminState={dashboard:DashboardData|null;orders:Order[];preorders:PreorderRequest[];deliveryRates:DeliveryRate[]};
+type Value={data:StoreData;loading:boolean;error:string;adminLoading:boolean;adminError:string;admin:AdminState;live:boolean;loadAdmin:()=>Promise<void>;retry:()=>void;save:<T extends EntityValue>(entity:Entity,value:T)=>void;commit:<T extends EntityValue>(entity:Entity,value:T)=>Promise<void>;remove:(entity:Entity,id:string)=>void;duplicate:(entity:Entity,id:string)=>void;reorder:(entity:Entity,id:string,direction:-1|1)=>void;saveSettings:(patch:Partial<SiteSettings>)=>void;commitSettings:(patch:Partial<SiteSettings>)=>Promise<void>;saveDeliveryRates:(rates:DeliveryRate[])=>Promise<void>;updateOrder:(patch:Partial<Order>&{orderId:string})=>Promise<Order>;updatePreorder:(patch:Partial<PreorderRequest>&{requestId:string})=>Promise<PreorderRequest>;refreshPreorders:()=>Promise<void>;resetDemo:()=>void};
 type SettingsRow={key:string;value:unknown};
 type PublicPayload={products:unknown[];categories:unknown[];collections:unknown[];sizeCharts:unknown[];navigation:unknown[];homepageSections:unknown[];settings:SettingsRow[]|Record<string,unknown>;deliveryRates?:unknown[]};
-type AdminBootstrap={dashboard:DashboardData|null;products:unknown[];categories:unknown[];collections:unknown[];sizeCharts:unknown[];homepageSections:unknown[];orders:Order[];settings:SettingsRow[];deliveryRates:unknown[]};
+type AdminBootstrap={dashboard:DashboardData|null;products:unknown[];categories:unknown[];collections:unknown[];sizeCharts:unknown[];homepageSections:unknown[];orders:Order[];preorders:PreorderRequest[];settings:SettingsRow[];deliveryRates:unknown[]};
 
 const demo=import.meta.env.VITE_DEMO_MODE==='true',adminRoute=location.pathname.startsWith('/admin'),storageKey='zevenra-admin-data-v2',Context=createContext<Value|null>(null);
-const emptyAdmin:AdminState={dashboard:null,orders:[],deliveryRates:[]};
+const emptyAdmin:AdminState={dashboard:null,orders:[],preorders:[],deliveryRates:[]};
 const defaultHero={...initialStoreData.settings.hero,videoEnabled:true,desktopVideo:'/media/hero-final-v2.mp4',mobileVideo:'/media/hero-final-v2.mp4'};
 const bool=(value:unknown)=>value===true||String(value).toLowerCase()==='true';
 const number=(value:unknown)=>Number(value)||0;
@@ -61,7 +61,7 @@ export function StoreProvider({children}:{children:ReactNode}){const[data,setDat
    });
    const deliveryRates=(payload.deliveryRates||[]).map(normalizeDeliveryRate);
    setData(current=>({...current,...clean,navigation:current.navigation,settings:normalizeSettings(payload.settings||[]),deliveryRates}));
-   setAdmin({dashboard:payload.dashboard||null,orders:payload.orders||[],deliveryRates});
+   setAdmin({dashboard:payload.dashboard||null,orders:payload.orders||[],preorders:payload.preorders||[],deliveryRates});
   }catch(reason){setAdminError(message(reason))}
   finally{setAdminLoading(false)}
  },[]);
@@ -76,8 +76,10 @@ export function StoreProvider({children}:{children:ReactNode}){const[data,setDat
  const commitSettings=useCallback(async(patch:Partial<SiteSettings>)=>{if(demo){demoCommit({...data,settings:{...data.settings,...patch,hero:{...data.settings.hero,...patch.hero}}});return}setAdminError('');try{await adminApi.post('saveSettings',settingsPayload(patch));const rows=await adminApi.get<SettingsRow[]>('getSettings');setData(x=>({...x,settings:normalizeSettings(rows)}))}catch(reason){setAdminError(message(reason));throw reason}},[data]);
  const saveDeliveryRates=useCallback(async(rates:DeliveryRate[])=>{if(demo){setAdmin(x=>({...x,deliveryRates:rates}));return}setAdminError('');try{const rows=await adminApi.post<DeliveryRate[]>('saveDeliveryRates',{rates});setAdmin(x=>({...x,deliveryRates:rows.map(rate=>({...rate,fee:number(rate.fee),active:bool(rate.active)}))}))}catch(reason){setAdminError(message(reason));throw reason}},[]);
  const updateOrder=useCallback(async(patch:Partial<Order>&{orderId:string})=>{if(demo)throw new Error('Order updates are unavailable in demo mode.');setAdminError('');try{const updated=await adminApi.post<Order>('updateOrder',patch);setAdmin(current=>({...current,orders:current.orders.map(order=>order.orderId===updated.orderId?{...order,...updated}:order)}));return updated}catch(reason){setAdminError(message(reason));throw reason}},[]);
+ const refreshPreorders=useCallback(async()=>{if(demo)return;const rows=await adminApi.get<PreorderRequest[]>('listPreorders');setAdmin(current=>({...current,preorders:rows}))},[]);
+ const updatePreorder=useCallback(async(patch:Partial<PreorderRequest>&{requestId:string})=>{if(demo)throw new Error('Pre-order updates are unavailable in demo mode.');setAdminError('');try{const updated=await adminApi.post<PreorderRequest>('updatePreorder',patch);setAdmin(current=>({...current,preorders:current.preorders.map(item=>item.requestId===updated.requestId?{...item,...updated}:item)}));return updated}catch(reason){setAdminError(message(reason));throw reason}},[]);
  const resetDemo=()=>{if(!demo)return;localStorage.removeItem(storageKey);setData(initialStoreData)};
- const value=useMemo<Value>(()=>({data,loading,error,adminLoading,adminError,admin,live:!demo,loadAdmin,retry:loadPublic,save,commit,remove,duplicate,reorder,saveSettings,commitSettings,saveDeliveryRates,updateOrder,resetDemo}),[data,loading,error,adminLoading,adminError,admin,loadAdmin,loadPublic,save,commit,remove,duplicate,reorder,saveSettings,commitSettings,saveDeliveryRates,updateOrder]);
+ const value=useMemo<Value>(()=>({data,loading,error,adminLoading,adminError,admin,live:!demo,loadAdmin,retry:loadPublic,save,commit,remove,duplicate,reorder,saveSettings,commitSettings,saveDeliveryRates,updateOrder,updatePreorder,refreshPreorders,resetDemo}),[data,loading,error,adminLoading,adminError,admin,loadAdmin,loadPublic,save,commit,remove,duplicate,reorder,saveSettings,commitSettings,saveDeliveryRates,updateOrder,updatePreorder,refreshPreorders]);
  if(!adminRoute&&loading)return <div className="grid min-h-dvh place-content-center bg-paper text-center"><p className="eyebrow">Loading live store data…</p></div>;
  if(!adminRoute&&error)return <div className="grid min-h-dvh place-content-center bg-paper px-6 text-center"><h1 className="display text-4xl">Store data unavailable.</h1><p className="mt-3 text-sm text-black/55">{error}</p><button className="btn btn-dark mx-auto mt-6" onClick={()=>void loadPublic()}>Try again</button></div>;
  return <Context.Provider value={value}>{children}</Context.Provider>}

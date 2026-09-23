@@ -12,7 +12,7 @@ import type {Media} from '../types';
 export default function ProductPage(){
  const {slug}=useParams(),cart=useCart(),{data}=useStore();
  const products=data.products.filter(p=>p.status==='published'),product=products.find(p=>p.slug===slug);
- const[color,setColor]=useState(product?.variants.find(v=>v.active&&(v.stock>0||product?.preorderEnabled))?.color||''),
+ const[color,setColor]=useState(product?.variants.find(v=>v.active)?.color||''),
   [size,setSize]=useState(''),
   [qty,setQty]=useState(1),
   [guide,setGuide]=useState(false),
@@ -20,7 +20,7 @@ export default function ProductPage(){
  const touchStart=useRef<number|null>(null);
 
  useEffect(()=>{
-  setColor(product?.variants.find(v=>v.active&&(v.stock>0||product?.preorderEnabled))?.color||'');
+  setColor(product?.variants.find(v=>v.active)?.color||'');
   setSize('');
   setQty(1);
   setGuide(false);
@@ -37,16 +37,16 @@ export default function ProductPage(){
   primaryImage=product.media.find(media=>media.type==='image')?.url||'',
   inCart=variant?cart.items.find(item=>item.variantId===variant.id)?.quantity||0:0,
   selectedPreorder=Boolean(variant&&variant.stock<1&&product.preorderEnabled),
-  maxAdd=variant?(selectedPreorder?Math.max(0,10-inCart):Math.max(0,variant.stock-inCart)):0,
+  maxAdd=variant&&!selectedPreorder?Math.max(0,variant.stock-inCart):0,
   galleryMedia=product.media.filter(media=>!chart?.imageUrl||media.url!==chart.imageUrl),
   media=galleryMedia.length?galleryMedia:product.media,
   current=media[activeMedia];
 
- const add=()=>variant&&maxAdd>0&&cart.add({productId:product.id,variantId:variant.id,slug:product.slug,name:product.name,image:primaryImage,color,size,quantity:Math.min(qty,maxAdd),unitPrice:product.price,sku:variant.sku,maxStock:selectedPreorder?10:variant.stock,isPreorder:selectedPreorder});
+ const add=()=>variant&&maxAdd>0&&cart.add({productId:product.id,variantId:variant.id,slug:product.slug,name:product.name,image:primaryImage,color,size,quantity:Math.min(qty,maxAdd),unitPrice:product.price,sku:variant.sku,maxStock:variant.stock});
  const previous=()=>media.length&&setActiveMedia(index=>(index-1+media.length)%media.length);
  const next=()=>media.length&&setActiveMedia(index=>(index+1)%media.length);
  const onTouchStart=(x:number)=>{touchStart.current=x};
- const onTouchEnd=(x:number)=>{if(touchStart.current==null)return;const delta=x-touchStart.current;touchStart.current=null;if(Math.abs(delta)<45)return;delta<0?next():previous()};
+ const onTouchEnd=(x:number)=>{if(touchStart.current==null)return;const delta=x-touchStart.current;touchStart.current=null;if(Math.abs(delta)<45)return;if(delta<0)next();else previous()};
 
  return <>
   <Seo title={product.name} description={product.shortDescription}/>
@@ -71,7 +71,7 @@ export default function ProductPage(){
 
      <div className="mt-7 flex gap-3">
       <div className="flex min-h-12 items-center border border-line"><button className="px-3" onClick={()=>setQty(Math.max(1,qty-1))}><Minus size={15}/></button><span className="w-8 text-center text-sm">{qty}</span><button className="px-3" disabled={!variant||qty>=Math.max(1,maxAdd)} onClick={()=>setQty(Math.min(Math.max(1,maxAdd),qty+1))}><Plus size={15}/></button></div>
-      <button disabled={sold||!variant||maxAdd<1} onClick={add} className="btn btn-dark flex-1 disabled:opacity-35">{sold?'Sold out':!size?'Select a size':maxAdd<1?'Already in bag':selectedPreorder?'Pre-order':'Add to bag'}</button>
+      {selectedPreorder&&variant?<Link to={`/preorder/${product.slug}?variant=${encodeURIComponent(variant.id)}`} className="btn btn-dark flex-1">Request pre-order</Link>:<button disabled={sold||!variant||maxAdd<1} onClick={add} className="btn btn-dark flex-1 disabled:opacity-35">{sold?'Sold out':!size?'Select a size':maxAdd<1?'Already in bag':'Add to bag'}</button>}
      </div>
 
      <div className="mt-9 divide-y divide-line border-y border-line">{[['DETAILS',product.description],['FIT',product.fit],['CARE',product.care],['DELIVERY & RETURNS','Delivery fee is calculated at checkout. See the current delivery and returns policies for full terms.']].map(([a,b])=><details key={a} className="group py-5"><summary className="flex cursor-pointer list-none items-center justify-between text-[10px] tracking-[.2em]">{a}<ChevronDown size={15} className="transition group-open:rotate-180"/></summary><p className="pt-4 text-sm leading-7 text-ink/55">{b}</p></details>)}</div>
@@ -85,7 +85,7 @@ export default function ProductPage(){
    </section>
   </div>
 
-  <div className="fixed inset-x-0 bottom-0 z-30 border-t hairline bg-paper p-3 lg:hidden"><button disabled={sold||!variant||maxAdd<1} onClick={add} className="btn btn-dark w-full disabled:opacity-40">{sold?'Sold out':!size?'Select a size':maxAdd<1?'Already in bag':selectedPreorder?`Pre-order · ${money(product.price)}`:`Add to bag · ${money(product.price)}`}</button></div>
+  <div className="fixed inset-x-0 bottom-0 z-30 border-t hairline bg-paper p-3 lg:hidden">{selectedPreorder&&variant?<Link to={`/preorder/${product.slug}?variant=${encodeURIComponent(variant.id)}`} className="btn btn-dark w-full">Request pre-order · {money(product.price)}</Link>:<button disabled={sold||!variant||maxAdd<1} onClick={add} className="btn btn-dark w-full disabled:opacity-40">{sold?'Sold out':!size?'Select a size':maxAdd<1?'Already in bag':`Add to bag · ${money(product.price)}`}</button>}</div>
 
   <AnimatePresence>{guide&&chart?.imageUrl&&<SizeGuide chart={chart} close={()=>setGuide(false)}/>}</AnimatePresence>
  </>;
