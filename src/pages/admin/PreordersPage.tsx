@@ -34,7 +34,7 @@ export default function PreordersPage(){
  }
 
  return <div>
-  <div className="flex flex-wrap items-end justify-between gap-5"><div><p className="eyebrow text-black/45">Supplier requests</p><h1 className="display mt-2 text-4xl md:text-5xl">Pre-orders</h1></div><div className="flex flex-wrap gap-2"><button onClick={()=>setManualOpen(true)} className="btn"><Plus size={15}/> Add manual request</button><button disabled={!unbatchedConfirmed.length||busy==='batch-new'} onClick={()=>void createBatch()} className="btn btn-dark disabled:opacity-40"><PackageCheck size={16}/> {busy==='batch-new'?'Creating…':'Create SHEIN batch'}</button></div></div>
+  <div className="flex flex-wrap items-end justify-between gap-5"><div><p className="eyebrow text-black/45">Supplier requests</p><h1 className="display mt-2 text-4xl md:text-5xl">Pre-orders</h1></div><div className="flex flex-wrap gap-2"><button onClick={()=>setManualOpen(true)} className="btn"><Plus size={15}/> Add manual request</button><button disabled={confirmedItems<target||busy==='batch-new'} onClick={()=>void createBatch()} className="btn btn-dark disabled:opacity-40"><PackageCheck size={16}/> {busy==='batch-new'?'Creating…':'Create SHEIN batch'}</button></div></div>
   <p className="mt-4 max-w-3xl text-sm leading-7 text-black/55">Pre-orders are requests, not sales. No payment or delivery fee is collected here. Contact the customer, confirm the final price, then group confirmed requests into a supplier batch.</p>
   {manualOpen&&<ManualPreorderForm close={()=>setManualOpen(false)} onCreated={request=>{setMessage(request.requestId+' added.');setManualOpen(false)}}/>}
 
