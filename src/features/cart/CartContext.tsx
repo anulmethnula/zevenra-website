@@ -6,7 +6,7 @@ const Context=createContext<CartState|null>(null),key='zevenra-cart-v1';
 const clamp=(item:CartItem,n:number)=>Math.max(1,Math.min(item.maxStock??99,n));
 
 export function CartProvider({children}:{children:ReactNode}){
- const[items,setItems]=useState<CartItem[]>(()=>{try{const parsed=JSON.parse(localStorage.getItem(key)||'[]') as Array<CartItem&{isPreorder?:boolean}>;return Array.isArray(parsed)?parsed.filter(item=>!item.isPreorder).map(({isPreorder:_,...item})=>item):[]}catch{return[]}}),[open,setOpen]=useState(false);
+ const[items,setItems]=useState<CartItem[]>(()=>{try{const parsed=JSON.parse(localStorage.getItem(key)||'[]') as Array<CartItem&{isPreorder?:boolean}>;return Array.isArray(parsed)?parsed.filter(item=>!item.isPreorder).map(item=>{const copy={...item};delete copy.isPreorder;return copy as CartItem}):[]}catch{return[]}}),[open,setOpen]=useState(false);
  useEffect(()=>localStorage.setItem(key,JSON.stringify(items)),[items]);
  const value=useMemo<CartState>(()=>({items,count:items.reduce((n,i)=>n+i.quantity,0),subtotal:items.reduce((n,i)=>n+i.unitPrice*i.quantity,0),open,setOpen,
   add:i=>{setItems(old=>{const found=old.find(x=>x.variantId===i.variantId);return found?old.map(x=>{if(x.variantId!==i.variantId)return x;const next={...x,...i};return{...next,quantity:clamp(next,x.quantity+i.quantity)}}):[...old,{...i,quantity:clamp(i,i.quantity)}]});setOpen(true)},
