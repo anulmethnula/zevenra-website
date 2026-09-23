@@ -18,7 +18,6 @@ export default function ShopPage(){
  const routeCollection=activeCollections.find(c=>c.slug===slug);
  const rootCategory=routeCategory?.parentId?activeCategories.find(c=>c.id===routeCategory.parentId):routeCategory;
  const styleCategories=rootCategory?activeCategories.filter(c=>c.parentId===rootCategory.id).sort((a,b)=>a.sortOrder-b.sortOrder):[];
- const categories=rootCategory?[rootCategory,...styleCategories]:shopCategories;
  const priceCeiling=Math.max(1000,Math.ceil(Math.max(0,...all.map(p=>p.price))/1000)*1000);
  const[cat,setCat]=useState(routeCategory?.slug||'all'),[collection,setCollection]=useState(routeCollection?.id||'all'),[sort,setSort]=useState('newest'),[available,setAvailable]=useState(false),[size,setSize]=useState('all'),[color,setColor]=useState('all'),[maxPrice,setMaxPrice]=useState(priceCeiling),[filters,setFilters]=useState(false),[search,setSearch]=useState(params.get('q')||'');
  const query=(params.get('q')||'').trim().toLowerCase();
