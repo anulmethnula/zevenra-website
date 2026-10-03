@@ -38,7 +38,7 @@ export default async function handler(req:VercelRequest,res:VercelResponse){
     return json(res,await legacyBootstrap(config));
    }
   }
-  return json(res,await callScript(config,action==='saveCourierConfig'?'saveDeliveryRates':action,validatedPayload));
+  return json(res,await callScript(config,action,validatedPayload));
  }catch(error){
   const message=error instanceof Error?error.message:'';
   if(message==='Upstream unavailable')return json(res,{error:'Google Sheets backend is temporarily unreachable. Please retry in a moment.'},503);
