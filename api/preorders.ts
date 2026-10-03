@@ -6,8 +6,8 @@ export default async function handler(req:VercelRequest,res:VercelResponse){
  try{
   const config=appsScriptEnv();
   if(!validOrigin(req,config))return json(res,{error:'Invalid request origin'},403);
-  const payload=preorderSchema.parse(body(req)),identity=readCustomerSession(req);
-  const requestPayload=identity?{...payload,email:identity.email,customerId:identity.id}:payload;
+  const payload=preorderSchema.parse(body(req)),identity=readCustomerSession(req),normalized={...payload,phone:payload.phone?.trim()||payload.whatsapp,address1:payload.address1||'',address2:payload.address2||'',district:payload.district||'',postalCode:payload.postalCode||''};
+  const requestPayload=identity?{...normalized,email:identity.email,customerId:identity.id}:normalized;
   const created=await callScript(config,'createPreorderRequest',requestPayload);
   return json(res,created,201);
  }catch(error){
