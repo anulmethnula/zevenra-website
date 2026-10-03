@@ -188,7 +188,7 @@ const ROUTES: Record<string, RouteHandler> = {
         courierSentDate:String((order as Record<string,unknown>).courierSentDate||''),
         paymentMethod: order.paymentMethod === 'bank' ? 'bank' : 'cod',
         paymentReference:String(order.paymentReference||''),
-        paymentReceiptUrl:String(order.paymentReceiptUrl||''),
+        paymentReceiptUrl:'',
         paymentStatus: String(order.paymentStatus || ''),
         subtotal: Number(order.subtotal) || 0,
         deliveryFee: Number(order.deliveryFee) || 0,
