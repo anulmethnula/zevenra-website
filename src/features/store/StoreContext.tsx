@@ -1,91 +1,1002 @@
-import {createContext,useCallback,useContext,useEffect,useMemo,useRef,useState,type ReactNode} from 'react';
-import {initialStoreData} from '../../data/demo';
-import {adminApi} from '../../services/adminApi';
-import type {Category,Collection,ContentPage,CourierProvider,DashboardData,DeliveryRate,HomepageSection,NavigationItem,Order,PreorderRequest,Product,SiteSettings,SizeChart,StoreData} from '../../types';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { initialStoreData } from "../../data/demo";
+import { adminApi } from "../../services/adminApi";
+import type {
+  Category,
+  Collection,
+  ContentPage,
+  CourierProvider,
+  DashboardData,
+  DeliveryRate,
+  HomepageSection,
+  NavigationItem,
+  Order,
+  PreorderRequest,
+  Product,
+  SiteSettings,
+  SizeChart,
+  StoreData,
+} from "../../types";
 
-type Entity='products'|'categories'|'collections'|'navigation'|'homepageSections'|'sizeCharts'|'pages';
-type EntityValue=Product|Category|Collection|NavigationItem|HomepageSection|SizeChart|ContentPage;
-type AdminState={dashboard:DashboardData|null;orders:Order[];preorders:PreorderRequest[];couriers:CourierProvider[];deliveryRates:DeliveryRate[]};
-type Value={data:StoreData;loading:boolean;error:string;adminLoading:boolean;adminError:string;admin:AdminState;live:boolean;loadAdmin:()=>Promise<void>;retry:()=>void;save:<T extends EntityValue>(entity:Entity,value:T)=>void;commit:<T extends EntityValue>(entity:Entity,value:T)=>Promise<void>;remove:(entity:Entity,id:string)=>void;duplicate:(entity:Entity,id:string)=>void;reorder:(entity:Entity,id:string,direction:-1|1)=>void;saveSettings:(patch:Partial<SiteSettings>)=>void;commitSettings:(patch:Partial<SiteSettings>)=>Promise<void>;saveDeliveryRates:(rates:DeliveryRate[])=>Promise<void>;saveCourierConfig:(couriers:CourierProvider[],rates:DeliveryRate[],defaultCourierProviderId:string)=>Promise<void>;updateOrder:(patch:Partial<Order>&{orderId:string})=>Promise<Order>;updatePreorder:(patch:Partial<PreorderRequest>&{requestId:string})=>Promise<PreorderRequest>;refreshPreorders:()=>Promise<void>;resetDemo:()=>void};
-type SettingsRow={key:string;value:unknown};
-type PublicPayload={products:unknown[];categories:unknown[];collections:unknown[];sizeCharts:unknown[];navigation:unknown[];homepageSections:unknown[];settings:SettingsRow[]|Record<string,unknown>;couriers?:unknown[];deliveryRates?:unknown[]};
-type AdminBootstrap={dashboard:DashboardData|null;products:unknown[];categories:unknown[];collections:unknown[];sizeCharts:unknown[];homepageSections:unknown[];orders:Order[];preorders:PreorderRequest[];settings:SettingsRow[];couriers?:unknown[];deliveryRates:unknown[]};
+type Entity =
+  | "products"
+  | "categories"
+  | "collections"
+  | "navigation"
+  | "homepageSections"
+  | "sizeCharts"
+  | "pages";
+type EntityValue =
+  | Product
+  | Category
+  | Collection
+  | NavigationItem
+  | HomepageSection
+  | SizeChart
+  | ContentPage;
+type AdminState = {
+  dashboard: DashboardData | null;
+  orders: Order[];
+  preorders: PreorderRequest[];
+  couriers: CourierProvider[];
+  deliveryRates: DeliveryRate[];
+};
+type Value = {
+  data: StoreData;
+  loading: boolean;
+  error: string;
+  adminLoading: boolean;
+  adminError: string;
+  admin: AdminState;
+  live: boolean;
+  loadAdmin: () => Promise<void>;
+  retry: () => void;
+  save: <T extends EntityValue>(entity: Entity, value: T) => void;
+  commit: <T extends EntityValue>(entity: Entity, value: T) => Promise<void>;
+  remove: (entity: Entity, id: string) => void;
+  duplicate: (entity: Entity, id: string) => void;
+  reorder: (entity: Entity, id: string, direction: -1 | 1) => void;
+  saveSettings: (patch: Partial<SiteSettings>) => void;
+  commitSettings: (patch: Partial<SiteSettings>) => Promise<void>;
+  saveDeliveryRates: (rates: DeliveryRate[]) => Promise<void>;
+  saveCourierConfig: (
+    couriers: CourierProvider[],
+    rates: DeliveryRate[],
+    defaultCourierProviderId: string,
+  ) => Promise<void>;
+  updateOrder: (patch: Partial<Order> & { orderId: string }) => Promise<Order>;
+  updatePreorder: (
+    patch: Partial<PreorderRequest> & { requestId: string },
+  ) => Promise<PreorderRequest>;
+  refreshPreorders: () => Promise<void>;
+  resetDemo: () => void;
+};
+type SettingsRow = { key: string; value: unknown };
+type PublicPayload = {
+  products: unknown[];
+  categories: unknown[];
+  collections: unknown[];
+  sizeCharts: unknown[];
+  navigation: unknown[];
+  homepageSections: unknown[];
+  settings: SettingsRow[] | Record<string, unknown>;
+  couriers?: unknown[];
+  deliveryRates?: unknown[];
+};
+type AdminBootstrap = {
+  dashboard: DashboardData | null;
+  products: unknown[];
+  categories: unknown[];
+  collections: unknown[];
+  sizeCharts: unknown[];
+  homepageSections: unknown[];
+  orders: Order[];
+  preorders: PreorderRequest[];
+  settings: SettingsRow[];
+  couriers?: unknown[];
+  deliveryRates: unknown[];
+};
 
-const demo=import.meta.env.VITE_DEMO_MODE==='true',adminRoute=location.pathname.startsWith('/admin'),storageKey='zevenra-admin-data-v2',Context=createContext<Value|null>(null);
-const emptyAdmin:AdminState={dashboard:null,orders:[],preorders:[],couriers:[],deliveryRates:[]};
-const defaultHero={...initialStoreData.settings.hero,videoEnabled:true,desktopVideo:'/media/hero-final-v2.mp4',mobileVideo:'/media/hero-final-v2.mp4'};
-const bool=(value:unknown)=>value===true||String(value).toLowerCase()==='true';
-const number=(value:unknown)=>Number(value)||0;
-const json=<T,>(value:unknown,fallback:T):T=>{if(Array.isArray(value)||value&&typeof value==='object')return value as T;try{return JSON.parse(String(value||'')) as T}catch{return fallback}};
-const stringList=(value:unknown,fallback:string[]=[])=>{const parsed=json<unknown>(value,fallback);return Array.isArray(parsed)?parsed.map(item=>String(item).trim()).filter(Boolean):fallback};
-const normalizeCategory=(row:unknown):Category=>{const x=row as Record<string,unknown>;return{...x,id:String(x.id??''),name:String(x.name??''),slug:String(x.slug??''),description:String(x.description??''),imageUrl:String(x.imageUrl??''),mobileImageUrl:String(x.mobileImageUrl??''),videoUrl:String(x.videoUrl??''),parentId:x.parentId==null||x.parentId===''?undefined:String(x.parentId),active:bool(x.active),featured:bool(x.featured),showInNavigation:bool(x.showInNavigation),showOnHomepage:bool(x.showOnHomepage),sortOrder:number(x.sortOrder)} as Category};
-const normalizeCollection=(row:unknown):Collection=>{const x=row as Record<string,unknown>;return{...x,id:String(x.id??''),name:String(x.name??''),slug:String(x.slug??''),description:String(x.description??''),heroImage:String(x.heroImage??''),videoUrl:String(x.videoUrl??''),active:bool(x.active),showInNavigation:bool(x.showInNavigation),showOnHomepage:bool(x.showOnHomepage),sortOrder:number(x.sortOrder)} as Collection};
-const normalizeSizeChart=(row:unknown):SizeChart=>{const x=row as Record<string,unknown>;return{...x,id:String(x.id??''),name:String(x.name??''),unit:String(x.unit??'cm'),imageUrl:String(x.imageUrl??''),notes:String(x.notes??''),columns:json(x.columns??x.columnsJson,[]),rows:json(x.rows??x.rowsJson,[])} as unknown as SizeChart};
-const normalizeNavigation=(row:unknown):NavigationItem=>{const x=row as Record<string,unknown>;return{...x,id:String(x.id??''),label:String(x.label??''),linkType:String(x.linkType??'page') as NavigationItem['linkType'],target:String(x.target??''),visible:bool(x.visible),sortOrder:number(x.sortOrder)} as NavigationItem};
-const normalizeHomepage=(row:unknown):HomepageSection=>{const x=row as Record<string,unknown>;return{...x,id:String(x.id??''),type:String(x.type??'editorial-image') as HomepageSection['type'],title:String(x.title??''),subtitle:String(x.subtitle??''),desktopMedia:String(x.desktopMedia??''),mobileMedia:String(x.mobileMedia??''),ctaLabel:String(x.ctaLabel??''),ctaLink:String(x.ctaLink??''),enabled:bool(x.enabled),overlay:number(x.overlay),sortOrder:number(x.sortOrder)} as HomepageSection};
-const normalizeDeliveryRate=(row:unknown,index=0):DeliveryRate=>{const x=row as Record<string,unknown>,legacyDistrict=String(x.district??'').trim();return{...x,id:String(x.id??''),courierProviderId:String(x.courierProviderId??'courier-legacy-zone'),name:String(x.name??(legacyDistrict||'Delivery zone')),fee:number(x.fee),active:bool(x.active),districts:stringList(x.districts??x.districtsJson,legacyDistrict?[legacyDistrict]:[]),cities:stringList(x.cities??x.citiesJson),postalCodes:stringList(x.postalCodes??x.postalCodesJson),fallback:bool(x.fallback),sortOrder:number(x.sortOrder)||index+1,district:legacyDistrict||undefined} as DeliveryRate};
-const normalizeCourier=(row:unknown):CourierProvider=>{const x=row as Record<string,unknown>;return{id:String(x.id??''),name:String(x.name??''),phone:String(x.phone??''),notes:String(x.notes??''),pricingMode:String(x.pricingMode)==='flat'?'flat':'zone',flatRate:number(x.flatRate),active:bool(x.active),createdAt:String(x.createdAt??''),updatedAt:String(x.updatedAt??'')}};
-const normalizeProduct=(row:unknown):Product=>{const x=row as Record<string,unknown>,variants=json<Record<string,unknown>[]>(x.variants,[]).map(v=>({...v,id:String(v.id??''),sku:String(v.sku??''),color:String(v.color??''),size:String(v.size??''),stock:number(v.stock),lowStockThreshold:number(v.lowStockThreshold),active:bool(v.active)}));return{...x,id:String(x.id??''),slug:String(x.slug??''),name:String(x.name??''),shortDescription:String(x.shortDescription??''),description:String(x.description??''),categoryId:String(x.categoryId??''),subcategory:String(x.subcategory??''),material:String(x.material??''),fit:String(x.fit??''),care:String(x.care??''),status:String(x.status??'draft') as Product['status'],price:number(x.price),compareAtPrice:x.compareAtPrice===''||x.compareAtPrice==null?undefined:number(x.compareAtPrice),media:json(x.media??x.mediaJson,[]),tags:Array.isArray(x.tags)?x.tags.map(tag=>String(tag)):String(x.tags||'').split(',').filter(Boolean),collectionIds:json<unknown[]>(x.collectionIds,[]).map(id=>String(id)),featured:bool(x.featured),newArrival:bool(x.newArrival),preorderEnabled:bool(x.preorderEnabled),preorderMessage:String(x.preorderMessage??''),sortOrder:number(x.sortOrder),variants} as unknown as Product};
-function normalizeSettings(source:SettingsRow[]|Record<string,unknown>):SiteSettings{const raw=Array.isArray(source)?Object.fromEntries(source.map(row=>[row.key,row.value])):source;const mapped:Record<string,unknown>={...raw,deliveryFee:raw.deliveryFee??raw.deliveryFlatFee,bankEnabled:raw.bankEnabled??raw.bankTransferEnabled,accountName:raw.accountName??raw.bankAccountName,accountNumber:raw.accountNumber??raw.bankAccountNumber,branch:raw.branch??raw.bankBranch};if(mapped.email==='hello@zevenra.test')mapped.email=initialStoreData.settings.email;const result=structuredClone(initialStoreData.settings) as unknown as Record<string,unknown>,brandFallbackKeys=new Set(['whatsapp','phone','email','instagram','tiktok']);for(const[key,defaultValue]of Object.entries(result)){if(key==='hero'||mapped[key]===undefined)continue;const incoming=mapped[key];if(brandFallbackKeys.has(key)&&String(incoming??'').trim()==='')continue;if(typeof defaultValue==='boolean')result[key]=bool(incoming);else if(typeof defaultValue==='number')result[key]=number(incoming);else if(typeof defaultValue==='string')result[key]=String(incoming??'');else result[key]=incoming}result.hero=structuredClone(defaultHero);return result as unknown as SiteSettings}
-function isSampleId(value:string,prefix:string){return value.toLowerCase().startsWith(prefix)}
-function isLegacySampleProduct(product:Product){return isSampleId(product.id,'sample-product-')&&(product.slug.toLowerCase().startsWith('sample-')||product.name.trim().toUpperCase().startsWith('SAMPLE'))}
-function cleanCatalogue(input:{products:Product[];categories:Category[];collections:Collection[];sizeCharts:SizeChart[];navigation:NavigationItem[];homepageSections:HomepageSection[]}){
- const products=input.products.filter(product=>!isLegacySampleProduct(product));
- const usedCategoryIds=new Set(products.map(product=>product.categoryId).filter(Boolean));
- const categories=input.categories.filter(category=>!isSampleId(category.id,'sample-cat-')||usedCategoryIds.has(category.id)||input.categories.some(child=>usedCategoryIds.has(child.id)&&child.parentId===category.id));
- const usedChartIds=new Set(products.map(product=>product.sizeChartId).filter(Boolean));
- const sizeCharts=input.sizeCharts.filter(chart=>!isSampleId(chart.id,'sample-size-')||usedChartIds.has(chart.id));
- const navigation=input.navigation.filter(item=>!isSampleId(item.id,'sample-nav-'));
- return{...input,products,categories,sizeCharts,navigation};
+const demo = import.meta.env.VITE_DEMO_MODE === "true",
+  adminRoute = location.pathname.startsWith("/admin"),
+  storageKey = "zevenra-admin-data-v2",
+  Context = createContext<Value | null>(null);
+const emptyAdmin: AdminState = {
+  dashboard: null,
+  orders: [],
+  preorders: [],
+  couriers: [],
+  deliveryRates: [],
+};
+const defaultHero = {
+  ...initialStoreData.settings.hero,
+  videoEnabled: true,
+  desktopVideo: "/media/hero-final-v2.mp4",
+  mobileVideo: "/media/hero-final-v2.mp4",
+};
+const bool = (value: unknown) =>
+  value === true || String(value).toLowerCase() === "true";
+const number = (value: unknown) => Number(value) || 0;
+const json = <T,>(value: unknown, fallback: T): T => {
+  if (Array.isArray(value) || (value && typeof value === "object"))
+    return value as T;
+  try {
+    return JSON.parse(String(value || "")) as T;
+  } catch {
+    return fallback;
+  }
+};
+const stringList = (value: unknown, fallback: string[] = []) => {
+  const parsed = json<unknown>(value, fallback);
+  return Array.isArray(parsed)
+    ? parsed.map((item) => String(item).trim()).filter(Boolean)
+    : fallback;
+};
+const normalizeCategory = (row: unknown): Category => {
+  const x = row as Record<string, unknown>;
+  return {
+    ...x,
+    id: String(x.id ?? ""),
+    name: String(x.name ?? ""),
+    slug: String(x.slug ?? ""),
+    description: String(x.description ?? ""),
+    imageUrl: String(x.imageUrl ?? ""),
+    mobileImageUrl: String(x.mobileImageUrl ?? ""),
+    videoUrl: String(x.videoUrl ?? ""),
+    parentId:
+      x.parentId == null || x.parentId === "" ? undefined : String(x.parentId),
+    active: bool(x.active),
+    featured: bool(x.featured),
+    showInNavigation: bool(x.showInNavigation),
+    showOnHomepage: bool(x.showOnHomepage),
+    sortOrder: number(x.sortOrder),
+  } as Category;
+};
+const normalizeCollection = (row: unknown): Collection => {
+  const x = row as Record<string, unknown>;
+  return {
+    ...x,
+    id: String(x.id ?? ""),
+    name: String(x.name ?? ""),
+    slug: String(x.slug ?? ""),
+    description: String(x.description ?? ""),
+    heroImage: String(x.heroImage ?? ""),
+    videoUrl: String(x.videoUrl ?? ""),
+    active: bool(x.active),
+    showInNavigation: bool(x.showInNavigation),
+    showOnHomepage: bool(x.showOnHomepage),
+    sortOrder: number(x.sortOrder),
+  } as Collection;
+};
+const normalizeSizeChart = (row: unknown): SizeChart => {
+  const x = row as Record<string, unknown>;
+  return {
+    ...x,
+    id: String(x.id ?? ""),
+    name: String(x.name ?? ""),
+    unit: String(x.unit ?? "cm"),
+    imageUrl: String(x.imageUrl ?? ""),
+    notes: String(x.notes ?? ""),
+    columns: json(x.columns ?? x.columnsJson, []),
+    rows: json(x.rows ?? x.rowsJson, []),
+  } as unknown as SizeChart;
+};
+const normalizeNavigation = (row: unknown): NavigationItem => {
+  const x = row as Record<string, unknown>;
+  return {
+    ...x,
+    id: String(x.id ?? ""),
+    label: String(x.label ?? ""),
+    linkType: String(x.linkType ?? "page") as NavigationItem["linkType"],
+    target: String(x.target ?? ""),
+    visible: bool(x.visible),
+    sortOrder: number(x.sortOrder),
+  } as NavigationItem;
+};
+const normalizeHomepage = (row: unknown): HomepageSection => {
+  const x = row as Record<string, unknown>;
+  return {
+    ...x,
+    id: String(x.id ?? ""),
+    type: String(x.type ?? "editorial-image") as HomepageSection["type"],
+    title: String(x.title ?? ""),
+    subtitle: String(x.subtitle ?? ""),
+    desktopMedia: String(x.desktopMedia ?? ""),
+    mobileMedia: String(x.mobileMedia ?? ""),
+    ctaLabel: String(x.ctaLabel ?? ""),
+    ctaLink: String(x.ctaLink ?? ""),
+    enabled: bool(x.enabled),
+    overlay: number(x.overlay),
+    sortOrder: number(x.sortOrder),
+  } as HomepageSection;
+};
+const normalizeDeliveryRate = (row: unknown, index = 0): DeliveryRate => {
+  const x = row as Record<string, unknown>,
+    legacyDistrict = String(x.district ?? "").trim();
+  return {
+    ...x,
+    id: String(x.id ?? ""),
+    courierProviderId: String(x.courierProviderId ?? "courier-legacy-zone"),
+    name: String(x.name ?? (legacyDistrict || "Delivery zone")),
+    fee: number(x.fee),
+    active: bool(x.active),
+    districts: stringList(
+      x.districts ?? x.districtsJson,
+      legacyDistrict ? [legacyDistrict] : [],
+    ),
+    cities: stringList(x.cities ?? x.citiesJson),
+    postalCodes: stringList(x.postalCodes ?? x.postalCodesJson),
+    fallback: bool(x.fallback),
+    sortOrder: number(x.sortOrder) || index + 1,
+    district: legacyDistrict || undefined,
+  } as DeliveryRate;
+};
+const normalizeCourier = (row: unknown): CourierProvider => {
+  const x = row as Record<string, unknown>;
+  return {
+    id: String(x.id ?? ""),
+    name: String(x.name ?? ""),
+    phone: String(x.phone ?? ""),
+    notes: String(x.notes ?? ""),
+    pricingMode: String(x.pricingMode) === "flat" ? "flat" : "zone",
+    flatRate: number(x.flatRate),
+    active: bool(x.active),
+    createdAt: String(x.createdAt ?? ""),
+    updatedAt: String(x.updatedAt ?? ""),
+  };
+};
+const normalizeProduct = (row: unknown): Product => {
+  const x = row as Record<string, unknown>,
+    variants = json<Record<string, unknown>[]>(x.variants, []).map((v) => ({
+      ...v,
+      id: String(v.id ?? ""),
+      sku: String(v.sku ?? ""),
+      color: String(v.color ?? ""),
+      size: String(v.size ?? ""),
+      stock: number(v.stock),
+      lowStockThreshold: number(v.lowStockThreshold),
+      active: bool(v.active),
+    }));
+  return {
+    ...x,
+    id: String(x.id ?? ""),
+    slug: String(x.slug ?? ""),
+    name: String(x.name ?? ""),
+    shortDescription: String(x.shortDescription ?? ""),
+    description: String(x.description ?? ""),
+    categoryId: String(x.categoryId ?? ""),
+    subcategory: String(x.subcategory ?? ""),
+    material: String(x.material ?? ""),
+    fit: String(x.fit ?? ""),
+    care: String(x.care ?? ""),
+    status: String(x.status ?? "draft") as Product["status"],
+    price: number(x.price),
+    compareAtPrice:
+      x.compareAtPrice === "" || x.compareAtPrice == null
+        ? undefined
+        : number(x.compareAtPrice),
+    media: json(x.media ?? x.mediaJson, []),
+    tags: Array.isArray(x.tags)
+      ? x.tags.map((tag) => String(tag))
+      : String(x.tags || "")
+          .split(",")
+          .filter(Boolean),
+    collectionIds: json<unknown[]>(x.collectionIds, []).map((id) => String(id)),
+    featured: bool(x.featured),
+    newArrival: bool(x.newArrival),
+    preorderEnabled: bool(x.preorderEnabled),
+    preorderMessage: String(x.preorderMessage ?? ""),
+    sortOrder: number(x.sortOrder),
+    variants,
+  } as unknown as Product;
+};
+function normalizeSettings(
+  source: SettingsRow[] | Record<string, unknown>,
+): SiteSettings {
+  const raw = Array.isArray(source)
+    ? Object.fromEntries(source.map((row) => [row.key, row.value]))
+    : source;
+  const mapped: Record<string, unknown> = {
+    ...raw,
+    deliveryFee: raw.deliveryFee ?? raw.deliveryFlatFee,
+    bankEnabled: raw.bankEnabled ?? raw.bankTransferEnabled,
+    accountName: raw.accountName ?? raw.bankAccountName,
+    accountNumber: raw.accountNumber ?? raw.bankAccountNumber,
+    branch: raw.branch ?? raw.bankBranch,
+  };
+  if (mapped.email === "hello@zevenra.test")
+    mapped.email = initialStoreData.settings.email;
+  const result = structuredClone(
+      initialStoreData.settings,
+    ) as unknown as Record<string, unknown>,
+    brandFallbackKeys = new Set([
+      "whatsapp",
+      "phone",
+      "email",
+      "instagram",
+      "tiktok",
+    ]);
+  for (const [key, defaultValue] of Object.entries(result)) {
+    if (key === "hero" || mapped[key] === undefined) continue;
+    const incoming = mapped[key];
+    if (brandFallbackKeys.has(key) && String(incoming ?? "").trim() === "")
+      continue;
+    if (typeof defaultValue === "boolean") result[key] = bool(incoming);
+    else if (typeof defaultValue === "number") result[key] = number(incoming);
+    else if (typeof defaultValue === "string")
+      result[key] = String(incoming ?? "");
+    else result[key] = incoming;
+  }
+  result.hero = structuredClone(defaultHero);
+  return result as unknown as SiteSettings;
 }
-function settingsPayload(patch:Partial<SiteSettings>){const payload:Record<string,unknown>={...patch};if(patch.deliveryFee!==undefined){payload.deliveryFlatFee=patch.deliveryFee;delete payload.deliveryFee}if(patch.bankEnabled!==undefined){payload.bankTransferEnabled=patch.bankEnabled;delete payload.bankEnabled}if(patch.accountName!==undefined){payload.bankAccountName=patch.accountName;delete payload.accountName}if(patch.accountNumber!==undefined){payload.bankAccountNumber=patch.accountNumber;delete payload.accountNumber}if(patch.branch!==undefined){payload.bankBranch=patch.branch;delete payload.branch}return payload}
-function demoLoad():StoreData{try{const saved=localStorage.getItem(storageKey);if(!saved)return initialStoreData;const parsed=JSON.parse(saved) as StoreData,zones=(parsed.deliveryRates||[]).map(normalizeDeliveryRate),couriers=(parsed.couriers||[]).map(normalizeCourier);return{...initialStoreData,...parsed,couriers:couriers.length?couriers:initialStoreData.couriers,deliveryRates:zones.length?zones:initialStoreData.deliveryRates}}catch{return initialStoreData}}
-function message(error:unknown){return error instanceof Error?error.message:'The operation could not be completed.'}
+function isSampleId(value: string, prefix: string) {
+  return value.toLowerCase().startsWith(prefix);
+}
+function isLegacySampleProduct(product: Product) {
+  return (
+    isSampleId(product.id, "sample-product-") &&
+    (product.slug.toLowerCase().startsWith("sample-") ||
+      product.name.trim().toUpperCase().startsWith("SAMPLE"))
+  );
+}
+function cleanCatalogue(input: {
+  products: Product[];
+  categories: Category[];
+  collections: Collection[];
+  sizeCharts: SizeChart[];
+  navigation: NavigationItem[];
+  homepageSections: HomepageSection[];
+}) {
+  const products = input.products.filter(
+    (product) => !isLegacySampleProduct(product),
+  );
+  const usedCategoryIds = new Set(
+    products.map((product) => product.categoryId).filter(Boolean),
+  );
+  const categories = input.categories.filter(
+    (category) =>
+      !isSampleId(category.id, "sample-cat-") ||
+      usedCategoryIds.has(category.id) ||
+      input.categories.some(
+        (child) =>
+          usedCategoryIds.has(child.id) && child.parentId === category.id,
+      ),
+  );
+  const usedChartIds = new Set(
+    products.map((product) => product.sizeChartId).filter(Boolean),
+  );
+  const sizeCharts = input.sizeCharts.filter(
+    (chart) =>
+      !isSampleId(chart.id, "sample-size-") || usedChartIds.has(chart.id),
+  );
+  const navigation = input.navigation.filter(
+    (item) => !isSampleId(item.id, "sample-nav-"),
+  );
+  return { ...input, products, categories, sizeCharts, navigation };
+}
+function settingsPayload(patch: Partial<SiteSettings>) {
+  const payload: Record<string, unknown> = { ...patch };
+  if (patch.deliveryFee !== undefined) {
+    payload.deliveryFlatFee = patch.deliveryFee;
+    delete payload.deliveryFee;
+  }
+  if (patch.bankEnabled !== undefined) {
+    payload.bankTransferEnabled = patch.bankEnabled;
+    delete payload.bankEnabled;
+  }
+  if (patch.accountName !== undefined) {
+    payload.bankAccountName = patch.accountName;
+    delete payload.accountName;
+  }
+  if (patch.accountNumber !== undefined) {
+    payload.bankAccountNumber = patch.accountNumber;
+    delete payload.accountNumber;
+  }
+  if (patch.branch !== undefined) {
+    payload.bankBranch = patch.branch;
+    delete payload.branch;
+  }
+  return payload;
+}
+function demoLoad(): StoreData {
+  try {
+    const saved = localStorage.getItem(storageKey);
+    if (!saved) return initialStoreData;
+    const parsed = JSON.parse(saved) as StoreData,
+      zones = (parsed.deliveryRates || []).map(normalizeDeliveryRate),
+      couriers = (parsed.couriers || []).map(normalizeCourier);
+    return {
+      ...initialStoreData,
+      ...parsed,
+      couriers: couriers.length ? couriers : initialStoreData.couriers,
+      deliveryRates: zones.length ? zones : initialStoreData.deliveryRates,
+    };
+  } catch {
+    return initialStoreData;
+  }
+}
+function message(error: unknown) {
+  return error instanceof Error
+    ? error.message
+    : "The operation could not be completed.";
+}
 
-export function StoreProvider({children}:{children:ReactNode}){const[data,setData]=useState<StoreData>(()=>demo?demoLoad():initialStoreData),[loading,setLoading]=useState(!demo&&!adminRoute),[error,setError]=useState(''),[adminLoading,setAdminLoading]=useState(!demo),[adminError,setAdminError]=useState(''),[admin,setAdmin]=useState<AdminState>(()=>demo?{...emptyAdmin,couriers:demoLoad().couriers,deliveryRates:demoLoad().deliveryRates}:emptyAdmin),timers=useRef<Record<string,ReturnType<typeof setTimeout>>>({});
- const applyPublic=useCallback((payload:PublicPayload)=>setData(current=>{const clean=cleanCatalogue({products:payload.products.map(normalizeProduct),categories:payload.categories.map(normalizeCategory),collections:payload.collections.map(normalizeCollection),sizeCharts:payload.sizeCharts.map(normalizeSizeChart),navigation:payload.navigation.map(normalizeNavigation),homepageSections:payload.homepageSections.map(normalizeHomepage)});return{...current,...clean,settings:normalizeSettings(payload.settings),couriers:(payload.couriers||[]).map(normalizeCourier),deliveryRates:(payload.deliveryRates||[]).map(normalizeDeliveryRate)}}),[]);
- const loadPublic=useCallback(async()=>{if(demo||adminRoute)return;setLoading(true);setError('');try{const response=await fetch(`${import.meta.env.VITE_API_BASE||'/api'}/store`),payload=await response.json() as PublicPayload&{error?:string};if(!response.ok)throw new Error(payload.error||'Live store data could not be loaded.');applyPublic(payload)}catch(reason){setError(message(reason))}finally{setLoading(false)}},[applyPublic]);
- useEffect(()=>{const pending=timers.current;void loadPublic();return()=>Object.values(pending).forEach(clearTimeout)},[loadPublic]);
- const refreshEntity=useCallback(async(entity:Entity)=>{if(entity==='products'){const rows=await adminApi.get<unknown[]>('listProducts');setData(x=>({...x,products:rows.map(normalizeProduct).filter(p=>!isLegacySampleProduct(p))}))}else if(entity==='categories'){const rows=await adminApi.get<unknown[]>('listCategories');setData(x=>{const normalized=rows.map(normalizeCategory),used=new Set(x.products.map(p=>p.categoryId));return{...x,categories:normalized.filter(category=>!isSampleId(category.id,'sample-cat-')||used.has(category.id)||normalized.some(child=>used.has(child.id)&&child.parentId===category.id))}})}else if(entity==='collections'){const rows=await adminApi.get<unknown[]>('listCollections');setData(x=>({...x,collections:rows.map(normalizeCollection)}))}else if(entity==='sizeCharts'){const rows=await adminApi.get<unknown[]>('listSizeCharts');setData(x=>{const used=new Set(x.products.map(p=>p.sizeChartId).filter(Boolean));return{...x,sizeCharts:rows.map(normalizeSizeChart).filter(chart=>!isSampleId(chart.id,'sample-size-')||used.has(chart.id))}})}else if(entity==='navigation'){const rows=await adminApi.get<unknown[]>('listNavigation');setData(x=>({...x,navigation:rows.map(normalizeNavigation).filter(item=>!isSampleId(item.id,'sample-nav-'))}))}else if(entity==='homepageSections'){const rows=await adminApi.get<unknown[]>('listHomepageSections');setData(x=>({...x,homepageSections:rows.map(normalizeHomepage)}))}},[]);
- const loadAdmin=useCallback(async()=>{
-  if(demo)return;
-  setAdminLoading(true);
-  setAdminError('');
-  try{
-   const payload=await adminApi.get<AdminBootstrap>('bootstrap');
-   const clean=cleanCatalogue({
-    products:(payload.products||[]).map(normalizeProduct),
-    categories:(payload.categories||[]).map(normalizeCategory),
-    collections:(payload.collections||[]).map(normalizeCollection),
-    sizeCharts:(payload.sizeCharts||[]).map(normalizeSizeChart),
-    navigation:[],
-    homepageSections:(payload.homepageSections||[]).map(normalizeHomepage)
-   });
-   const deliveryRates=(payload.deliveryRates||[]).map(normalizeDeliveryRate),couriers=(payload.couriers||[]).map(normalizeCourier);
-   setData(current=>({...current,...clean,navigation:current.navigation,settings:normalizeSettings(payload.settings||[]),couriers,deliveryRates}));
-   setAdmin({dashboard:payload.dashboard||null,orders:payload.orders||[],preorders:payload.preorders||[],couriers,deliveryRates});
-  }catch(reason){setAdminError(message(reason))}
-  finally{setAdminLoading(false)}
- },[]);
- const demoCommit=(next:StoreData)=>{setData(next);localStorage.setItem(storageKey,JSON.stringify(next))};
- const queue=useCallback((key:string,work:()=>Promise<void>)=>{clearTimeout(timers.current[key]);timers.current[key]=setTimeout(()=>{void work().catch(reason=>setAdminError(message(reason)))},450)},[]);
- const save=useCallback(<T extends EntityValue>(entity:Entity,item:T)=>{const update=(current:StoreData)=>{const list=current[entity] as EntityValue[];return{...current,[entity]:list.some(x=>x.id===item.id)?list.map(x=>x.id===item.id?item:x):[...list,item]} as StoreData};if(demo){demoCommit(update(data));return}setData(update);const actions:Partial<Record<Entity,string>>={products:'saveProduct',categories:'saveCategory',collections:'saveCollection',sizeCharts:'saveSizeChart',navigation:'saveNavigation',homepageSections:'saveHomepageSection'},action=actions[entity];if(!action){setAdminError(`${entity} is not available in the live backend.`);return}setAdminError('');queue(`${entity}:${item.id}`,async()=>{await adminApi.post(action,item);await refreshEntity(entity)})},[data,queue,refreshEntity]);
- const commit=useCallback(async<T extends EntityValue>(entity:Entity,item:T)=>{if(demo){const list=data[entity] as EntityValue[];demoCommit({...data,[entity]:list.some(x=>x.id===item.id)?list.map(x=>x.id===item.id?item:x):[...list,item]} as StoreData);return}const actions:Partial<Record<Entity,string>>={products:'saveProduct',categories:'saveCategory',collections:'saveCollection',sizeCharts:'saveSizeChart',navigation:'saveNavigation',homepageSections:'saveHomepageSection'},action=actions[entity];if(!action)throw new Error(`${entity} is not available in the live backend.`);setAdminError('');try{await adminApi.post(action,item);await refreshEntity(entity)}catch(reason){setAdminError(message(reason));throw reason}},[data,refreshEntity]);
- const remove=useCallback((entity:Entity,id:string)=>{if(demo){demoCommit({...data,[entity]:(data[entity] as EntityValue[]).filter(x=>x.id!==id)});return}const actions:Partial<Record<Entity,string>>={products:'deleteProduct',categories:'deleteCategory',collections:'deleteCollection',sizeCharts:'deleteSizeChart',navigation:'deleteNavigation',homepageSections:'deleteHomepageSection'},action=actions[entity];if(!action){setAdminError(`Deleting ${entity} is not supported by the current backend.`);return}setAdminError('');void adminApi.post(action,{id}).then(()=>refreshEntity(entity)).catch(reason=>setAdminError(message(reason)))},[data,refreshEntity]);
- const duplicate=useCallback((entity:Entity,id:string)=>{const list=data[entity] as EntityValue[],source=list.find(x=>x.id===id);if(!source)return;const copy={...structuredClone(source),id:crypto.randomUUID(),name:'name'in source?`${String(source.name)} Copy`:undefined,label:'label'in source?`${String(source.label)} Copy`:undefined,slug:'slug'in source?`${String(source.slug)}-copy`:undefined,sortOrder:list.length+1} as EntityValue;save(entity,copy)},[data,save]);
- const reorder=useCallback((entity:Entity,id:string,direction:-1|1)=>{const list=[...(data[entity] as EntityValue[])],index=list.findIndex(x=>x.id===id),target=index+direction;if(index<0||target<0||target>=list.length)return;[list[index],list[target]]=[list[target],list[index]];list.map((item,i)=>({...item,sortOrder:i+1}) as EntityValue).forEach(item=>save(entity,item))},[data,save]);
- const saveSettings=useCallback((patch:Partial<SiteSettings>)=>{const next={...data.settings,...patch,hero:{...data.settings.hero,...patch.hero}};if(demo){demoCommit({...data,settings:next});return}setData(x=>({...x,settings:next}));setAdminError('');queue('settings',async()=>{await adminApi.post('saveSettings',settingsPayload(patch));const rows=await adminApi.get<SettingsRow[]>('getSettings');setData(x=>({...x,settings:normalizeSettings(rows)}))})},[data,queue]);
- const commitSettings=useCallback(async(patch:Partial<SiteSettings>)=>{if(demo){demoCommit({...data,settings:{...data.settings,...patch,hero:{...data.settings.hero,...patch.hero}}});return}setAdminError('');try{await adminApi.post('saveSettings',settingsPayload(patch));const rows=await adminApi.get<SettingsRow[]>('getSettings');setData(x=>({...x,settings:normalizeSettings(rows)}))}catch(reason){setAdminError(message(reason));throw reason}},[data]);
- const saveCourierConfig=useCallback(async(couriers:CourierProvider[],rates:DeliveryRate[],defaultCourierProviderId:string)=>{if(demo){const settings={...data.settings,defaultCourierProviderId},next={...data,couriers,rates,deliveryRates:rates,settings};delete (next as StoreData&{rates?:DeliveryRate[]}).rates;setAdmin(x=>({...x,couriers,deliveryRates:rates}));setData(next);localStorage.setItem(storageKey,JSON.stringify(next));return}setAdminError('');try{const result=await adminApi.post<{couriers:unknown[];deliveryRates:unknown[];defaultCourierProviderId:string}>('saveCourierConfig',{couriers,rates,defaultCourierProviderId}),normalizedCouriers=result.couriers.map(normalizeCourier),normalizedRates=result.deliveryRates.map(normalizeDeliveryRate);setAdmin(x=>({...x,couriers:normalizedCouriers,deliveryRates:normalizedRates}));setData(x=>({...x,couriers:normalizedCouriers,deliveryRates:normalizedRates,settings:{...x.settings,defaultCourierProviderId:result.defaultCourierProviderId}}))}catch(reason){setAdminError(message(reason));throw reason}},[data]);
- const updateOrder=useCallback(async(patch:Partial<Order>&{orderId:string})=>{if(demo)throw new Error('Order updates are unavailable in demo mode.');setAdminError('');try{const updated=await adminApi.post<Order>('updateOrder',patch);setAdmin(current=>({...current,orders:current.orders.map(order=>order.orderId===updated.orderId?{...order,...updated}:order)}));return updated}catch(reason){setAdminError(message(reason));throw reason}},[]);
- const refreshPreorders=useCallback(async()=>{if(demo)return;const rows=await adminApi.get<PreorderRequest[]>('listPreorders');setAdmin(current=>({...current,preorders:rows}))},[]);
- const updatePreorder=useCallback(async(patch:Partial<PreorderRequest>&{requestId:string})=>{if(demo)throw new Error('Pre-order updates are unavailable in demo mode.');setAdminError('');try{const updated=await adminApi.post<PreorderRequest>('updatePreorder',patch);setAdmin(current=>({...current,preorders:current.preorders.map(item=>item.requestId===updated.requestId?{...item,...updated}:item)}));return updated}catch(reason){setAdminError(message(reason));throw reason}},[]);
- const saveDeliveryRates=useCallback(async(rates:DeliveryRate[])=>saveCourierConfig(data.couriers,rates,data.settings.defaultCourierProviderId),[data.couriers,data.settings.defaultCourierProviderId,saveCourierConfig]);
- const resetDemo=()=>{if(!demo)return;localStorage.removeItem(storageKey);setData(initialStoreData);setAdmin(current=>({...current,couriers:initialStoreData.couriers,deliveryRates:initialStoreData.deliveryRates}))};
- const value=useMemo<Value>(()=>({data,loading,error,adminLoading,adminError,admin,live:!demo,loadAdmin,retry:loadPublic,save,commit,remove,duplicate,reorder,saveSettings,commitSettings,saveDeliveryRates,saveCourierConfig,updateOrder,updatePreorder,refreshPreorders,resetDemo}),[data,loading,error,adminLoading,adminError,admin,loadAdmin,loadPublic,save,commit,remove,duplicate,reorder,saveSettings,commitSettings,saveDeliveryRates,saveCourierConfig,updateOrder,updatePreorder,refreshPreorders]);
- if(!adminRoute&&loading)return <div className="grid min-h-dvh place-content-center bg-paper text-center"><p className="eyebrow">Loading live store data…</p></div>;
- if(!adminRoute&&error)return <div className="grid min-h-dvh place-content-center bg-paper px-6 text-center"><h1 className="display text-4xl">Store data unavailable.</h1><p className="mt-3 text-sm text-black/55">{error}</p><button className="btn btn-dark mx-auto mt-6" onClick={()=>void loadPublic()}>Try again</button></div>;
- return <Context.Provider value={value}>{children}</Context.Provider>}
+export function StoreProvider({ children }: { children: ReactNode }) {
+  const [data, setData] = useState<StoreData>(() =>
+      demo ? demoLoad() : initialStoreData,
+    ),
+    [loading, setLoading] = useState(!demo && !adminRoute),
+    [error, setError] = useState(""),
+    [adminLoading, setAdminLoading] = useState(!demo),
+    [adminError, setAdminError] = useState(""),
+    [admin, setAdmin] = useState<AdminState>(() =>
+      demo
+        ? {
+            ...emptyAdmin,
+            couriers: demoLoad().couriers,
+            deliveryRates: demoLoad().deliveryRates,
+          }
+        : emptyAdmin,
+    ),
+    timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const applyPublic = useCallback(
+    (payload: PublicPayload) =>
+      setData((current) => {
+        const clean = cleanCatalogue({
+          products: payload.products.map(normalizeProduct),
+          categories: payload.categories.map(normalizeCategory),
+          collections: payload.collections.map(normalizeCollection),
+          sizeCharts: payload.sizeCharts.map(normalizeSizeChart),
+          navigation: payload.navigation.map(normalizeNavigation),
+          homepageSections: payload.homepageSections.map(normalizeHomepage),
+        });
+        return {
+          ...current,
+          ...clean,
+          settings: normalizeSettings(payload.settings),
+          couriers: (payload.couriers || []).map(normalizeCourier),
+          deliveryRates: (payload.deliveryRates || []).map(
+            normalizeDeliveryRate,
+          ),
+        };
+      }),
+    [],
+  );
+  const loadPublic = useCallback(async () => {
+    if (demo || adminRoute) return;
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch(
+          `${import.meta.env.VITE_API_BASE || "/api"}/store`,
+        ),
+        payload = (await response.json()) as PublicPayload & { error?: string };
+      if (!response.ok)
+        throw new Error(
+          payload.error || "Live store data could not be loaded.",
+        );
+      applyPublic(payload);
+    } catch (reason) {
+      setError(message(reason));
+    } finally {
+      setLoading(false);
+    }
+  }, [applyPublic]);
+  useEffect(() => {
+    const pending = timers.current;
+    void loadPublic();
+    return () => Object.values(pending).forEach(clearTimeout);
+  }, [loadPublic]);
+  const refreshEntity = useCallback(async (entity: Entity) => {
+    if (entity === "products") {
+      const rows = await adminApi.get<unknown[]>("listProducts");
+      setData((x) => ({
+        ...x,
+        products: rows
+          .map(normalizeProduct)
+          .filter((p) => !isLegacySampleProduct(p)),
+      }));
+    } else if (entity === "categories") {
+      const rows = await adminApi.get<unknown[]>("listCategories");
+      setData((x) => {
+        const normalized = rows.map(normalizeCategory),
+          used = new Set(x.products.map((p) => p.categoryId));
+        return {
+          ...x,
+          categories: normalized.filter(
+            (category) =>
+              !isSampleId(category.id, "sample-cat-") ||
+              used.has(category.id) ||
+              normalized.some(
+                (child) => used.has(child.id) && child.parentId === category.id,
+              ),
+          ),
+        };
+      });
+    } else if (entity === "collections") {
+      const rows = await adminApi.get<unknown[]>("listCollections");
+      setData((x) => ({ ...x, collections: rows.map(normalizeCollection) }));
+    } else if (entity === "sizeCharts") {
+      const rows = await adminApi.get<unknown[]>("listSizeCharts");
+      setData((x) => {
+        const used = new Set(
+          x.products.map((p) => p.sizeChartId).filter(Boolean),
+        );
+        return {
+          ...x,
+          sizeCharts: rows
+            .map(normalizeSizeChart)
+            .filter(
+              (chart) =>
+                !isSampleId(chart.id, "sample-size-") || used.has(chart.id),
+            ),
+        };
+      });
+    } else if (entity === "navigation") {
+      const rows = await adminApi.get<unknown[]>("listNavigation");
+      setData((x) => ({
+        ...x,
+        navigation: rows
+          .map(normalizeNavigation)
+          .filter((item) => !isSampleId(item.id, "sample-nav-")),
+      }));
+    } else if (entity === "homepageSections") {
+      const rows = await adminApi.get<unknown[]>("listHomepageSections");
+      setData((x) => ({ ...x, homepageSections: rows.map(normalizeHomepage) }));
+    }
+  }, []);
+  const loadAdmin = useCallback(async () => {
+    if (demo) return;
+    setAdminLoading(true);
+    setAdminError("");
+    try {
+      const payload = await adminApi.get<AdminBootstrap>("bootstrap");
+      const clean = cleanCatalogue({
+        products: (payload.products || []).map(normalizeProduct),
+        categories: (payload.categories || []).map(normalizeCategory),
+        collections: (payload.collections || []).map(normalizeCollection),
+        sizeCharts: (payload.sizeCharts || []).map(normalizeSizeChart),
+        navigation: [],
+        homepageSections: (payload.homepageSections || []).map(
+          normalizeHomepage,
+        ),
+      });
+      const deliveryRates = (payload.deliveryRates || []).map(
+          normalizeDeliveryRate,
+        ),
+        couriers = (payload.couriers || []).map(normalizeCourier);
+      setData((current) => ({
+        ...current,
+        ...clean,
+        navigation: current.navigation,
+        settings: normalizeSettings(payload.settings || []),
+        couriers,
+        deliveryRates,
+      }));
+      setAdmin({
+        dashboard: payload.dashboard || null,
+        orders: payload.orders || [],
+        preorders: payload.preorders || [],
+        couriers,
+        deliveryRates,
+      });
+    } catch (reason) {
+      setAdminError(message(reason));
+    } finally {
+      setAdminLoading(false);
+    }
+  }, []);
+  const demoCommit = (next: StoreData) => {
+    setData(next);
+    localStorage.setItem(storageKey, JSON.stringify(next));
+  };
+  const queue = useCallback((key: string, work: () => Promise<void>) => {
+    clearTimeout(timers.current[key]);
+    timers.current[key] = setTimeout(() => {
+      void work().catch((reason) => setAdminError(message(reason)));
+    }, 450);
+  }, []);
+  const save = useCallback(
+    <T extends EntityValue>(entity: Entity, item: T) => {
+      const update = (current: StoreData) => {
+        const list = current[entity] as EntityValue[];
+        return {
+          ...current,
+          [entity]: list.some((x) => x.id === item.id)
+            ? list.map((x) => (x.id === item.id ? item : x))
+            : [...list, item],
+        } as StoreData;
+      };
+      if (demo) {
+        demoCommit(update(data));
+        return;
+      }
+      setData(update);
+      const actions: Partial<Record<Entity, string>> = {
+          products: "saveProduct",
+          categories: "saveCategory",
+          collections: "saveCollection",
+          sizeCharts: "saveSizeChart",
+          navigation: "saveNavigation",
+          homepageSections: "saveHomepageSection",
+        },
+        action = actions[entity];
+      if (!action) {
+        setAdminError(`${entity} is not available in the live backend.`);
+        return;
+      }
+      setAdminError("");
+      queue(`${entity}:${item.id}`, async () => {
+        await adminApi.post(action, item);
+        await refreshEntity(entity);
+      });
+    },
+    [data, queue, refreshEntity],
+  );
+  const commit = useCallback(
+    async <T extends EntityValue>(entity: Entity, item: T) => {
+      if (demo) {
+        const list = data[entity] as EntityValue[];
+        demoCommit({
+          ...data,
+          [entity]: list.some((x) => x.id === item.id)
+            ? list.map((x) => (x.id === item.id ? item : x))
+            : [...list, item],
+        } as StoreData);
+        return;
+      }
+      const actions: Partial<Record<Entity, string>> = {
+          products: "saveProduct",
+          categories: "saveCategory",
+          collections: "saveCollection",
+          sizeCharts: "saveSizeChart",
+          navigation: "saveNavigation",
+          homepageSections: "saveHomepageSection",
+        },
+        action = actions[entity];
+      if (!action)
+        throw new Error(`${entity} is not available in the live backend.`);
+      setAdminError("");
+      try {
+        await adminApi.post(action, item);
+        await refreshEntity(entity);
+      } catch (reason) {
+        setAdminError(message(reason));
+        throw reason;
+      }
+    },
+    [data, refreshEntity],
+  );
+  const remove = useCallback(
+    (entity: Entity, id: string) => {
+      if (demo) {
+        demoCommit({
+          ...data,
+          [entity]: (data[entity] as EntityValue[]).filter((x) => x.id !== id),
+        });
+        return;
+      }
+      const actions: Partial<Record<Entity, string>> = {
+          products: "deleteProduct",
+          categories: "deleteCategory",
+          collections: "deleteCollection",
+          sizeCharts: "deleteSizeChart",
+          navigation: "deleteNavigation",
+          homepageSections: "deleteHomepageSection",
+        },
+        action = actions[entity];
+      if (!action) {
+        setAdminError(
+          `Deleting ${entity} is not supported by the current backend.`,
+        );
+        return;
+      }
+      setAdminError("");
+      void adminApi
+        .post(action, { id })
+        .then(() => refreshEntity(entity))
+        .catch((reason) => setAdminError(message(reason)));
+    },
+    [data, refreshEntity],
+  );
+  const duplicate = useCallback(
+    (entity: Entity, id: string) => {
+      const list = data[entity] as EntityValue[],
+        source = list.find((x) => x.id === id);
+      if (!source) return;
+      const copy = {
+        ...structuredClone(source),
+        id: crypto.randomUUID(),
+        name: "name" in source ? `${String(source.name)} Copy` : undefined,
+        label: "label" in source ? `${String(source.label)} Copy` : undefined,
+        slug: "slug" in source ? `${String(source.slug)}-copy` : undefined,
+        sortOrder: list.length + 1,
+      } as EntityValue;
+      save(entity, copy);
+    },
+    [data, save],
+  );
+  const reorder = useCallback(
+    (entity: Entity, id: string, direction: -1 | 1) => {
+      const list = [...(data[entity] as EntityValue[])],
+        index = list.findIndex((x) => x.id === id),
+        target = index + direction;
+      if (index < 0 || target < 0 || target >= list.length) return;
+      [list[index], list[target]] = [list[target], list[index]];
+      list
+        .map((item, i) => ({ ...item, sortOrder: i + 1 }) as EntityValue)
+        .forEach((item) => save(entity, item));
+    },
+    [data, save],
+  );
+  const saveSettings = useCallback(
+    (patch: Partial<SiteSettings>) => {
+      const next = {
+        ...data.settings,
+        ...patch,
+        hero: { ...data.settings.hero, ...patch.hero },
+      };
+      if (demo) {
+        demoCommit({ ...data, settings: next });
+        return;
+      }
+      setData((x) => ({ ...x, settings: next }));
+      setAdminError("");
+      queue("settings", async () => {
+        await adminApi.post("saveSettings", settingsPayload(patch));
+        const rows = await adminApi.get<SettingsRow[]>("getSettings");
+        setData((x) => ({ ...x, settings: normalizeSettings(rows) }));
+      });
+    },
+    [data, queue],
+  );
+  const commitSettings = useCallback(
+    async (patch: Partial<SiteSettings>) => {
+      if (demo) {
+        demoCommit({
+          ...data,
+          settings: {
+            ...data.settings,
+            ...patch,
+            hero: { ...data.settings.hero, ...patch.hero },
+          },
+        });
+        return;
+      }
+      setAdminError("");
+      try {
+        await adminApi.post("saveSettings", settingsPayload(patch));
+        const rows = await adminApi.get<SettingsRow[]>("getSettings");
+        setData((x) => ({ ...x, settings: normalizeSettings(rows) }));
+      } catch (reason) {
+        setAdminError(message(reason));
+        throw reason;
+      }
+    },
+    [data],
+  );
+  const saveCourierConfig = useCallback(
+    async (
+      couriers: CourierProvider[],
+      rates: DeliveryRate[],
+      defaultCourierProviderId: string,
+    ) => {
+      if (demo) {
+        const settings = { ...data.settings, defaultCourierProviderId },
+          next = { ...data, couriers, rates, deliveryRates: rates, settings };
+        delete (next as StoreData & { rates?: DeliveryRate[] }).rates;
+        setAdmin((x) => ({ ...x, couriers, deliveryRates: rates }));
+        setData(next);
+        localStorage.setItem(storageKey, JSON.stringify(next));
+        return;
+      }
+      setAdminError("");
+      try {
+        const result = await adminApi.post<{
+            couriers: unknown[];
+            deliveryRates: unknown[];
+            defaultCourierProviderId: string;
+          }>("saveCourierConfig", {
+            couriers,
+            rates,
+            defaultCourierProviderId,
+          }),
+          normalizedCouriers = result.couriers.map(normalizeCourier),
+          normalizedRates = result.deliveryRates.map(normalizeDeliveryRate);
+        setAdmin((x) => ({
+          ...x,
+          couriers: normalizedCouriers,
+          deliveryRates: normalizedRates,
+        }));
+        setData((x) => ({
+          ...x,
+          couriers: normalizedCouriers,
+          deliveryRates: normalizedRates,
+          settings: {
+            ...x.settings,
+            defaultCourierProviderId: result.defaultCourierProviderId,
+          },
+        }));
+      } catch (reason) {
+        setAdminError(message(reason));
+        throw reason;
+      }
+    },
+    [data],
+  );
+  const updateOrder = useCallback(
+    async (patch: Partial<Order> & { orderId: string }) => {
+      if (demo) throw new Error("Order updates are unavailable in demo mode.");
+      setAdminError("");
+      try {
+        const updated = await adminApi.post<Order>("updateOrder", patch);
+        setAdmin((current) => ({
+          ...current,
+          orders: current.orders.map((order) =>
+            order.orderId === updated.orderId
+              ? { ...order, ...updated }
+              : order,
+          ),
+        }));
+        return updated;
+      } catch (reason) {
+        setAdminError(message(reason));
+        throw reason;
+      }
+    },
+    [],
+  );
+  const refreshPreorders = useCallback(async () => {
+    if (demo) return;
+    const rows = await adminApi.get<PreorderRequest[]>("listPreorders");
+    setAdmin((current) => ({ ...current, preorders: rows }));
+  }, []);
+  const updatePreorder = useCallback(
+    async (patch: Partial<PreorderRequest> & { requestId: string }) => {
+      if (demo)
+        throw new Error("Pre-order updates are unavailable in demo mode.");
+      setAdminError("");
+      try {
+        const updated = await adminApi.post<PreorderRequest>(
+          "updatePreorder",
+          patch,
+        );
+        setAdmin((current) => ({
+          ...current,
+          preorders: current.preorders.map((item) =>
+            item.requestId === updated.requestId
+              ? { ...item, ...updated }
+              : item,
+          ),
+        }));
+        return updated;
+      } catch (reason) {
+        setAdminError(message(reason));
+        throw reason;
+      }
+    },
+    [],
+  );
+  const saveDeliveryRates = useCallback(
+    async (rates: DeliveryRate[]) =>
+      saveCourierConfig(
+        data.couriers,
+        rates,
+        data.settings.defaultCourierProviderId,
+      ),
+    [data.couriers, data.settings.defaultCourierProviderId, saveCourierConfig],
+  );
+  const resetDemo = () => {
+    if (!demo) return;
+    localStorage.removeItem(storageKey);
+    setData(initialStoreData);
+    setAdmin((current) => ({
+      ...current,
+      couriers: initialStoreData.couriers,
+      deliveryRates: initialStoreData.deliveryRates,
+    }));
+  };
+  const value = useMemo<Value>(
+    () => ({
+      data,
+      loading,
+      error,
+      adminLoading,
+      adminError,
+      admin,
+      live: !demo,
+      loadAdmin,
+      retry: loadPublic,
+      save,
+      commit,
+      remove,
+      duplicate,
+      reorder,
+      saveSettings,
+      commitSettings,
+      saveDeliveryRates,
+      saveCourierConfig,
+      updateOrder,
+      updatePreorder,
+      refreshPreorders,
+      resetDemo,
+    }),
+    [
+      data,
+      loading,
+      error,
+      adminLoading,
+      adminError,
+      admin,
+      loadAdmin,
+      loadPublic,
+      save,
+      commit,
+      remove,
+      duplicate,
+      reorder,
+      saveSettings,
+      commitSettings,
+      saveDeliveryRates,
+      saveCourierConfig,
+      updateOrder,
+      updatePreorder,
+      refreshPreorders,
+    ],
+  );
+  if (!adminRoute && loading)
+    return (
+      <div className="grid min-h-dvh place-content-center bg-paper text-center">
+        <p className="eyebrow">Loading live store data…</p>
+      </div>
+    );
+  if (!adminRoute && error)
+    return (
+      <div className="grid min-h-dvh place-content-center bg-paper px-6 text-center">
+        <h1 className="display text-4xl">Store data unavailable.</h1>
+        <p className="mt-3 text-sm text-black/55">{error}</p>
+        <button
+          className="btn btn-dark mx-auto mt-6"
+          onClick={() => void loadPublic()}
+        >
+          Try again
+        </button>
+      </div>
+    );
+  return <Context.Provider value={value}>{children}</Context.Provider>;
+}
 
-export function useStore(){const value=useContext(Context);if(!value)throw new Error('StoreProvider required');return value}
-export function navigationHref(item:NavigationItem,categories:Category[]=[],collections:Collection[]=[]){const target=String(item.target??'');if(item.linkType==='category'){const raw=target.replace(/^\/category\//,'');const category=categories.find(x=>x.id===raw||x.slug===raw);return `/category/${category?.slug||raw}`}if(item.linkType==='collection'){const raw=target.replace(/^\/collections\//,'');const collection=collections.find(x=>x.id===raw||x.slug===raw);return `/collections/${collection?.slug||raw}`}if(item.linkType==='url'&&/^https?:\/\//i.test(target))return target;return target.startsWith('/')?target:`/${target}`}
+export function useStore() {
+  const value = useContext(Context);
+  if (!value) throw new Error("StoreProvider required");
+  return value;
+}
+export function navigationHref(
+  item: NavigationItem,
+  categories: Category[] = [],
+  collections: Collection[] = [],
+) {
+  const target = String(item.target ?? "");
+  if (item.linkType === "category") {
+    const raw = target.replace(/^\/category\//, "");
+    const category = categories.find((x) => x.id === raw || x.slug === raw);
+    return `/category/${category?.slug || raw}`;
+  }
+  if (item.linkType === "collection") {
+    const raw = target.replace(/^\/collections\//, "");
+    const collection = collections.find((x) => x.id === raw || x.slug === raw);
+    return `/collections/${collection?.slug || raw}`;
+  }
+  if (item.linkType === "url" && /^https?:\/\//i.test(target)) return target;
+  return target.startsWith("/") ? target : `/${target}`;
+}

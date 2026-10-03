@@ -1,16 +1,120 @@
-import {Check} from 'lucide-react';
-import {Link,useParams} from 'react-router-dom';
-import {Seo} from '../components/Seo';
-import {money} from '../config/site';
-import {useStore} from '../features/store/StoreContext';
-import {useCustomerAuth} from '../features/account/CustomerAuthContext';
-import type {Order} from '../types';
-import {normalizeWhatsappDigits} from '../utils/contact';
+import { Check } from "lucide-react";
+import { Link, useParams } from "react-router-dom";
+import { Seo } from "../components/Seo";
+import { money } from "../config/site";
+import { useStore } from "../features/store/StoreContext";
+import { useCustomerAuth } from "../features/account/CustomerAuthContext";
+import type { Order } from "../types";
+import { normalizeWhatsappDigits } from "../utils/contact";
 
-export default function OrderPage(){
- const{orderId}=useParams(),{data}=useStore(),{user}=useCustomerAuth();let order:Order|undefined;
- try{order=JSON.parse(sessionStorage.getItem(`order:${orderId}`)||'') as Order}catch{order=undefined}
- if(!order)return <div className="container grid min-h-[70vh] place-content-center text-center"><h1 className="display text-4xl">Order details unavailable.</h1><p className="mt-3 text-sm text-ink/55">Open the original confirmation link or contact ZEVENRA.</p><Link to="/contact" className="btn mt-6">Contact us</Link></div>;
- const whatsapp=normalizeWhatsappDigits(data.settings.whatsapp),lines=order.items.map(item=>`${item.name} — ${item.color}/${item.size} × ${item.quantity}${item.isPreorder?' (PRE-ORDER)':''}`).join('\n'),deliveryLabel=order.deliveryZoneName?`${order.deliveryZoneName} — ${money(order.deliveryFee)}`:money(order.deliveryFee),message=`Hello ZEVENRA, I have submitted order ${order.orderId}.\n\n${lines}\nSubtotal: ${money(order.subtotal)}\nDelivery: ${deliveryLabel}\nTotal: ${money(order.total)}\nName: ${order.customerName}\nCity: ${order.city}\nPayment: ${order.paymentMethod==='cod'?'Cash on delivery':'Bank transfer'}`;
- return <main className="container py-16 text-center"><Seo title={`Order ${order.orderId}`}/><span className="mx-auto grid h-16 w-16 place-items-center rounded-full border border-bronze text-bronze"><Check size={28}/></span><p className="eyebrow mt-7 text-bronze">Order request received</p><h1 className="display mt-3 text-4xl sm:text-6xl">#{order.orderId}</h1><p className="mx-auto mt-5 max-w-lg text-sm leading-7 text-ink/60">Your order has been received and its stock is reserved. ZEVENRA will review the order and payment details before fulfilment.</p>{order.paymentMethod==='bank'&&<p className="mx-auto mt-4 max-w-lg border border-emerald-900/15 bg-emerald-950/[.05] px-4 py-3 text-xs text-emerald-950">Your bank receipt was attached to this order for verification.</p>}<div className="mx-auto mt-9 max-w-xl border-y hairline py-6 text-left">{order.items.map(item=><div key={item.variantId} className="flex justify-between gap-5 py-2 text-sm"><span>{item.name} · {item.color}/{item.size} × {item.quantity}{item.isPreorder&&<small className="ml-2 border border-bronze/30 px-1.5 py-0.5 text-[9px] tracking-wider text-bronze">PRE-ORDER</small>}</span><span>{money(item.unitPrice*item.quantity)}</span></div>)}<div className="mt-4 flex justify-between border-t hairline pt-4 text-sm"><span>Delivery{order.deliveryZoneName?`: ${order.deliveryZoneName}`:''}</span><span>{order.deliveryFee?money(order.deliveryFee):'Complimentary'}</span></div><div className="mt-3 flex justify-between"><span>Total</span><b>{money(order.total)}</b></div></div><div className="mt-8 flex flex-wrap justify-center gap-3">{user&&<Link className="btn btn-dark" to="/account/orders">View My Orders</Link>}{whatsapp.length>=8&&<a className={user?'btn':'btn btn-dark'} href={`https://wa.me/${whatsapp}?text=${encodeURIComponent(message)}`} target="_blank" rel="noreferrer">{order.paymentMethod==='bank'?'Contact on WhatsApp':'Continue on WhatsApp'}</a>}</div><p className="mx-auto mt-5 max-w-xl text-xs leading-5 text-ink/45">Keep your order ID for reference.{order.paymentMethod==='bank'&&whatsapp.length>=8?' Your receipt is saved securely with the order; you do not need to resend the file unless ZEVENRA asks you to.':''}</p></main>
+export default function OrderPage() {
+  const { orderId } = useParams(),
+    { data } = useStore(),
+    { user } = useCustomerAuth();
+  let order: Order | undefined;
+  try {
+    order = JSON.parse(
+      sessionStorage.getItem(`order:${orderId}`) || "",
+    ) as Order;
+  } catch {
+    order = undefined;
+  }
+  if (!order)
+    return (
+      <div className="container grid min-h-[70vh] place-content-center text-center">
+        <h1 className="display text-4xl">Order details unavailable.</h1>
+        <p className="mt-3 text-sm text-ink/55">
+          Open the original confirmation link or contact ZEVENRA.
+        </p>
+        <Link to="/contact" className="btn mt-6">
+          Contact us
+        </Link>
+      </div>
+    );
+  const whatsapp = normalizeWhatsappDigits(data.settings.whatsapp),
+    lines = order.items
+      .map(
+        (item) =>
+          `${item.name} — ${item.color}/${item.size} × ${item.quantity}${item.isPreorder ? " (PRE-ORDER)" : ""}`,
+      )
+      .join("\n"),
+    deliveryLabel = order.deliveryZoneName
+      ? `${order.deliveryZoneName} — ${money(order.deliveryFee)}`
+      : money(order.deliveryFee),
+    message = `Hello ZEVENRA, I have submitted order ${order.orderId}.\n\n${lines}\nSubtotal: ${money(order.subtotal)}\nDelivery: ${deliveryLabel}\nTotal: ${money(order.total)}\nName: ${order.customerName}\nCity: ${order.city}\nPayment: ${order.paymentMethod === "cod" ? "Cash on delivery" : "Bank transfer"}`;
+  return (
+    <main className="container py-16 text-center">
+      <Seo title={`Order ${order.orderId}`} />
+      <span className="mx-auto grid h-16 w-16 place-items-center rounded-full border border-bronze text-bronze">
+        <Check size={28} />
+      </span>
+      <p className="eyebrow mt-7 text-bronze">Order request received</p>
+      <h1 className="display mt-3 text-4xl sm:text-6xl">#{order.orderId}</h1>
+      <p className="mx-auto mt-5 max-w-lg text-sm leading-7 text-ink/60">
+        Your order has been received and its stock is reserved. ZEVENRA will
+        review the order and payment details before fulfilment.
+      </p>
+      {order.paymentMethod === "bank" && (
+        <p className="mx-auto mt-4 max-w-lg border border-emerald-900/15 bg-emerald-950/[.05] px-4 py-3 text-xs text-emerald-950">
+          Your bank receipt was attached to this order for verification.
+        </p>
+      )}
+      <div className="mx-auto mt-9 max-w-xl border-y hairline py-6 text-left">
+        {order.items.map((item) => (
+          <div
+            key={item.variantId}
+            className="flex justify-between gap-5 py-2 text-sm"
+          >
+            <span>
+              {item.name} · {item.color}/{item.size} × {item.quantity}
+              {item.isPreorder && (
+                <small className="ml-2 border border-bronze/30 px-1.5 py-0.5 text-[9px] tracking-wider text-bronze">
+                  PRE-ORDER
+                </small>
+              )}
+            </span>
+            <span>{money(item.unitPrice * item.quantity)}</span>
+          </div>
+        ))}
+        <div className="mt-4 flex justify-between border-t hairline pt-4 text-sm">
+          <span>
+            Delivery
+            {order.deliveryZoneName ? `: ${order.deliveryZoneName}` : ""}
+          </span>
+          <span>
+            {order.deliveryFee ? money(order.deliveryFee) : "Complimentary"}
+          </span>
+        </div>
+        <div className="mt-3 flex justify-between">
+          <span>Total</span>
+          <b>{money(order.total)}</b>
+        </div>
+      </div>
+      <div className="mt-8 flex flex-wrap justify-center gap-3">
+        {user && (
+          <Link className="btn btn-dark" to="/account/orders">
+            View My Orders
+          </Link>
+        )}
+        {whatsapp.length >= 8 && (
+          <a
+            className={user ? "btn" : "btn btn-dark"}
+            href={`https://wa.me/${whatsapp}?text=${encodeURIComponent(message)}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            {order.paymentMethod === "bank"
+              ? "Contact on WhatsApp"
+              : "Continue on WhatsApp"}
+          </a>
+        )}
+      </div>
+      <p className="mx-auto mt-5 max-w-xl text-xs leading-5 text-ink/45">
+        Keep your order ID for reference.
+        {order.paymentMethod === "bank" && whatsapp.length >= 8
+          ? " Your receipt is saved securely with the order; you do not need to resend the file unless ZEVENRA asks you to."
+          : ""}
+      </p>
+    </main>
+  );
 }

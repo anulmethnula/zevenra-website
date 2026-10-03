@@ -1,0 +1,95 @@
+import { query } from "../_db.js";
+import {
+  listCategories,
+  listCollections,
+  listCouriers,
+  listDeliveryRates,
+  listHomepageSections,
+  listProducts,
+  listSettings,
+  listSizeCharts,
+} from "./catalog.js";
+import { listOrders } from "./orders.js";
+import { listPreorders } from "./preorders.js";
+
+export async function dashboard() {
+  const counts = await query<Record<string, unknown>>(
+    `SELECT count(*) FILTER(WHERE created_at::date=(now() AT TIME ZONE 'Asia/Colombo')::date)::int AS orders_today,count(*) FILTER(WHERE order_status='pending')::int AS pending,count(*) FILTER(WHERE order_status='confirmed')::int AS confirmed,count(*) FILTER(WHERE order_status='packed')::int AS packed,count(*) FILTER(WHERE order_status='shipped')::int AS shipped,count(*) FILTER(WHERE order_status='delivered')::int AS delivered,count(*) FILTER(WHERE order_status='cancelled')::int AS cancelled,COALESCE(sum(subtotal) FILTER(WHERE order_status='delivered' AND (payment_method='cod' OR payment_status IN('paid','verified'))),0) AS product_revenue,COALESCE(sum(delivery_fee) FILTER(WHERE order_status='delivered' AND (payment_method='cod' OR payment_status IN('paid','verified'))),0) AS delivery_collected FROM orders`,
+  );
+  const top = await query<Record<string, unknown>>(
+    `SELECT oi.product_id,oi.product_name AS name,sum(oi.quantity)::int AS quantity,sum(oi.line_total) AS revenue FROM order_items oi JOIN orders o ON o.order_id=oi.order_id WHERE o.order_status='delivered' AND (o.payment_method='cod' OR o.payment_status IN('paid','verified')) GROUP BY oi.product_id,oi.product_name ORDER BY quantity DESC,revenue DESC LIMIT 8`,
+  );
+  const items = await query<{ count: number }>(
+      `SELECT COALESCE(sum(oi.quantity),0)::int AS count FROM order_items oi JOIN orders o ON o.order_id=oi.order_id WHERE o.order_status='delivered' AND (o.payment_method='cod' OR o.payment_status IN('paid','verified'))`,
+    ),
+    preorders = await query<Record<string, unknown>>(
+      `SELECT count(*) FILTER(WHERE status='new')::int AS new_count,COALESCE(sum(quantity) FILTER(WHERE status='confirmed' AND batch_id=''),0)::int AS confirmed_count FROM preorders`,
+    ),
+    recent = (await listOrders()).slice(0, 10),
+    row = counts.rows[0] || {},
+    pre = preorders.rows[0] || {};
+  return {
+    ordersToday: Number(row.orders_today) || 0,
+    pending: Number(row.pending) || 0,
+    confirmed: Number(row.confirmed) || 0,
+    packed: Number(row.packed) || 0,
+    shipped: Number(row.shipped) || 0,
+    delivered: Number(row.delivered) || 0,
+    cancelled: Number(row.cancelled) || 0,
+    revenue: Number(row.product_revenue) || 0,
+    productRevenue: Number(row.product_revenue) || 0,
+    deliveryCollected: Number(row.delivery_collected) || 0,
+    itemsSold: Number(items.rows[0]?.count) || 0,
+    preorderNew: Number(pre.new_count) || 0,
+    preorderConfirmed: Number(pre.confirmed_count) || 0,
+    preorderBatchTarget: 5,
+    topProducts: top.rows.map((item) => ({
+      productId: String(item.product_id || ""),
+      name: String(item.name || ""),
+      quantity: Number(item.quantity) || 0,
+      revenue: Number(item.revenue) || 0,
+    })),
+    recent,
+  };
+}
+
+export async function adminBootstrap() {
+  const [
+    dashboardData,
+    products,
+    categories,
+    collections,
+    sizeCharts,
+    homepageSections,
+    orders,
+    preorders,
+    settings,
+    couriers,
+    deliveryRates,
+  ] = await Promise.all([
+    dashboard(),
+    listProducts(),
+    listCategories(),
+    listCollections(),
+    listSizeCharts(),
+    listHomepageSections(),
+    listOrders(),
+    listPreorders(),
+    listSettings(),
+    listCouriers(),
+    listDeliveryRates(),
+  ]);
+  return {
+    dashboard: dashboardData,
+    products,
+    categories,
+    collections,
+    sizeCharts,
+    homepageSections,
+    orders,
+    preorders,
+    settings,
+    couriers,
+    deliveryRates,
+  };
+}

@@ -1,74 +1,57 @@
 # ZEVENRA
 
-Production React/Vite storefront for ZEVENRA, deployed on Vercel with Vercel Functions, Google Sheets + Apps Script, and signed Cloudinary uploads.
+ZEVENRA is a React/Vite ecommerce storefront with Vercel Serverless Functions, Neon PostgreSQL, and Cloudinary media.
 
-## Local development
+## Runtime architecture
 
-```bash
-npm install
-npm run dev
+```text
+React / Vite -> /api Vercel Functions -> Neon PostgreSQL
+                     |
+                     +-> Cloudinary (catalogue media and protected receipts)
 ```
 
-`.env.development` uses demo mode for local visual work. Production uses Vercel environment variables and `VITE_DEMO_MODE=false`.
+Google Sheets and Apps Script are not runtime dependencies. The old implementation is archived under `legacy/apps-script` solely for migration reference. The existing Sheet remains an external backup until migration is verified.
 
-## Production architecture
+## Local modes
 
-- Frontend: React + Vite
-- Hosting/API: Vercel + Vercel Functions in `/api`
-- Data: Google Sheets through `apps-script/Code.gs`
-- Media uploads: Cloudinary signed server-side
-- Admin auth: signed HttpOnly session
-- Customer accounts: optional; guest checkout remains available
+```bash
+npm ci
+npm run dev:demo  # browser-only demo data; never writes to Neon
+npm run dev:full  # Vercel Functions + Neon + Cloudinary from .env.local
+```
 
-The production hero is `public/media/hero-final-v2.mp4`.
+`npm run dev` starts Vite directly. Use `dev:demo` for safe UI work and `dev:full` for integration testing.
 
-## Main business flows
+## Database
 
-### In-stock orders
-Website, Instagram and WhatsApp sales share the same inventory. Stock is reserved when an order is created and restored once if that order is cancelled.
+```bash
+npm run db:migrate
+npm run db:verify
+npm run db:import-sheets -- path/to/export.sheets-export.json
+```
 
-Website checkout supports COD and bank transfer. Bank orders require the customer receipt upload before submission.
+Migration commands prefer `DATABASE_URL_UNPOOLED`. Runtime functions use `DATABASE_URL`. See [database/README.md](database/README.md) and [docs/DATA_MIGRATION.md](docs/DATA_MIGRATION.md).
 
-### Pre-orders
-Out-of-stock products may expose a separate no-payment pre-order request flow. Pre-orders never enter the normal cart. Admin confirms customers on WhatsApp, records the final selling price, groups confirmed pieces into a SHEIN batch, then converts arrived/ready requests into normal orders.
+## Business invariants
 
-## Apps Script
+- Checkout reloads current products, prices, variants, stock, courier rules, and settings server-side.
+- Order creation, item inserts, stock reservation, and audit logging commit together in a PostgreSQL transaction.
+- Cancellation restores reserved stock once; cancelled orders cannot be silently reopened.
+- Orders store immutable checkout courier/rate/fee snapshots separately from fulfilment tracking.
+- Preorder-to-order conversion is transactional.
+- Receipt URLs are never returned to customers. Admin receipt access requires an authenticated session and produces a short-lived Cloudinary URL.
 
-1. Open the store Google Sheet → Extensions → Apps Script.
-2. Replace `Code.gs` with `apps-script/Code.gs`.
-3. Run `setup()` after schema changes.
-4. Keep `APPS_SCRIPT_SECRET` in Script Properties.
-5. Deploy by editing the existing Web App deployment and selecting **New version**. Keep the same deployment URL.
+## Required server environment
 
-Existing catalogue and order rows are preserved by the migration code.
+See `.env.example`. Never expose or `VITE_`-prefix database, session, admin, or Cloudinary secrets.
 
-## Vercel environment variables
-
-Required production variables include:
-
-- `APPS_SCRIPT_URL`
-- `APPS_SCRIPT_SECRET`
-- `SESSION_SECRET`
-- `CUSTOMER_SESSION_SECRET`
-- `ADMIN_USERNAME`
-- `ADMIN_PASSWORD_HASH`
-- `ALLOWED_ORIGIN`
-- `CLOUDINARY_CLOUD_NAME`
-- `CLOUDINARY_API_KEY`
-- `CLOUDINARY_API_SECRET`
-- `VITE_API_BASE=/api`
-- `VITE_DEMO_MODE=false`
-
-Never commit server secrets.
-
-## Release checks
-
-Before production changes are considered complete:
+## Quality gate
 
 ```bash
 npm run typecheck
 npm run lint
 npm run build
+npm run qa
 ```
 
-Normal work is committed directly to `main`. Use a temporary branch only for unusually risky auth/payment/database work, and remove it after merge.
+No migration, commit, push, Vercel project creation, or deployment is performed automatically.

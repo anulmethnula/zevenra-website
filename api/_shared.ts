@@ -1,63 +1,480 @@
-import type {VercelRequest,VercelResponse} from '@vercel/node';
-import {createHmac,randomBytes,scrypt as scryptCallback,timingSafeEqual} from 'node:crypto';
-import {promisify} from 'node:util';
-import {z} from 'zod';
+import type { VercelRequest, VercelResponse } from "@vercel/node";
+import {
+  createHmac,
+  randomBytes,
+  scrypt as scryptCallback,
+  timingSafeEqual,
+} from "node:crypto";
+import { promisify } from "node:util";
+import { z } from "zod";
 
-export type AuthEnv={SESSION_SECRET:string;ADMIN_USERNAME:string;ADMIN_PASSWORD_HASH:string;ALLOWED_ORIGIN:string};
-export type AppsScriptEnv=AuthEnv&{APPS_SCRIPT_URL:string;APPS_SCRIPT_SECRET:string};
-export type CloudinaryEnv=AuthEnv&{CLOUDINARY_CLOUD_NAME:string;CLOUDINARY_API_KEY:string;CLOUDINARY_API_SECRET:string};
-export type CustomerIdentity={id:string;email:string};
-export type CustomerRecord={id:string;firstName:string;lastName:string;email:string;mobile?:string;address1?:string;address2?:string;city?:string;district?:string;postalCode?:string;passwordHash:string;passwordSalt:string;status:string;createdAt:string;updatedAt:string;lastLoginAt?:string};
+export type AuthEnv = {
+  SESSION_SECRET: string;
+  ADMIN_USERNAME: string;
+  ADMIN_PASSWORD_HASH: string;
+  ALLOWED_ORIGIN: string;
+};
+export type CloudinaryEnv = AuthEnv & {
+  CLOUDINARY_CLOUD_NAME: string;
+  CLOUDINARY_API_KEY: string;
+  CLOUDINARY_API_SECRET: string;
+};
+export type CustomerIdentity = { id: string; email: string };
+export type CustomerRecord = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  mobile?: string;
+  address1?: string;
+  address2?: string;
+  city?: string;
+  district?: string;
+  postalCode?: string;
+  passwordHash: string;
+  passwordSalt: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  lastLoginAt?: string;
+};
 
-export class ConfigurationError extends Error{constructor(name:string){super(`Missing environment variable: ${name}`);this.name='ConfigurationError'}}
-export function required(name:string){const value=process.env[name];if(!value)throw new ConfigurationError(name);return value}
-export function authEnv():AuthEnv{return{SESSION_SECRET:required('SESSION_SECRET'),ADMIN_USERNAME:required('ADMIN_USERNAME'),ADMIN_PASSWORD_HASH:required('ADMIN_PASSWORD_HASH'),ALLOWED_ORIGIN:required('ALLOWED_ORIGIN')}}
-export function appsScriptEnv():AppsScriptEnv{return{...authEnv(),APPS_SCRIPT_URL:required('APPS_SCRIPT_URL'),APPS_SCRIPT_SECRET:required('APPS_SCRIPT_SECRET')}}
-export function cloudinaryEnv():CloudinaryEnv{return{...authEnv(),CLOUDINARY_CLOUD_NAME:required('CLOUDINARY_CLOUD_NAME'),CLOUDINARY_API_KEY:required('CLOUDINARY_API_KEY'),CLOUDINARY_API_SECRET:required('CLOUDINARY_API_SECRET')}}
-
-export function json(res:VercelResponse,data:unknown,status=200,headers:Record<string,string>={}){res.status(status);res.setHeader('Content-Type','application/json; charset=utf-8');res.setHeader('Cache-Control','no-store');for(const [name,value] of Object.entries(headers))res.setHeader(name,value);return res.json(data)}
-export function methodNotAllowed(res:VercelResponse,allowed:string[]){res.setHeader('Allow',allowed.join(', '));return json(res,{error:'Method not allowed'},405)}
-const requestRateBuckets=new Map<string,{count:number;resetAt:number}>();
-export function rateLimit(request:VercelRequest,scope:string,limit:number,windowMs:number){
- const forwarded=request.headers['x-forwarded-for'],ip=String(Array.isArray(forwarded)?forwarded[0]:forwarded||request.headers['x-real-ip']||'unknown').split(',')[0].trim(),key=scope+':'+ip,now=Date.now(),current=requestRateBuckets.get(key);
- if(!current||current.resetAt<=now){requestRateBuckets.set(key,{count:1,resetAt:now+windowMs});return{limited:false,retryAfter:0}}
- current.count+=1;
- if(current.count>limit)return{limited:true,retryAfter:Math.max(1,Math.ceil((current.resetAt-now)/1000))};
- return{limited:false,retryAfter:0}
+export class ConfigurationError extends Error {
+  constructor(name: string) {
+    super(`Missing environment variable: ${name}`);
+    this.name = "ConfigurationError";
+  }
 }
-export function body(request:VercelRequest):unknown{if(typeof request.body==='string')return JSON.parse(request.body);if(Buffer.isBuffer(request.body))return JSON.parse(request.body.toString('utf8'));return request.body}
+export function required(name: string) {
+  const value = process.env[name];
+  if (!value) throw new ConfigurationError(name);
+  return value;
+}
+export function authEnv(): AuthEnv {
+  return {
+    SESSION_SECRET: required("SESSION_SECRET"),
+    ADMIN_USERNAME: required("ADMIN_USERNAME"),
+    ADMIN_PASSWORD_HASH: required("ADMIN_PASSWORD_HASH"),
+    ALLOWED_ORIGIN: required("ALLOWED_ORIGIN"),
+  };
+}
+export function cloudinaryEnv(): CloudinaryEnv {
+  return {
+    ...authEnv(),
+    CLOUDINARY_CLOUD_NAME: required("CLOUDINARY_CLOUD_NAME"),
+    CLOUDINARY_API_KEY: required("CLOUDINARY_API_KEY"),
+    CLOUDINARY_API_SECRET: required("CLOUDINARY_API_SECRET"),
+  };
+}
+export function originEnv() {
+  return { ALLOWED_ORIGIN: required("ALLOWED_ORIGIN") };
+}
 
-const b64=(value:Buffer|string)=>Buffer.from(value).toString('base64url');
-const scrypt=promisify(scryptCallback);
-function signature(value:string,secret:string){return createHmac('sha256',secret).update(value).digest('base64url')}
-export async function hashCustomerPassword(password:string,salt=randomBytes(24).toString('base64url')){const hash=await scrypt(password,salt,64) as Buffer;return{passwordHash:hash.toString('base64url'),passwordSalt:salt}}
-export async function verifyCustomerPassword(password:string,passwordHash:string,passwordSalt:string){try{const candidate=await scrypt(password,passwordSalt,64) as Buffer,stored=Buffer.from(passwordHash,'base64url');return candidate.length===stored.length&&timingSafeEqual(candidate,stored)}catch{return false}}
-export function makeSession(secret:string){const payload=b64(JSON.stringify({sub:'owner',exp:Date.now()+1000*60*60*8}));return `${payload}.${signature(payload,secret)}`}
-export function adminCookie(value:string,maxAge=60*60*8){const secure=process.env.NODE_ENV==='production'||Boolean(process.env.VERCEL);return `zevenra_session=${value}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secure?'; Secure':''}`}
-export function validSession(request:VercelRequest,secret:string){const header=request.headers.cookie;const cookie=(Array.isArray(header)?header.join('; '):header||'').match(/(?:^|; )zevenra_session=([^;]+)/)?.[1];if(!cookie)return false;const [payload,sig]=cookie.split('.');if(!payload||!sig)return false;const expected=Buffer.from(signature(payload,secret));const actual=Buffer.from(sig);if(expected.length!==actual.length||!timingSafeEqual(expected,actual))return false;try{const data=JSON.parse(Buffer.from(payload,'base64url').toString('utf8')) as {sub?:string;exp?:number};return data.sub==='owner'&&typeof data.exp==='number'&&data.exp>Date.now()}catch{return false}}
-export function makeCustomerSession(secret:string,customer:CustomerIdentity){const payload=b64(JSON.stringify({customerId:customer.id,email:customer.email,exp:Date.now()+1000*60*60*24*7}));return `${payload}.${signature(payload,secret)}`}
-export function readCustomerSession(request:VercelRequest,required=false):CustomerIdentity|null{const header=request.headers.cookie,cookie=(Array.isArray(header)?header.join('; '):header||'').match(/(?:^|; )zevenra_customer=([^;]+)/)?.[1];if(!cookie){if(required)throw new Error('CUSTOMER_AUTH_REQUIRED');return null}const secret=process.env.CUSTOMER_SESSION_SECRET;if(!secret)throw new ConfigurationError('CUSTOMER_SESSION_SECRET');const[payload,sig]=cookie.split('.');if(!payload||!sig)throw new Error('CUSTOMER_AUTH_INVALID');const expected=Buffer.from(signature(payload,secret)),actual=Buffer.from(sig);if(expected.length!==actual.length||!timingSafeEqual(expected,actual))throw new Error('CUSTOMER_AUTH_INVALID');try{const data=JSON.parse(Buffer.from(payload,'base64url').toString('utf8')) as{customerId?:string;email?:string;exp?:number};if(!data.customerId||!data.email||typeof data.exp!=='number'||data.exp<=Date.now())throw new Error('CUSTOMER_AUTH_INVALID');return{id:data.customerId,email:data.email}}catch{throw new Error('CUSTOMER_AUTH_INVALID')}}
-export function customerCookie(value:string,maxAge=60*60*24*7){const secure=process.env.NODE_ENV==='production'||Boolean(process.env.VERCEL);return `zevenra_customer=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure?'; Secure':''}`}
-export function validOrigin(request:VercelRequest,config:Pick<AuthEnv,'ALLOWED_ORIGIN'>){if(['GET','HEAD','OPTIONS'].includes(request.method||''))return true;const value=request.headers.origin;const origin=Array.isArray(value)?value[0]:value;if(!origin)return true;const host=request.headers['x-forwarded-host']||request.headers.host;const protocol=request.headers['x-forwarded-proto']||'https';const requestOrigin=host?`${Array.isArray(protocol)?protocol[0]:protocol}://${Array.isArray(host)?host[0]:host}`:'';return origin===config.ALLOWED_ORIGIN||origin===requestOrigin}
-export async function callScript(config:AppsScriptEnv,action:string,payload:unknown){const response=await fetch(config.APPS_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({token:config.APPS_SCRIPT_SECRET,action,payload})});if(!response.ok)throw new Error('Upstream unavailable');const data=await response.json() as {ok:boolean;data?:unknown;error?:string};if(!data.ok)throw new Error(data.error||'Upstream rejected request');return data.data}
-export const sriLankaDistricts=['Ampara','Anuradhapura','Badulla','Batticaloa','Colombo','Galle','Gampaha','Hambantota','Jaffna','Kalutara','Kandy','Kegalle','Kilinochchi','Kurunegala','Mannar','Matale','Matara','Monaragala','Mullaitivu','Nuwara Eliya','Polonnaruwa','Puttalam','Ratnapura','Trincomalee','Vavuniya'] as const;
-const phoneSchema=z.string().trim().regex(/^[+\d][\d\s-]{8,14}$/);
-const optionalPhoneSchema=z.string().trim().regex(/^$|^[+\d][\d\s-]{8,14}$/).optional();
-const optionalPostalSchema=z.string().trim().regex(/^$|^\d{5}$/).max(5).optional();
-const requiredPostalSchema=z.string().trim().regex(/^\d{5}$/).max(5);
-const receiptUrlSchema=z.string().url().max(1000).refine(value=>{try{const url=new URL(value);return url.protocol==='https:'&&url.hostname==='res.cloudinary.com'&&url.pathname.includes('/zevenra/payment-receipts/')}catch{return false}},{message:'Invalid payment receipt URL.'});
-export const customerRegisterSchema=z.object({firstName:z.string().trim().min(1).max(80),lastName:z.string().trim().min(1).max(80),email:z.string().trim().email().max(254).transform(value=>value.toLowerCase()),mobile:optionalPhoneSchema,password:z.string().min(8).max(200).regex(/[A-Za-z]/).regex(/\d/)}).strict();
-export const customerLoginSchema=z.object({email:z.string().trim().email().max(254).transform(value=>value.toLowerCase()),password:z.string().min(1).max(200)}).strict();
-export const customerProfileSchema=z.object({firstName:z.string().trim().min(1).max(80),lastName:z.string().trim().min(1).max(80),mobile:optionalPhoneSchema,address1:z.string().trim().max(180).optional(),address2:z.string().trim().max(180).optional(),city:z.string().trim().max(80).optional(),district:z.enum(sriLankaDistricts).or(z.literal('')).optional(),postalCode:optionalPostalSchema}).strict();
-export const orderSchema=z.object({customerName:z.string().trim().min(2).max(100),phone:phoneSchema,whatsapp:optionalPhoneSchema,email:z.string().trim().email().or(z.literal('')).optional(),address1:z.string().trim().min(5).max(180),address2:z.string().trim().max(180).optional(),city:z.string().trim().min(2).max(80),district:z.enum(sriLankaDistricts),postalCode:requiredPostalSchema,deliveryNotes:z.string().trim().max(300).optional(),paymentMethod:z.enum(['cod','bank']),paymentReference:z.string().trim().max(100).optional(),paymentReceiptUrl:receiptUrlSchema.optional(),items:z.array(z.object({productId:z.string().min(1),variantId:z.string().min(1),quantity:z.number().int().min(1).max(10)})).min(1).max(30)}).strict().superRefine((value,ctx)=>{if(value.paymentMethod==='bank'&&!value.paymentReceiptUrl)ctx.addIssue({code:z.ZodIssueCode.custom,path:['paymentReceiptUrl'],message:'Bank transfer receipt is required.'})});
-export const preorderSchema=z.object({customerName:z.string().trim().min(2).max(100),phone:optionalPhoneSchema,whatsapp:phoneSchema,email:z.string().trim().email().or(z.literal('')).optional(),address1:z.string().trim().max(180).optional(),address2:z.string().trim().max(180).optional(),city:z.string().trim().min(2).max(80),district:z.enum(sriLankaDistricts).or(z.literal('')).optional(),postalCode:optionalPostalSchema,productId:z.string().min(1),variantId:z.string().min(1),quantity:z.number().int().min(1).max(5)}).strict();
-export const manualOrderSchema=z.object({source:z.enum(['instagram','whatsapp','manual']),customerName:z.string().trim().min(2).max(100),phone:phoneSchema,whatsapp:optionalPhoneSchema,email:z.string().trim().email().or(z.literal('')).optional(),address1:z.string().trim().min(5).max(180),address2:z.string().trim().max(180).optional(),city:z.string().trim().min(2).max(80),district:z.enum(sriLankaDistricts),postalCode:optionalPostalSchema,deliveryNotes:z.string().trim().max(300).optional(),paymentMethod:z.enum(['cod','bank']),paymentStatus:z.string().trim().min(1).max(50),items:z.array(z.object({productId:z.string().min(1),variantId:z.string().min(1),quantity:z.number().int().min(1).max(50)})).min(1).max(30)}).strict();
-export const adminLoginSchema=z.object({username:z.string().min(1).max(100),password:z.string().min(8).max(200)}).strict();
-export async function sha256(value:string){return Buffer.from(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value))).toString('base64url')}
-export async function verifyAdminPassword(password:string,stored:string){
- const separator=String.fromCharCode(36),prefix='scrypt'+separator;
- if(stored.startsWith(prefix)){
-  try{const parts=stored.split(separator),salt=parts[1],encoded=parts[2];if(!salt||!encoded)return false;const candidate=await scrypt(password,salt,64) as Buffer,expected=Buffer.from(encoded,'base64url');return candidate.length===expected.length&&timingSafeEqual(candidate,expected)}catch{return false}
- }
- return await sha256(password)===stored
+export function json(
+  res: VercelResponse,
+  data: unknown,
+  status = 200,
+  headers: Record<string, string> = {},
+) {
+  res.status(status);
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("Cache-Control", "no-store");
+  for (const [name, value] of Object.entries(headers))
+    res.setHeader(name, value);
+  return res.json(data);
+}
+export function methodNotAllowed(res: VercelResponse, allowed: string[]) {
+  res.setHeader("Allow", allowed.join(", "));
+  return json(res, { error: "Method not allowed" }, 405);
+}
+const requestRateBuckets = new Map<
+  string,
+  { count: number; resetAt: number }
+>();
+export function rateLimit(
+  request: VercelRequest,
+  scope: string,
+  limit: number,
+  windowMs: number,
+) {
+  const forwarded = request.headers["x-forwarded-for"],
+    ip = String(
+      Array.isArray(forwarded)
+        ? forwarded[0]
+        : forwarded || request.headers["x-real-ip"] || "unknown",
+    )
+      .split(",")[0]
+      .trim(),
+    key = scope + ":" + ip,
+    now = Date.now(),
+    current = requestRateBuckets.get(key);
+  if (!current || current.resetAt <= now) {
+    requestRateBuckets.set(key, { count: 1, resetAt: now + windowMs });
+    return { limited: false, retryAfter: 0 };
+  }
+  current.count += 1;
+  if (current.count > limit)
+    return {
+      limited: true,
+      retryAfter: Math.max(1, Math.ceil((current.resetAt - now) / 1000)),
+    };
+  return { limited: false, retryAfter: 0 };
+}
+export function body(request: VercelRequest): unknown {
+  if (typeof request.body === "string") return JSON.parse(request.body);
+  if (Buffer.isBuffer(request.body))
+    return JSON.parse(request.body.toString("utf8"));
+  return request.body;
+}
+
+const b64 = (value: Buffer | string) =>
+  Buffer.from(value).toString("base64url");
+const scrypt = promisify(scryptCallback);
+function signature(value: string, secret: string) {
+  return createHmac("sha256", secret).update(value).digest("base64url");
+}
+export async function hashCustomerPassword(
+  password: string,
+  salt = randomBytes(24).toString("base64url"),
+) {
+  const hash = (await scrypt(password, salt, 64)) as Buffer;
+  return { passwordHash: hash.toString("base64url"), passwordSalt: salt };
+}
+export async function verifyCustomerPassword(
+  password: string,
+  passwordHash: string,
+  passwordSalt: string,
+) {
+  try {
+    const candidate = (await scrypt(password, passwordSalt, 64)) as Buffer,
+      stored = Buffer.from(passwordHash, "base64url");
+    return (
+      candidate.length === stored.length && timingSafeEqual(candidate, stored)
+    );
+  } catch {
+    return false;
+  }
+}
+export function makeSession(secret: string) {
+  const payload = b64(
+    JSON.stringify({ sub: "owner", exp: Date.now() + 1000 * 60 * 60 * 8 }),
+  );
+  return `${payload}.${signature(payload, secret)}`;
+}
+export function adminCookie(value: string, maxAge = 60 * 60 * 8) {
+  const secure =
+    process.env.NODE_ENV === "production" || Boolean(process.env.VERCEL);
+  return `zevenra_session=${value}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secure ? "; Secure" : ""}`;
+}
+export function validSession(request: VercelRequest, secret: string) {
+  const header = request.headers.cookie;
+  const cookie = (
+    Array.isArray(header) ? header.join("; ") : header || ""
+  ).match(/(?:^|; )zevenra_session=([^;]+)/)?.[1];
+  if (!cookie) return false;
+  const [payload, sig] = cookie.split(".");
+  if (!payload || !sig) return false;
+  const expected = Buffer.from(signature(payload, secret));
+  const actual = Buffer.from(sig);
+  if (expected.length !== actual.length || !timingSafeEqual(expected, actual))
+    return false;
+  try {
+    const data = JSON.parse(
+      Buffer.from(payload, "base64url").toString("utf8"),
+    ) as { sub?: string; exp?: number };
+    return (
+      data.sub === "owner" &&
+      typeof data.exp === "number" &&
+      data.exp > Date.now()
+    );
+  } catch {
+    return false;
+  }
+}
+export function makeCustomerSession(
+  secret: string,
+  customer: CustomerIdentity,
+) {
+  const payload = b64(
+    JSON.stringify({
+      customerId: customer.id,
+      email: customer.email,
+      exp: Date.now() + 1000 * 60 * 60 * 24 * 7,
+    }),
+  );
+  return `${payload}.${signature(payload, secret)}`;
+}
+export function readCustomerSession(
+  request: VercelRequest,
+  required = false,
+): CustomerIdentity | null {
+  const header = request.headers.cookie,
+    cookie = (Array.isArray(header) ? header.join("; ") : header || "").match(
+      /(?:^|; )zevenra_customer=([^;]+)/,
+    )?.[1];
+  if (!cookie) {
+    if (required) throw new Error("CUSTOMER_AUTH_REQUIRED");
+    return null;
+  }
+  const secret = process.env.CUSTOMER_SESSION_SECRET;
+  if (!secret) throw new ConfigurationError("CUSTOMER_SESSION_SECRET");
+  const [payload, sig] = cookie.split(".");
+  if (!payload || !sig) throw new Error("CUSTOMER_AUTH_INVALID");
+  const expected = Buffer.from(signature(payload, secret)),
+    actual = Buffer.from(sig);
+  if (expected.length !== actual.length || !timingSafeEqual(expected, actual))
+    throw new Error("CUSTOMER_AUTH_INVALID");
+  try {
+    const data = JSON.parse(
+      Buffer.from(payload, "base64url").toString("utf8"),
+    ) as { customerId?: string; email?: string; exp?: number };
+    if (
+      !data.customerId ||
+      !data.email ||
+      typeof data.exp !== "number" ||
+      data.exp <= Date.now()
+    )
+      throw new Error("CUSTOMER_AUTH_INVALID");
+    return { id: data.customerId, email: data.email };
+  } catch {
+    throw new Error("CUSTOMER_AUTH_INVALID");
+  }
+}
+export function customerCookie(value: string, maxAge = 60 * 60 * 24 * 7) {
+  const secure =
+    process.env.NODE_ENV === "production" || Boolean(process.env.VERCEL);
+  return `zevenra_customer=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure ? "; Secure" : ""}`;
+}
+export function validOrigin(
+  request: VercelRequest,
+  config: Pick<AuthEnv, "ALLOWED_ORIGIN">,
+) {
+  if (["GET", "HEAD", "OPTIONS"].includes(request.method || "")) return true;
+  const value = request.headers.origin;
+  const origin = Array.isArray(value) ? value[0] : value;
+  if (!origin) return true;
+  const host = request.headers["x-forwarded-host"] || request.headers.host;
+  const protocol = request.headers["x-forwarded-proto"] || "https";
+  const requestOrigin = host
+    ? `${Array.isArray(protocol) ? protocol[0] : protocol}://${Array.isArray(host) ? host[0] : host}`
+    : "";
+  return origin === config.ALLOWED_ORIGIN || origin === requestOrigin;
+}
+export const sriLankaDistricts = [
+  "Ampara",
+  "Anuradhapura",
+  "Badulla",
+  "Batticaloa",
+  "Colombo",
+  "Galle",
+  "Gampaha",
+  "Hambantota",
+  "Jaffna",
+  "Kalutara",
+  "Kandy",
+  "Kegalle",
+  "Kilinochchi",
+  "Kurunegala",
+  "Mannar",
+  "Matale",
+  "Matara",
+  "Monaragala",
+  "Mullaitivu",
+  "Nuwara Eliya",
+  "Polonnaruwa",
+  "Puttalam",
+  "Ratnapura",
+  "Trincomalee",
+  "Vavuniya",
+] as const;
+const phoneSchema = z
+  .string()
+  .trim()
+  .regex(/^[+\d][\d\s-]{8,14}$/);
+const optionalPhoneSchema = z
+  .string()
+  .trim()
+  .regex(/^$|^[+\d][\d\s-]{8,14}$/)
+  .optional();
+const optionalPostalSchema = z
+  .string()
+  .trim()
+  .regex(/^$|^\d{5}$/)
+  .max(5)
+  .optional();
+const requiredPostalSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{5}$/)
+  .max(5);
+const receiptUrlSchema = z
+  .string()
+  .url()
+  .max(1000)
+  .refine(
+    (value) => {
+      try {
+        const url = new URL(value);
+        return (
+          url.protocol === "https:" &&
+          url.hostname === "res.cloudinary.com" &&
+          url.pathname.includes("/zevenra/payment-receipts/")
+        );
+      } catch {
+        return false;
+      }
+    },
+    { message: "Invalid payment receipt URL." },
+  );
+export const customerRegisterSchema = z
+  .object({
+    firstName: z.string().trim().min(1).max(80),
+    lastName: z.string().trim().min(1).max(80),
+    email: z
+      .string()
+      .trim()
+      .email()
+      .max(254)
+      .transform((value) => value.toLowerCase()),
+    mobile: optionalPhoneSchema,
+    password: z
+      .string()
+      .min(8)
+      .max(200)
+      .regex(/[A-Za-z]/)
+      .regex(/\d/),
+  })
+  .strict();
+export const customerLoginSchema = z
+  .object({
+    email: z
+      .string()
+      .trim()
+      .email()
+      .max(254)
+      .transform((value) => value.toLowerCase()),
+    password: z.string().min(1).max(200),
+  })
+  .strict();
+export const customerProfileSchema = z
+  .object({
+    firstName: z.string().trim().min(1).max(80),
+    lastName: z.string().trim().min(1).max(80),
+    mobile: optionalPhoneSchema,
+    address1: z.string().trim().max(180).optional(),
+    address2: z.string().trim().max(180).optional(),
+    city: z.string().trim().max(80).optional(),
+    district: z.enum(sriLankaDistricts).or(z.literal("")).optional(),
+    postalCode: optionalPostalSchema,
+  })
+  .strict();
+export const orderSchema = z
+  .object({
+    customerName: z.string().trim().min(2).max(100),
+    phone: phoneSchema,
+    whatsapp: optionalPhoneSchema,
+    email: z.string().trim().email().or(z.literal("")).optional(),
+    address1: z.string().trim().min(5).max(180),
+    address2: z.string().trim().max(180).optional(),
+    city: z.string().trim().min(2).max(80),
+    district: z.enum(sriLankaDistricts),
+    postalCode: requiredPostalSchema,
+    deliveryNotes: z.string().trim().max(300).optional(),
+    paymentMethod: z.enum(["cod", "bank"]),
+    paymentReference: z.string().trim().max(100).optional(),
+    paymentReceiptUrl: receiptUrlSchema.optional(),
+    items: z
+      .array(
+        z.object({
+          productId: z.string().min(1),
+          variantId: z.string().min(1),
+          quantity: z.number().int().min(1).max(10),
+        }),
+      )
+      .min(1)
+      .max(30),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.paymentMethod === "bank" && !value.paymentReceiptUrl)
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["paymentReceiptUrl"],
+        message: "Bank transfer receipt is required.",
+      });
+  });
+export const preorderSchema = z
+  .object({
+    customerName: z.string().trim().min(2).max(100),
+    phone: optionalPhoneSchema,
+    whatsapp: phoneSchema,
+    email: z.string().trim().email().or(z.literal("")).optional(),
+    address1: z.string().trim().max(180).optional(),
+    address2: z.string().trim().max(180).optional(),
+    city: z.string().trim().min(2).max(80),
+    district: z.enum(sriLankaDistricts).or(z.literal("")).optional(),
+    postalCode: optionalPostalSchema,
+    productId: z.string().min(1),
+    variantId: z.string().min(1),
+    quantity: z.number().int().min(1).max(5),
+  })
+  .strict();
+export const manualOrderSchema = z
+  .object({
+    source: z.enum(["instagram", "whatsapp", "manual"]),
+    customerName: z.string().trim().min(2).max(100),
+    phone: phoneSchema,
+    whatsapp: optionalPhoneSchema,
+    email: z.string().trim().email().or(z.literal("")).optional(),
+    address1: z.string().trim().min(5).max(180),
+    address2: z.string().trim().max(180).optional(),
+    city: z.string().trim().min(2).max(80),
+    district: z.enum(sriLankaDistricts),
+    postalCode: optionalPostalSchema,
+    deliveryNotes: z.string().trim().max(300).optional(),
+    paymentMethod: z.enum(["cod", "bank"]),
+    paymentStatus: z.string().trim().min(1).max(50),
+    items: z
+      .array(
+        z.object({
+          productId: z.string().min(1),
+          variantId: z.string().min(1),
+          quantity: z.number().int().min(1).max(50),
+        }),
+      )
+      .min(1)
+      .max(30),
+  })
+  .strict();
+export const adminLoginSchema = z
+  .object({
+    username: z.string().min(1).max(100),
+    password: z.string().min(8).max(200),
+  })
+  .strict();
+export async function sha256(value: string) {
+  return Buffer.from(
+    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)),
+  ).toString("base64url");
+}
+export async function verifyAdminPassword(password: string, stored: string) {
+  const separator = String.fromCharCode(36),
+    prefix = "scrypt" + separator;
+  if (stored.startsWith(prefix)) {
+    try {
+      const parts = stored.split(separator),
+        salt = parts[1],
+        encoded = parts[2];
+      if (!salt || !encoded) return false;
+      const candidate = (await scrypt(password, salt, 64)) as Buffer,
+        expected = Buffer.from(encoded, "base64url");
+      return (
+        candidate.length === expected.length &&
+        timingSafeEqual(candidate, expected)
+      );
+    } catch {
+      return false;
+    }
+  }
+  return (await sha256(password)) === stored;
 }

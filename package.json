@@ -12,23 +12,30 @@
     "dev:demo": "vite --mode demo",
     "qa": "npm run typecheck && npm run lint && npm run build",
     "dev:full": "vercel dev --local-config vercel.local.json",
-    "admin:hash-password": "node scripts/hash-admin-password.mjs"
+    "admin:hash-password": "node scripts/hash-admin-password.mjs",
+    "db:migrate": "node scripts/db-migrate.mjs",
+    "db:verify": "node scripts/db-verify.mjs",
+    "db:import-sheets": "node scripts/import-sheets-to-neon.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
+    "@neondatabase/serverless": "^1.2.0",
     "framer-motion": "^11.11.17",
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-hook-form": "^7.54.2",
     "react-router-dom": "^7.1.1",
+    "ws": "^8.22.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240925.0",
+    "@electric-sql/pglite": "^0.3.14",
     "@eslint/js": "^9.17.0",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
+    "@types/ws": "^8.18.2",
     "@vercel/node": "^13.0.1",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",

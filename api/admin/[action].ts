@@ -1,50 +1,203 @@
-import type {VercelRequest,VercelResponse} from '@vercel/node';
-import{appsScriptEnv,body,callScript,json,manualOrderSchema,validOrigin,validSession}from'../_shared.js';
+import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { adminBootstrap, dashboard } from "../_data/admin.js";
+import {
+  archiveProduct,
+  deleteEntity,
+  deleteProduct,
+  listCategories,
+  listCollections,
+  listCouriers,
+  listDeliveryRates,
+  listHomepageSections,
+  listNavigation,
+  listProducts,
+  listSettings,
+  listSizeCharts,
+  saveCourierConfig,
+  saveEntity,
+  saveProduct,
+  saveSettings,
+} from "../_data/catalog.js";
+import {
+  createOrder,
+  getOrder,
+  listOrders,
+  updateOrder,
+} from "../_data/orders.js";
+import {
+  convertPreorderToOrder,
+  createPreorderBatch,
+  listPreorders,
+  updatePreorder,
+} from "../_data/preorders.js";
+import {
+  authEnv,
+  body,
+  json,
+  manualOrderSchema,
+  validOrigin,
+  validSession,
+} from "../_shared.js";
 
-const allowed=new Set(['bootstrap','dashboard','listProducts','saveProduct','archiveProduct','deleteProduct','listCategories','saveCategory','deleteCategory','listCollections','saveCollection','deleteCollection','listSizeCharts','saveSizeChart','deleteSizeChart','listNavigation','saveNavigation','deleteNavigation','listHomepageSections','saveHomepageSection','deleteHomepageSection','listOrders','getOrder','updateOrder','listPreorders','updatePreorder','createPreorderBatch','convertPreorderToOrder','createManualOrder','getSettings','saveSettings','listDeliveryRates','saveDeliveryRates','saveCourierConfig']);
+const allowed = new Set([
+  "bootstrap",
+  "dashboard",
+  "listProducts",
+  "saveProduct",
+  "archiveProduct",
+  "deleteProduct",
+  "listCategories",
+  "saveCategory",
+  "deleteCategory",
+  "listCollections",
+  "saveCollection",
+  "deleteCollection",
+  "listSizeCharts",
+  "saveSizeChart",
+  "deleteSizeChart",
+  "listNavigation",
+  "saveNavigation",
+  "deleteNavigation",
+  "listHomepageSections",
+  "saveHomepageSection",
+  "deleteHomepageSection",
+  "listOrders",
+  "getOrder",
+  "updateOrder",
+  "listPreorders",
+  "updatePreorder",
+  "createPreorderBatch",
+  "convertPreorderToOrder",
+  "createManualOrder",
+  "getSettings",
+  "saveSettings",
+  "listCouriers",
+  "listDeliveryRates",
+  "saveDeliveryRates",
+  "saveCourierConfig",
+]);
 
-async function legacyBootstrap(config:ReturnType<typeof appsScriptEnv>){
- const specs=[
-  ['dashboard','dashboard'],['products','listProducts'],['categories','listCategories'],
-  ['collections','listCollections'],['sizeCharts','listSizeCharts'],['homepageSections','listHomepageSections'],
-  ['orders','listOrders'],['preorders','listPreorders'],['settings','getSettings'],['deliveryRates','listDeliveryRates']
- ] as const;
- const result:Record<string,unknown>={};
- for(let index=0;index<specs.length;index+=3){
-  const batch=specs.slice(index,index+3);
-  const values=await Promise.all(batch.map(([,scriptAction])=>callScript(config,scriptAction,{})));
-  batch.forEach(([key],offset)=>{result[key]=values[offset]});
- }
- return result;
+async function execute(action: string, payload: Record<string, unknown>) {
+  switch (action) {
+    case "bootstrap":
+      return adminBootstrap();
+    case "dashboard":
+      return dashboard();
+    case "listProducts":
+      return listProducts();
+    case "listCategories":
+      return listCategories();
+    case "listCollections":
+      return listCollections();
+    case "listSizeCharts":
+      return listSizeCharts();
+    case "listNavigation":
+      return listNavigation();
+    case "listHomepageSections":
+      return listHomepageSections();
+    case "listOrders":
+      return listOrders();
+    case "getOrder":
+      return getOrder(String(payload.orderId || payload.id || ""));
+    case "listPreorders":
+      return listPreorders(String(payload.status || "") || undefined);
+    case "getSettings":
+      return listSettings();
+    case "listCouriers":
+      return listCouriers();
+    case "listDeliveryRates":
+      return listDeliveryRates();
+    case "saveProduct":
+      return saveProduct(payload);
+    case "archiveProduct":
+      return archiveProduct(String(payload.id || ""));
+    case "deleteProduct":
+      return deleteProduct(String(payload.id || ""));
+    case "saveCategory":
+      return saveEntity("categories", payload);
+    case "deleteCategory":
+      return deleteEntity("categories", String(payload.id || ""));
+    case "saveCollection":
+      return saveEntity("collections", payload);
+    case "deleteCollection":
+      return deleteEntity("collections", String(payload.id || ""));
+    case "saveSizeChart":
+      return saveEntity("size_charts", payload);
+    case "deleteSizeChart":
+      return deleteEntity("size_charts", String(payload.id || ""));
+    case "saveNavigation":
+      return saveEntity("navigation", payload);
+    case "deleteNavigation":
+      return deleteEntity("navigation", String(payload.id || ""));
+    case "saveHomepageSection":
+      return saveEntity("homepage_sections", payload);
+    case "deleteHomepageSection":
+      return deleteEntity("homepage_sections", String(payload.id || ""));
+    case "updateOrder":
+      return updateOrder(payload);
+    case "updatePreorder":
+      return updatePreorder(payload);
+    case "createPreorderBatch":
+      return createPreorderBatch();
+    case "convertPreorderToOrder":
+      return convertPreorderToOrder(payload);
+    case "createManualOrder":
+      return createOrder({
+        ...manualOrderSchema.parse(payload),
+        source: String(payload.source || "manual"),
+      });
+    case "saveSettings":
+      return saveSettings(payload);
+    case "saveCourierConfig":
+      return saveCourierConfig(payload);
+    case "saveDeliveryRates":
+      return saveCourierConfig(payload);
+    default:
+      throw new Error("Unknown action");
+  }
 }
 
-export default async function handler(req:VercelRequest,res:VercelResponse){
- try{
-  const config=appsScriptEnv();
-  if(!validSession(req,config.SESSION_SECRET))return json(res,{error:'Session expired'},401);
-  if(!validOrigin(req,config))return json(res,{error:'Invalid request origin'},403);
-  const value=Array.isArray(req.query.action)?req.query.action[0]:req.query.action,action=String(value||'');
-  if(!allowed.has(action))return json(res,{error:'Unknown action'},404);
-  if(!['GET','POST'].includes(req.method||'')){res.setHeader('Allow','GET, POST');return json(res,{error:'Method not allowed'},405)}
-  const payload=req.method==='GET'
-   ?Object.fromEntries(Object.entries(req.query).filter(([key])=>key!=='action').map(([key,item])=>[key,Array.isArray(item)?item[0]:item]))
-   :body(req);
-  const validatedPayload=action==='createManualOrder'?manualOrderSchema.parse(payload):payload;
-  if(action==='bootstrap'){
-   try{return json(res,await callScript(config,'adminBootstrap',{}))}
-   catch(error){
-    const message=error instanceof Error?error.message:'';
-    if(message!=='Unknown action')throw error;
-    return json(res,await legacyBootstrap(config));
-   }
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  try {
+    const config = authEnv();
+    if (!validSession(req, config.SESSION_SECRET))
+      return json(res, { error: "Session expired" }, 401);
+    if (!validOrigin(req, config))
+      return json(res, { error: "Invalid request origin" }, 403);
+    const value = Array.isArray(req.query.action)
+        ? req.query.action[0]
+        : req.query.action,
+      action = String(value || "");
+    if (!allowed.has(action))
+      return json(res, { error: "Unknown action" }, 404);
+    if (!["GET", "POST"].includes(req.method || "")) {
+      res.setHeader("Allow", "GET, POST");
+      return json(res, { error: "Method not allowed" }, 405);
+    }
+    const payload =
+      req.method === "GET"
+        ? Object.fromEntries(
+            Object.entries(req.query)
+              .filter(([key]) => key !== "action")
+              .map(([key, item]) => [
+                key,
+                Array.isArray(item) ? item[0] : item,
+              ]),
+          )
+        : (body(req) as Record<string, unknown>);
+    return json(res, await execute(action, payload));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (error instanceof Error && error.name === "ZodError")
+      return json(
+        res,
+        { error: "Please check the customer, delivery and item details." },
+        400,
+      );
+    return json(
+      res,
+      { error: message || "The operation could not be completed." },
+      400,
+    );
   }
-  return json(res,await callScript(config,action,validatedPayload));
- }catch(error){
-  const message=error instanceof Error?error.message:'';
-  if(message==='Upstream unavailable')return json(res,{error:'Google Sheets backend is temporarily unreachable. Please retry in a moment.'},503);
-  if(message==='Unknown action')return json(res,{error:'The live Apps Script backend is out of date. Redeploy the latest apps-script/Code.gs version.'},503);
-  if(message==='Unauthorized')return json(res,{error:'Apps Script authentication is not configured correctly.'},503);
-  if(error instanceof Error&&error.name==='ZodError')return json(res,{error:'Please check the customer, delivery and item details.'},400);
-  return json(res,{error:message||'The operation could not be completed.'},400);
- }
 }

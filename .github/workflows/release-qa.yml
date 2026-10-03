@@ -37,10 +37,11 @@ jobs:
       - name: Production dependency audit
         run: npm audit --omit=dev --audit-level=high
 
-      - name: Apps Script syntax
+      - name: Database tooling syntax
         run: |
-          cp apps-script/Code.gs /tmp/Code.js
-          node --check /tmp/Code.js
+          node --check scripts/db-migrate.mjs
+          node --check scripts/db-verify.mjs
+          node --check scripts/import-sheets-to-neon.mjs
 
       - name: Required release assets
         run: |

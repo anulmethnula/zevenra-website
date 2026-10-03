@@ -1,26 +1,381 @@
-export type Media={url:string;alt:string;type:'image'|'video';publicId?:string};
-export type Variant={id:string;sku:string;color:string;size:string;stock:number;lowStockThreshold:number;active:boolean};
-export type Product={id:string;slug:string;name:string;shortDescription:string;description:string;price:number;compareAtPrice?:number;categoryId:string;subcategory?:string;collectionIds:string[];media:Media[];material:string;fit:string;care:string;tags:string[];featured:boolean;newArrival:boolean;preorderEnabled?:boolean;preorderMessage?:string;status:'published'|'draft'|'archived';sortOrder:number;variants:Variant[];sizeChartId?:string};
-export type Category={id:string;name:string;slug:string;description:string;imageUrl:string;mobileImageUrl?:string;videoUrl?:string;active:boolean;featured:boolean;showInNavigation:boolean;showOnHomepage:boolean;parentId?:string;sortOrder:number};
-export type Collection={id:string;name:string;slug:string;description:string;heroImage:string;mobileImage?:string;videoUrl?:string;ctaLabel?:string;active:boolean;showInNavigation:boolean;showOnHomepage:boolean;sortOrder:number};
-export type NavigationItem={id:string;label:string;linkType:'category'|'collection'|'page'|'url';target:string;visible:boolean;sortOrder:number};
-export type HomepageSectionType='product-grid'|'collection-feature'|'category-grid'|'editorial-image'|'full-width-campaign'|'split-story'|'text-statement'|'new-arrivals'|'featured-products'|'social'|'service-strip';
-export type HomepageSection={id:string;type:HomepageSectionType;enabled:boolean;title:string;subtitle?:string;desktopMedia?:string;mobileMedia?:string;ctaLabel?:string;ctaLink?:string;referenceId?:string;textPosition:'left'|'center'|'right';overlay:number;spacing:'compact'|'normal'|'generous';sortOrder:number};
-export type SizeChart={id:string;name:string;unit:string;columns:string[];rows:string[][];notes?:string;imageUrl?:string};
-export type SiteSettings={brandName:string;tagline:string;logoLight:string;logoDark:string;favicon:string;announcement:string;whatsapp:string;email:string;phone:string;instagram:string;tiktok:string;codEnabled:boolean;bankEnabled:boolean;bankName:string;accountName:string;accountNumber:string;branch:string;bankInstructions:string;deliveryEnabled:boolean;deliveryFee:number;freeDeliveryThreshold:number;defaultCourierProviderId:string;currency:string;storeOpen:boolean;ordersEnabled:boolean;defaultTitle:string;defaultDescription:string;ogImage:string;hero:{videoEnabled:boolean;desktopVideo:string;mobileVideo:string;poster:string;fallbackImage:string;heading:string;tagline:string;ctaLabel:string;ctaLink:string;textPosition:'left'|'center'|'right';overlay:number}};
-export type ContentPage={id:string;slug:string;eyebrow:string;title:string;body:string[]};
-export type StoreData={products:Product[];categories:Category[];collections:Collection[];navigation:NavigationItem[];homepageSections:HomepageSection[];sizeCharts:SizeChart[];couriers:CourierProvider[];deliveryRates:DeliveryRate[];settings:SiteSettings;pages:ContentPage[]};
-export type CartItem={productId:string;variantId:string;slug:string;name:string;image:string;color:string;size:string;quantity:number;unitPrice:number;sku:string;maxStock?:number;isPreorder?:boolean};
-export type PaymentMethod='cod'|'bank';
-export type CheckoutData={customerName:string;phone:string;whatsapp?:string;email?:string;address1:string;address2?:string;city:string;district:string;postalCode:string;deliveryNotes?:string;paymentMethod:PaymentMethod;paymentReference?:string;paymentReceiptUrl?:string;items:CartItem[]};
-export type Order={orderId:string;createdAt:string;customerName:string;phone:string;whatsapp?:string;email?:string;address1?:string;address2?:string;city:string;district:string;postalCode?:string;deliveryNotes?:string;courierProviderId?:string;courierName?:string;deliveryPricingMode?:DeliveryPricingMode;deliveryRatePlan?:string;deliveryZoneName?:string;fulfilmentCourierProviderId?:string;fulfilmentCourierName?:string;trackingNumber?:string;trackingUrl?:string;courierSentDate?:string;paymentMethod:PaymentMethod;paymentReference?:string;paymentReceiptUrl?:string;source?:string;hasPreorder?:boolean;subtotal:number;deliveryFee:number;total:number;orderStatus:string;paymentStatus:string;items:CartItem[]};
-export type CustomerOrderItem={variantId:string;name:string;color:string;size:string;quantity:number;unitPrice:number;subtotal:number;isPreorder?:boolean};
-export type CustomerOrder={orderId:string;createdAt:string;customerName?:string;phone?:string;whatsapp?:string;email?:string;address1?:string;address2?:string;city?:string;district?:string;postalCode?:string;deliveryNotes?:string;courierName?:string;deliveryPricingMode?:DeliveryPricingMode;deliveryRatePlan?:string;deliveryZoneName?:string;fulfilmentCourierName?:string;trackingNumber?:string;trackingUrl?:string;courierSentDate?:string;paymentMethod:PaymentMethod;paymentReference?:string;paymentReceiptUrl?:string;paymentStatus?:string;subtotal:number;deliveryFee:number;total:number;orderStatus:'Pending'|'Confirmed'|'Sourcing'|'Packed'|'Shipped'|'Delivered'|'Cancelled';items:CustomerOrderItem[]};
-export type DeliveryPricingMode='zone'|'flat';
-export type CourierProvider={id:string;name:string;phone?:string;notes?:string;pricingMode:DeliveryPricingMode;flatRate:number;active:boolean;createdAt?:string;updatedAt?:string};
-export type DeliveryRate={id:string;courierProviderId?:string;name:string;fee:number;active:boolean;districts:string[];cities:string[];postalCodes:string[];fallback:boolean;sortOrder:number;district?:string};
-export type DashboardTopProduct={productId:string;name:string;quantity:number;revenue:number};
-export type PreorderStatus='new'|'contacted'|'confirmed'|'batched'|'ordered'|'in_transit'|'arrived'|'ready'|'converted'|'cancelled';
-export type PreorderRequest={requestId:string;createdAt:string;customerId?:string;customerName:string;phone:string;whatsapp:string;email?:string;address1?:string;address2?:string;city:string;district?:string;postalCode?:string;productId:string;variantId:string;productName:string;sku:string;color:string;size:string;quantity:number;requestedPrice:number;confirmedPrice?:number;status:PreorderStatus;batchId?:string;notes?:string;updatedAt:string};
-export type CustomerPreorder=Omit<PreorderRequest,'customerId'|'phone'|'email'|'notes'>;
-export type DashboardData={ordersToday:number;pending:number;confirmed:number;packed:number;shipped:number;delivered:number;cancelled:number;revenue:number;productRevenue:number;deliveryCollected:number;itemsSold:number;preorderNew?:number;preorderConfirmed?:number;preorderBatchTarget?:number;topProducts:DashboardTopProduct[];recent:Order[]};
+export type Media = {
+  url: string;
+  alt: string;
+  type: "image" | "video";
+  publicId?: string;
+};
+export type Variant = {
+  id: string;
+  sku: string;
+  color: string;
+  size: string;
+  stock: number;
+  lowStockThreshold: number;
+  active: boolean;
+};
+export type Product = {
+  id: string;
+  slug: string;
+  name: string;
+  shortDescription: string;
+  description: string;
+  price: number;
+  compareAtPrice?: number;
+  categoryId: string;
+  subcategory?: string;
+  collectionIds: string[];
+  media: Media[];
+  material: string;
+  fit: string;
+  care: string;
+  tags: string[];
+  featured: boolean;
+  newArrival: boolean;
+  preorderEnabled?: boolean;
+  preorderMessage?: string;
+  status: "published" | "draft" | "archived";
+  sortOrder: number;
+  variants: Variant[];
+  sizeChartId?: string;
+};
+export type Category = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  imageUrl: string;
+  mobileImageUrl?: string;
+  videoUrl?: string;
+  active: boolean;
+  featured: boolean;
+  showInNavigation: boolean;
+  showOnHomepage: boolean;
+  parentId?: string;
+  sortOrder: number;
+};
+export type Collection = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  heroImage: string;
+  mobileImage?: string;
+  videoUrl?: string;
+  ctaLabel?: string;
+  active: boolean;
+  showInNavigation: boolean;
+  showOnHomepage: boolean;
+  sortOrder: number;
+};
+export type NavigationItem = {
+  id: string;
+  label: string;
+  linkType: "category" | "collection" | "page" | "url";
+  target: string;
+  visible: boolean;
+  sortOrder: number;
+};
+export type HomepageSectionType =
+  | "product-grid"
+  | "collection-feature"
+  | "category-grid"
+  | "editorial-image"
+  | "full-width-campaign"
+  | "split-story"
+  | "text-statement"
+  | "new-arrivals"
+  | "featured-products"
+  | "social"
+  | "service-strip";
+export type HomepageSection = {
+  id: string;
+  type: HomepageSectionType;
+  enabled: boolean;
+  title: string;
+  subtitle?: string;
+  desktopMedia?: string;
+  mobileMedia?: string;
+  ctaLabel?: string;
+  ctaLink?: string;
+  referenceId?: string;
+  textPosition: "left" | "center" | "right";
+  overlay: number;
+  spacing: "compact" | "normal" | "generous";
+  sortOrder: number;
+};
+export type SizeChart = {
+  id: string;
+  name: string;
+  unit: string;
+  columns: string[];
+  rows: string[][];
+  notes?: string;
+  imageUrl?: string;
+};
+export type SiteSettings = {
+  brandName: string;
+  tagline: string;
+  logoLight: string;
+  logoDark: string;
+  favicon: string;
+  announcement: string;
+  whatsapp: string;
+  email: string;
+  phone: string;
+  instagram: string;
+  tiktok: string;
+  codEnabled: boolean;
+  bankEnabled: boolean;
+  bankName: string;
+  accountName: string;
+  accountNumber: string;
+  branch: string;
+  bankInstructions: string;
+  deliveryEnabled: boolean;
+  deliveryFee: number;
+  freeDeliveryThreshold: number;
+  defaultCourierProviderId: string;
+  currency: string;
+  storeOpen: boolean;
+  ordersEnabled: boolean;
+  defaultTitle: string;
+  defaultDescription: string;
+  ogImage: string;
+  hero: {
+    videoEnabled: boolean;
+    desktopVideo: string;
+    mobileVideo: string;
+    poster: string;
+    fallbackImage: string;
+    heading: string;
+    tagline: string;
+    ctaLabel: string;
+    ctaLink: string;
+    textPosition: "left" | "center" | "right";
+    overlay: number;
+  };
+};
+export type ContentPage = {
+  id: string;
+  slug: string;
+  eyebrow: string;
+  title: string;
+  body: string[];
+};
+export type StoreData = {
+  products: Product[];
+  categories: Category[];
+  collections: Collection[];
+  navigation: NavigationItem[];
+  homepageSections: HomepageSection[];
+  sizeCharts: SizeChart[];
+  couriers: CourierProvider[];
+  deliveryRates: DeliveryRate[];
+  settings: SiteSettings;
+  pages: ContentPage[];
+};
+export type CartItem = {
+  productId: string;
+  variantId: string;
+  slug: string;
+  name: string;
+  image: string;
+  color: string;
+  size: string;
+  quantity: number;
+  unitPrice: number;
+  sku: string;
+  maxStock?: number;
+  isPreorder?: boolean;
+};
+export type PaymentMethod = "cod" | "bank";
+export type CheckoutData = {
+  customerName: string;
+  phone: string;
+  whatsapp?: string;
+  email?: string;
+  address1: string;
+  address2?: string;
+  city: string;
+  district: string;
+  postalCode: string;
+  deliveryNotes?: string;
+  paymentMethod: PaymentMethod;
+  paymentReference?: string;
+  paymentReceiptUrl?: string;
+  items: CartItem[];
+};
+export type Order = {
+  orderId: string;
+  createdAt: string;
+  customerName: string;
+  phone: string;
+  whatsapp?: string;
+  email?: string;
+  address1?: string;
+  address2?: string;
+  city: string;
+  district: string;
+  postalCode?: string;
+  deliveryNotes?: string;
+  courierProviderId?: string;
+  courierName?: string;
+  deliveryPricingMode?: DeliveryPricingMode;
+  deliveryRatePlan?: string;
+  deliveryZoneName?: string;
+  fulfilmentCourierProviderId?: string;
+  fulfilmentCourierName?: string;
+  trackingNumber?: string;
+  trackingUrl?: string;
+  courierSentDate?: string;
+  paymentMethod: PaymentMethod;
+  paymentReference?: string;
+  paymentReceiptUrl?: string;
+  source?: string;
+  hasPreorder?: boolean;
+  subtotal: number;
+  deliveryFee: number;
+  total: number;
+  orderStatus: string;
+  paymentStatus: string;
+  items: CartItem[];
+};
+export type CustomerOrderItem = {
+  variantId: string;
+  name: string;
+  color: string;
+  size: string;
+  quantity: number;
+  unitPrice: number;
+  subtotal: number;
+  isPreorder?: boolean;
+};
+export type CustomerOrder = {
+  orderId: string;
+  createdAt: string;
+  customerName?: string;
+  phone?: string;
+  whatsapp?: string;
+  email?: string;
+  address1?: string;
+  address2?: string;
+  city?: string;
+  district?: string;
+  postalCode?: string;
+  deliveryNotes?: string;
+  courierName?: string;
+  deliveryPricingMode?: DeliveryPricingMode;
+  deliveryRatePlan?: string;
+  deliveryZoneName?: string;
+  fulfilmentCourierName?: string;
+  trackingNumber?: string;
+  trackingUrl?: string;
+  courierSentDate?: string;
+  paymentMethod: PaymentMethod;
+  paymentReference?: string;
+  paymentReceiptUrl?: string;
+  paymentStatus?: string;
+  subtotal: number;
+  deliveryFee: number;
+  total: number;
+  orderStatus:
+    | "Pending"
+    | "Confirmed"
+    | "Sourcing"
+    | "Packed"
+    | "Shipped"
+    | "Delivered"
+    | "Cancelled";
+  items: CustomerOrderItem[];
+};
+export type DeliveryPricingMode = "zone" | "flat";
+export type CourierProvider = {
+  id: string;
+  name: string;
+  phone?: string;
+  notes?: string;
+  pricingMode: DeliveryPricingMode;
+  flatRate: number;
+  active: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+};
+export type DeliveryRate = {
+  id: string;
+  courierProviderId?: string;
+  name: string;
+  fee: number;
+  active: boolean;
+  districts: string[];
+  cities: string[];
+  postalCodes: string[];
+  fallback: boolean;
+  sortOrder: number;
+  district?: string;
+};
+export type DashboardTopProduct = {
+  productId: string;
+  name: string;
+  quantity: number;
+  revenue: number;
+};
+export type PreorderStatus =
+  | "new"
+  | "contacted"
+  | "confirmed"
+  | "batched"
+  | "ordered"
+  | "in_transit"
+  | "arrived"
+  | "ready"
+  | "converted"
+  | "cancelled";
+export type PreorderRequest = {
+  requestId: string;
+  createdAt: string;
+  customerId?: string;
+  customerName: string;
+  phone: string;
+  whatsapp: string;
+  email?: string;
+  address1?: string;
+  address2?: string;
+  city: string;
+  district?: string;
+  postalCode?: string;
+  productId: string;
+  variantId: string;
+  productName: string;
+  sku: string;
+  color: string;
+  size: string;
+  quantity: number;
+  requestedPrice: number;
+  confirmedPrice?: number;
+  status: PreorderStatus;
+  batchId?: string;
+  notes?: string;
+  updatedAt: string;
+};
+export type CustomerPreorder = Omit<
+  PreorderRequest,
+  "customerId" | "phone" | "email" | "notes"
+>;
+export type DashboardData = {
+  ordersToday: number;
+  pending: number;
+  confirmed: number;
+  packed: number;
+  shipped: number;
+  delivered: number;
+  cancelled: number;
+  revenue: number;
+  productRevenue: number;
+  deliveryCollected: number;
+  itemsSold: number;
+  preorderNew?: number;
+  preorderConfirmed?: number;
+  preorderBatchTarget?: number;
+  topProducts: DashboardTopProduct[];
+  recent: Order[];
+};

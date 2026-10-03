@@ -1,324 +1,4087 @@
-import {useEffect,useState} from 'react';import {Link,useLocation} from 'react-router-dom';import {ChevronLeft,ChevronRight,Copy,Download,ExternalLink,MessageCircle,PackagePlus,Plus,Search,Trash2} from 'lucide-react';import {money} from '../../config/site';import {adminApi} from '../../services/adminApi';import {uploadAdminMedia} from '../../services/cloudinaryUpload';import {useStore} from '../../features/store/StoreContext';import type {Category,Collection,DeliveryRate,HomepageSection,NavigationItem,Order,PreorderRequest,PreorderStatus,SizeChart} from '../../types';
-const sriLankaDistricts=['Ampara','Anuradhapura','Badulla','Batticaloa','Colombo','Galle','Gampaha','Hambantota','Jaffna','Kalutara','Kandy','Kegalle','Kilinochchi','Kurunegala','Mannar','Matale','Matara','Monaragala','Mullaitivu','Nuwara Eliya','Polonnaruwa','Puttalam','Ratnapura','Trincomalee','Vavuniya'] as const;
-const adminPhone=/^[+\d][\d\s-]{8,14}$/;
+import { useEffect, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  Download,
+  ExternalLink,
+  MessageCircle,
+  PackagePlus,
+  Plus,
+  Search,
+  Trash2,
+} from "lucide-react";
+import { money } from "../../config/site";
+import { adminApi } from "../../services/adminApi";
+import { uploadAdminMedia } from "../../services/cloudinaryUpload";
+import { useStore } from "../../features/store/StoreContext";
+import type {
+  Category,
+  Collection,
+  DeliveryRate,
+  HomepageSection,
+  NavigationItem,
+  Order,
+  PreorderRequest,
+  PreorderStatus,
+  SizeChart,
+} from "../../types";
+const sriLankaDistricts = [
+  "Ampara",
+  "Anuradhapura",
+  "Badulla",
+  "Batticaloa",
+  "Colombo",
+  "Galle",
+  "Gampaha",
+  "Hambantota",
+  "Jaffna",
+  "Kalutara",
+  "Kandy",
+  "Kegalle",
+  "Kilinochchi",
+  "Kurunegala",
+  "Mannar",
+  "Matale",
+  "Matara",
+  "Monaragala",
+  "Mullaitivu",
+  "Nuwara Eliya",
+  "Polonnaruwa",
+  "Puttalam",
+  "Ratnapura",
+  "Trincomalee",
+  "Vavuniya",
+] as const;
+const adminPhone = /^[+\d][\d\s-]{8,14}$/;
 
-export default function AdminPage(){const section=useLocation().pathname.split('/')[2]||'overview';if(section==='overview')return <Dashboard/>;if(section==='products')return <Products/>;if(section==='categories')return <Categories/>;if(section==='collections')return <Collections/>;if(section==='navigation')return <Navigation/>;if(section==='homepage')return <Homepage/>;if(section==='size-charts')return <SizeCharts/>;if(section==='settings')return <ExplicitSettings focus={section}/>;if(section==='delivery')return <DeliveryRates/>;if(section==='orders')return <Orders/>;if(section==='preorders')return <Preorders/>;return <Media/>}
-function Head({eyebrow,title,action}:{eyebrow:string;title:string;action?:React.ReactNode}){return <div className="admin-page-head flex flex-wrap items-end justify-between gap-5"><div><p className="admin-kicker">{eyebrow}</p><h1 className="admin-title mt-2">{title}</h1></div>{action}</div>}
-function UploadField({label,value,onChange,accept='image/jpeg,image/png,image/webp,image/avif'}:{label:string;value:string;onChange:(value:string)=>void;accept?:string}){const[busy,setBusy]=useState(false),[error,setError]=useState('');async function upload(file?:File){if(!file)return;setBusy(true);setError('');try{onChange(await uploadAdminMedia(file))}catch(reason){setError(reason instanceof Error?reason.message:'Upload failed.')}finally{setBusy(false)}}return <div><p className="text-xs">{label}</p><div className="mt-2 flex gap-2"><input className="field min-w-0 flex-1" value={value} placeholder="Upload or paste URL" onChange={e=>onChange(e.target.value)}/><label className="btn btn-dark shrink-0 cursor-pointer">{busy?'Uploading…':'Upload'}<input className="sr-only" type="file" accept={accept} disabled={busy} onChange={e=>{void upload(e.target.files?.[0]);e.currentTarget.value=''}}/></label></div>{value&&accept.startsWith('image')&&<img src={value} alt="" className="mt-2 h-24 w-20 border border-black/10 object-cover"/>}{error&&<p className="mt-2 text-xs text-red-800">{error}</p>}</div>}
-function Dashboard(){
- const {data,admin}=useStore(),stats=admin.dashboard,low=data.products.filter(p=>p.status==='published'&&p.variants.some(v=>v.active&&v.stock<=v.lowStockThreshold));
- return <><Head eyebrow="Your store today" title="Dashboard" action={<Link to="/admin/products/new" className="btn btn-dark"><PackagePlus size={16}/> Add product</Link>}/>
-  <div className="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
-   {[
-    ['Published products',data.products.filter(p=>p.status==='published').length],
-    ['Low stock',low.length],
-    ['Orders today',stats?.ordersToday||0],
-    ['Pending orders',stats?.pending||0],
-    ['Delivered',stats?.delivered||0],
-    ['Product revenue',money(stats?.productRevenue??stats?.revenue??0)],
-    ['Delivery collected',money(stats?.deliveryCollected||0)],
-    ['Items sold',stats?.itemsSold||0],['Pre-order requests',stats?.preorderNew||0],['Batch progress',(stats?.preorderConfirmed||0)+' / '+(stats?.preorderBatchTarget||6)]
-   ].map(([label,value])=><div key={label} className="admin-metric-card border p-4 sm:p-5"><p className="text-xs text-black/50">{label}</p><p className="display mt-3 break-words text-2xl sm:mt-4 sm:text-3xl">{value}</p></div>)}
-  </div>
-  <p className="mt-4 text-xs leading-5 text-black/45">Revenue shows delivered product value only. Delivery fees are shown separately, so shipping charges are not mixed into product sales.</p>
-  <div className="mt-6 grid gap-5 xl:grid-cols-2">
-   <Panel title="Top selling products">{stats?.topProducts?.length?stats.topProducts.map((product,index)=><div key={product.productId} className="grid grid-cols-[32px_1fr_auto] items-center gap-3 border-b border-black/10 py-3"><span className="display text-xl text-black/30">{String(index+1).padStart(2,'0')}</span><div className="min-w-0"><p className="truncate text-sm">{product.name}</p><p className="mt-1 text-xs text-black/45">{product.quantity} items sold</p></div><span className="text-sm">{money(product.revenue)}</span></div>):<Empty text="Delivered sales will appear here."/>}</Panel>
-   <Panel title="Recent orders">{stats?.recent?.length?stats.recent.slice(0,6).map(order=><Link to="/admin/orders" key={order.orderId} className="flex items-center justify-between gap-4 border-b border-black/10 py-3 text-sm"><span className="min-w-0"><span className="block truncate">{order.orderId} · {order.customerName}</span><span className="mt-1 block text-xs uppercase tracking-wider text-black/40">{order.orderStatus}</span></span><span className="shrink-0">{money(Number(order.total))}</span></Link>):<Empty text="No orders yet."/>}</Panel>
-  </div>
-  <div className="mt-5"><Panel title="Stock attention">{low.length?<div className="grid gap-2 md:grid-cols-2">{low.slice(0,10).map(p=>{const image=p.media.find(m=>m.type==='image'),stock=p.variants.filter(v=>v.active).reduce((sum,v)=>sum+v.stock,0);return <Link to={'/admin/products/'+p.id} key={p.id} className="flex items-center gap-3 border border-black/10 bg-white/25 p-3">{image?<img src={image.url} alt="" loading="lazy" className="h-16 w-12 object-cover"/>:<div className="h-16 w-12 bg-black/5"/>}<span className="min-w-0 flex-1"><span className="block truncate text-sm">{p.name}</span><span className="mt-1 block text-xs text-black/45">{stock} units left{p.preorderEnabled?' · pre-order enabled':''}</span></span><span className="text-xs underline">EDIT</span></Link>})}</div>:<Empty text="No products need stock attention."/>}</Panel></div>
- </>
+export default function AdminPage() {
+  const section = useLocation().pathname.split("/")[2] || "overview";
+  if (section === "overview") return <Dashboard />;
+  if (section === "products") return <Products />;
+  if (section === "categories") return <Categories />;
+  if (section === "collections") return <Collections />;
+  if (section === "navigation") return <Navigation />;
+  if (section === "homepage") return <Homepage />;
+  if (section === "size-charts") return <SizeCharts />;
+  if (section === "settings") return <ExplicitSettings focus={section} />;
+  if (section === "delivery") return <DeliveryRates />;
+  if (section === "orders") return <Orders />;
+  if (section === "preorders") return <Preorders />;
+  return <Media />;
 }
-function Products(){
- const {data,duplicate,remove,commit}=useStore(),[query,setQuery]=useState(''),[status,setStatus]=useState('all'),[category,setCategory]=useState('all'),[page,setPage]=useState(1),pageSize=20;
- const mainCategories=data.categories.filter(cat=>!cat.parentId&&cat.active).sort((a,b)=>a.sortOrder-b.sortOrder),needle=query.trim().toLowerCase();
- const filtered=data.products.filter(product=>{const cat=data.categories.find(x=>x.id===product.categoryId),parent=cat?.parentId?data.categories.find(x=>x.id===cat.parentId):cat,haystack=[product.name,product.slug,product.tags.join(' '),cat?.name,parent?.name].join(' ').toLowerCase(),matchCategory=category==='all'||product.categoryId===category||cat?.parentId===category;return(!needle||haystack.includes(needle))&&(status==='all'||product.status===status)&&matchCategory}).sort((a,b)=>b.sortOrder-a.sortOrder);
- const pages=Math.max(1,Math.ceil(filtered.length/pageSize)),safePage=Math.min(page,pages),visible=filtered.slice((safePage-1)*pageSize,safePage*pageSize);
- useEffect(()=>setPage(1),[query,status,category]);
- return <><Head eyebrow="Catalogue" title="Products" action={<Link to="/admin/products/new" className="btn btn-dark"><PackagePlus size={16}/> Add product</Link>}/>
-  <div className="mt-7 grid gap-3 rounded-sm bg-[#f6f3ed] p-4 md:grid-cols-[minmax(220px,1fr)_180px_200px]"><div className="relative"><Search className="absolute left-3 top-3" size={18}/><input value={query} onChange={e=>setQuery(e.target.value)} className="field bg-white/55 pl-10" placeholder="Search product, category, tag…"/></div><select value={status} onChange={e=>setStatus(e.target.value)} className="field bg-white/55"><option value="all">All statuses</option><option value="published">Published</option><option value="draft">Draft</option><option value="archived">Archived</option></select><select value={category} onChange={e=>setCategory(e.target.value)} className="field bg-white/55"><option value="all">All categories</option>{mainCategories.map(cat=><option key={cat.id} value={cat.id}>{cat.name}</option>)}</select></div>
-  <div className="mt-4 overflow-hidden border border-black/10 bg-[#f6f3ed]">{visible.length?visible.map(p=>{const image=p.media.find(media=>media.type==='image'),cat=data.categories.find(x=>x.id===p.categoryId),parent=cat?.parentId?data.categories.find(x=>x.id===cat.parentId):undefined,stock=p.variants.filter(v=>v.active).reduce((n,v)=>n+v.stock,0);return <div key={p.id} className="grid grid-cols-[64px_minmax(0,1fr)_auto] items-center gap-3 border-b border-black/10 p-3 last:border-0 sm:grid-cols-[72px_minmax(0,1fr)_110px_110px_auto] sm:gap-4">{image?<img src={image.url} alt="" loading="lazy" decoding="async" className="aspect-[4/5] w-full border border-black/5 object-cover"/>:<div className="aspect-[4/5] w-full bg-black/5"/>}<div className="min-w-0"><p className="truncate text-sm">{p.name}</p><p className="mt-1 truncate text-xs text-black/45">{parent?parent.name+' → ':''}{cat?.name||'No category'} · {stock} units</p><div className="mt-2 flex flex-wrap gap-1.5"><span className="border border-black/10 px-2 py-1 text-[9px] uppercase tracking-wider">{p.status}</span>{p.preorderEnabled&&<span className="border border-[#96724f]/30 bg-[#96724f]/5 px-2 py-1 text-[9px] uppercase tracking-wider text-[#765638]">Pre-order</span>}</div></div><span className="hidden text-sm sm:block">{money(p.price)}</span><button onClick={()=>void commit('products',{...p,status:p.status==='published'?'draft':'published'})} className="hidden min-h-11 text-xs underline sm:block">{p.status==='published'?'UNPUBLISH':'PUBLISH'}</button><div className="flex items-center"><Link className="grid min-h-11 min-w-11 place-items-center text-xs underline" to={`/admin/products/${p.id}`}>EDIT</Link><button onClick={()=>duplicate('products',p.id)} className="hidden min-h-11 min-w-11 place-items-center sm:grid" title="Duplicate"><Copy size={15}/></button><button onClick={()=>confirm(`Delete ${p.name}?`)&&remove('products',p.id)} className="hidden min-h-11 min-w-11 place-items-center text-red-800 sm:grid" title="Delete"><Trash2 size={15}/></button></div></div>}):<Empty text="No products match these filters."/>}</div>
-  <div className="mt-5 flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-black/45">Showing {filtered.length?((safePage-1)*pageSize)+1:0}–{Math.min(safePage*pageSize,filtered.length)} of {filtered.length} products</p><div className="flex items-center gap-2"><button className="btn" disabled={safePage<=1} onClick={()=>setPage(value=>Math.max(1,value-1))}><ChevronLeft size={15}/> Previous</button><span className="px-2 text-xs">Page {safePage} / {pages}</span><button className="btn" disabled={safePage>=pages} onClick={()=>setPage(value=>Math.min(pages,value+1))}>Next <ChevronRight size={15}/></button></div></div>
- </>}
-function Categories(){
- const store=useStore(),[creating,setCreating]=useState<'main'|'sub'|null>(null),main=[...store.data.categories].filter(category=>!category.parentId).sort((a,b)=>a.sortOrder-b.sortOrder);
- const blank:Category={id:crypto.randomUUID(),name:'',slug:'',description:'',imageUrl:'',active:true,featured:false,showInNavigation:creating==='main',showOnHomepage:false,parentId:creating==='sub'?main[0]?.id:undefined,sortOrder:store.data.categories.length+1};
- return <><Head eyebrow="Catalogue structure" title="Categories" action={<div className="flex flex-wrap gap-2"><button onClick={()=>setCreating('main')} className="btn btn-dark"><Plus size={16}/> Main category</button><button disabled={!main.length} onClick={()=>setCreating('sub')} className="btn disabled:opacity-40"><Plus size={16}/> Subcategory</button></div>}/>
-  <p className="mt-4 max-w-3xl text-sm leading-7 text-black/55">Use main categories for the top menu, such as WOMEN, MEN and ACCESSORIES. Put more specific groups such as Crop Tops under a main category. Products can then be assigned to the exact subcategory.</p>
-  {creating&&<div className="mt-7"><CategoryCard key={creating} item={blank} fresh onCancel={()=>setCreating(null)}/></div>}
-  <div className="mt-7 space-y-5">{main.map(parent=>{const children=store.data.categories.filter(child=>child.parentId===parent.id).sort((a,b)=>a.sortOrder-b.sortOrder);return <section key={parent.id} className="border border-black/10 bg-white/25 p-4 sm:p-5"><div className="mb-4 flex items-center justify-between gap-3"><div><p className="eyebrow text-black/45">Main category</p><h2 className="display mt-1 text-2xl">{parent.name}</h2></div><span className="text-xs text-black/45">{children.length} subcategories</span></div><div className="grid gap-4 lg:grid-cols-2"><CategoryCard item={parent}/>{children.map(child=><CategoryCard key={child.id} item={child}/>)}</div></section>})}</div>
- </>
-}
-function CategoryCard({item,fresh=false,onCancel}:{item:Category;fresh?:boolean;onCancel?:()=>void}){
- const s=useStore(),[draft,setDraft]=useState(item),[busy,setBusy]=useState(false),[status,setStatus]=useState('');useEffect(()=>setDraft(item),[item]);
- const change=<K extends keyof Category>(key:K,value:Category[K])=>setDraft(x=>({...x,[key]:value})),name=(value:string)=>setDraft(x=>({...x,name:value,slug:!x.slug||x.slug===slugify(x.name)?slugify(value):x.slug}));
- const parents=s.data.categories.filter(category=>category.id!==draft.id&&!category.parentId),childCount=s.data.categories.filter(category=>category.parentId===draft.id).length,parent=s.data.categories.find(category=>category.id===draft.parentId);
- async function submit(){
-  if(!draft.name.trim())return setStatus('Name is required.');
-  if(draft.parentId===draft.id)return setStatus('A category cannot be its own parent.');
-  setBusy(true);setStatus('');
-  try{await s.commit('categories',{...draft,slug:draft.slug||slugify(draft.name),showInNavigation:draft.parentId?false:draft.showInNavigation});setStatus('Category saved.');onCancel?.()}
-  catch(reason){setStatus(reason instanceof Error?reason.message:'Could not save category. Try again.')}
-  finally{setBusy(false)}
- }
- return <Panel title={(draft.parentId?'Subcategory':'Main category')+' — '+(draft.name||'New category')}>
-  <div className="grid gap-3 sm:grid-cols-2"><Field label="Category name" value={draft.name} onChange={name}/><Field label="Slug" value={draft.slug} onChange={slug=>change('slug',slug)}/><label className="block text-xs">Parent category<select className="field mt-2" disabled={childCount>0&&!draft.parentId} value={draft.parentId||''} onChange={e=>change('parentId',e.target.value||undefined)}><option value="">None — main category</option>{parents.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label><Field label="Sort order" value={String(draft.sortOrder)} onChange={value=>change('sortOrder',Number(value)||0)}/><UploadField label="Category image (optional)" value={draft.imageUrl} onChange={value=>change('imageUrl',value)}/><UploadField label="Mobile image (optional)" value={draft.mobileImageUrl||''} onChange={value=>change('mobileImageUrl',value)}/></div>
-  {parent&&<p className="mt-3 border-l-2 border-[#96724f] pl-3 text-xs text-black/50">Storefront path: {parent.name} → {draft.name||'Subcategory'}</p>}
-  {childCount>0&&!draft.parentId&&<p className="mt-3 text-xs text-amber-900">This main category has {childCount} subcategories. Move them first before changing this category into a subcategory.</p>}
-  <label className="mt-3 block text-xs">Description (optional)<textarea className="field mt-2" value={draft.description} onChange={e=>change('description',e.target.value)}/></label>
-  <Toggles items={[['Published',draft.active,v=>change('active',v)],['Featured',draft.featured,v=>change('featured',v)],...(!draft.parentId?[['Show in navigation',draft.showInNavigation,(v:boolean)=>change('showInNavigation',v)] as [string,boolean,(v:boolean)=>void]]:[]),['Show on homepage',draft.showOnHomepage,v=>change('showOnHomepage',v)]]}/>{draft.parentId&&<p className="mt-2 text-xs leading-5 text-black/45">Published subcategories appear automatically inside their main category menu and on that category’s shop page.</p>}
-  <EditorActions busy={busy} status={status} save={submit} cancel={()=>{setDraft(item);onCancel?.()}}>{!fresh&&<button onClick={()=>confirm('Delete "'+item.name+'"?')&&s.remove('categories',item.id)} className="btn border-red-800 text-red-800">Delete</button>}</EditorActions>
- </Panel>
-}
-function Collections(){const s=useStore(),[creating,setCreating]=useState(false),blank:Collection={id:crypto.randomUUID(),name:'',slug:'',description:'',heroImage:'',active:false,showInNavigation:false,showOnHomepage:false,sortOrder:s.data.collections.length+1};return <><Head eyebrow="How pieces are grouped" title="Collections" action={<button onClick={()=>setCreating(true)} className="btn btn-dark"><Plus size={16}/> Add collection</button>}/>{creating&&<div className="mt-7"><CollectionCard item={blank} fresh onCancel={()=>setCreating(false)}/></div>}<div className="mt-7 grid gap-4 lg:grid-cols-2">{s.data.collections.map(c=><CollectionCard key={c.id} item={c}/>)}</div></>}
-function CollectionCard({item,fresh=false,onCancel}:{item:Collection;fresh?:boolean;onCancel?:()=>void}){const s=useStore(),[draft,setDraft]=useState(item),[busy,setBusy]=useState(false),[status,setStatus]=useState('');useEffect(()=>setDraft(item),[item]);const change=<K extends keyof Collection>(key:K,value:Collection[K])=>setDraft(x=>({...x,[key]:value}));async function submit(){if(!draft.name.trim())return setStatus('Name is required.');setBusy(true);try{await s.commit('collections',{...draft,slug:draft.slug||slugify(draft.name)});setStatus('Collection saved.');onCancel?.()}catch{setStatus('Could not save collection.')}finally{setBusy(false)}}return <Panel title={draft.name||'New collection'}><div className="grid gap-3 sm:grid-cols-2"><Field label="Title" value={draft.name} onChange={value=>change('name',value)}/><Field label="Slug" value={draft.slug} onChange={value=>change('slug',value)}/><UploadField label="Hero image" value={draft.heroImage} onChange={value=>change('heroImage',value)}/><UploadField label="Optional video" value={draft.videoUrl||''} onChange={value=>change('videoUrl',value)} accept="video/mp4,video/webm"/></div><label className="mt-3 block text-xs">Description<textarea className="field mt-2" value={draft.description} onChange={e=>change('description',e.target.value)}/></label><Toggles items={[["Published",draft.active,v=>change('active',v)],["Navigation",draft.showInNavigation,v=>change('showInNavigation',v)],["Homepage",draft.showOnHomepage,v=>change('showOnHomepage',v)]]}/><EditorActions busy={busy} status={status} save={submit} cancel={()=>{setDraft(item);onCancel?.()}}>{!fresh&&<button onClick={()=>confirm(`Delete "${item.name}"?`)&&s.remove('collections',item.id)} className="btn border-red-800 text-red-800">Delete</button>}</EditorActions></Panel>}
-function Navigation(){
- const s=useStore(),[creating,setCreating]=useState(false);
- const blank:NavigationItem={id:crypto.randomUUID(),label:'',linkType:'page',target:'/shop',visible:true,sortOrder:s.data.navigation.length+1};
- return <><Head eyebrow="Storefront header" title="Navigation" action={<button onClick={()=>setCreating(true)} className="btn btn-dark"><Plus size={16}/> Add item</button>}/><p className="mt-4 max-w-2xl text-sm leading-7 text-black/55">NEW, SHOP and ABOUT are permanent storefront links. Main categories marked “Show in navigation” are inserted automatically between them. Every published subcategory under that main category appears automatically in its dropdown. Use this editor only for optional collections, campaigns or custom links.</p>{creating&&<div className="mt-7"><NavRow item={blank} fresh onCancel={()=>setCreating(false)}/></div>}<div className="mt-7 grid gap-2">{[...s.data.navigation].sort((a,b)=>a.sortOrder-b.sortOrder).map(n=><NavRow key={n.id} item={n}/>)}</div></>
-}
-function NavRow({item,fresh=false,onCancel}:{item:NavigationItem;fresh?:boolean;onCancel?:()=>void}){
- const s=useStore(),[draft,setDraft]=useState(item),[busy,setBusy]=useState(false),[status,setStatus]=useState('');useEffect(()=>setDraft(item),[item]);
- function changeType(linkType:NavigationItem['linkType']){const target=linkType==='category'?(s.data.categories.find(c=>c.active&&!c.parentId)?.id||''):linkType==='collection'?(s.data.collections.find(c=>c.active)?.id||''):linkType==='page'?'/shop':'';setDraft({...draft,linkType,target})}
- async function submit(){if(!draft.label.trim())return setStatus('Label is required.');if(!draft.target.trim())return setStatus('Choose a destination.');setBusy(true);setStatus('');try{await s.commit('navigation',draft);setStatus('Navigation saved.');onCancel?.()}catch(reason){setStatus(reason instanceof Error?reason.message:'Could not save navigation.')}finally{setBusy(false)}}
- const target=draft.linkType==='category'?<select className="field" value={draft.target} onChange={e=>setDraft({...draft,target:e.target.value})}><option value="">Select main category</option>{s.data.categories.filter(c=>c.active&&!c.parentId).map(cat=><option key={cat.id} value={cat.id}>{cat.name}</option>)}</select>:draft.linkType==='collection'?<select className="field" value={draft.target} onChange={e=>setDraft({...draft,target:e.target.value})}><option value="">Select collection</option>{s.data.collections.filter(col=>col.active).map(col=><option key={col.id} value={col.id}>{col.name}</option>)}</select>:<input className="field" value={draft.target} placeholder={draft.linkType==='url'?'https://…':'/shop'} onChange={e=>setDraft({...draft,target:e.target.value})}/>;
- return <div className="bg-[#f6f3ed] p-4"><div className="grid gap-3 sm:grid-cols-[1fr_150px_1fr_auto]"><input className="field" placeholder="Menu label" value={draft.label} onChange={e=>setDraft({...draft,label:e.target.value})}/><select className="field" value={draft.linkType} onChange={e=>changeType(e.target.value as NavigationItem['linkType'])}><option>category</option><option>collection</option><option>page</option><option>url</option></select>{target}<button onClick={()=>setDraft({...draft,visible:!draft.visible})} className="min-h-11 px-3 text-xs">{draft.visible?'VISIBLE':'HIDDEN'}</button></div><EditorActions busy={busy} status={status} save={submit} cancel={()=>{setDraft(item);onCancel?.()}}>{!fresh&&<button onClick={()=>confirm('Delete "'+item.label+'"?')&&s.remove('navigation',item.id)} className="btn border-red-800 text-red-800">Delete</button>}</EditorActions></div>
-}
-function Homepage(){
- const s=useStore(),[creating,setCreating]=useState(false),blank:HomepageSection={id:crypto.randomUUID(),type:'editorial-image',enabled:false,title:'New section',subtitle:'',textPosition:'left',overlay:25,spacing:'normal',sortOrder:s.data.homepageSections.length+1};
- return <><Head eyebrow="Controlled page builder" title="Homepage" action={<button onClick={()=>setCreating(true)} className="btn btn-dark"><Plus size={16}/> Add section</button>}/><HeroEditor/>{creating&&<div className="mt-8"><SectionRow item={blank} fresh onCancel={()=>setCreating(false)}/></div>}<div className="mt-8 grid gap-3">{[...s.data.homepageSections].sort((a,b)=>a.sortOrder-b.sortOrder).map(x=><SectionRow key={x.id} item={x}/>)}</div></>
-}
-function HeroEditor(){return <Panel title="Hero"><div className="border-l-2 border-[#96724f] bg-white/40 px-4 py-4 text-sm leading-6 text-black/60"><p className="font-medium text-black/80">Hero is managed from the website code.</p><p className="mt-1">Localhost and Vercel now use the same hero configuration and video asset. Edit the hero in VS Code, then commit and push it to deploy the exact same version.</p><p className="mt-2 text-xs">Current video: <code>/media/hero-final-v2.mp4</code></p></div></Panel>}
-function SectionRow({item,fresh=false,onCancel}:{item:HomepageSection;fresh?:boolean;onCancel?:()=>void}){const s=useStore(),[draft,setDraft]=useState(item),[busy,setBusy]=useState(false),[status,setStatus]=useState('');useEffect(()=>setDraft(item),[item]);async function submit(){setBusy(true);try{await s.commit('homepageSections',draft);setStatus('Section saved.');onCancel?.()}catch{setStatus('Could not save section.')}finally{setBusy(false)}}return <div className="bg-[#f6f3ed] p-4"><div className="grid gap-3 sm:grid-cols-[180px_1fr_1fr_auto]"><select className="field" value={draft.type} onChange={e=>setDraft({...draft,type:e.target.value as HomepageSection['type']})}>{['product-grid','collection-feature','category-grid','editorial-image','full-width-campaign','text-statement','new-arrivals','featured-products','social','service-strip'].map(x=><option key={x}>{x}</option>)}</select><input className="field" value={draft.title} onChange={e=>setDraft({...draft,title:e.target.value})}/><input className="field" value={draft.desktopMedia||''} placeholder="Desktop media URL" onChange={e=>setDraft({...draft,desktopMedia:e.target.value})}/><button onClick={()=>setDraft({...draft,enabled:!draft.enabled})} className="min-h-11 text-xs">{draft.enabled?'VISIBLE':'HIDDEN'}</button></div><EditorActions busy={busy} status={status} save={submit} cancel={()=>{setDraft(item);onCancel?.()}}>{!fresh&&<button onClick={()=>confirm(`Delete "${item.title}"?`)&&s.remove('homepageSections',item.id)} className="btn border-red-800 text-red-800">Delete</button>}</EditorActions></div>}
-function SizeCharts(){
- const s=useStore(),[creating,setCreating]=useState(false),blank:SizeChart={id:crypto.randomUUID(),name:'New Size Chart',unit:'',columns:[],rows:[],imageUrl:'',notes:''};
- return <><Head eyebrow="Product-specific sizing" title="Size Charts" action={<button onClick={()=>setCreating(true)} className="btn btn-dark"><Plus size={16}/> Add chart</button>}/><p className="mt-4 max-w-3xl text-sm leading-7 text-black/55">Size charts are image-only. Upload the supplier chart and assign it to the matching product. You can also upload or replace a chart directly inside the Product editor.</p>{creating&&<div className="mt-7"><ChartCard item={blank} fresh onCancel={()=>setCreating(false)}/></div>}<div className="mt-7 grid gap-4 lg:grid-cols-2">{s.data.sizeCharts.map(chart=><ChartCard key={chart.id} item={chart}/>)}</div></>
-}
-function ChartCard({item,fresh=false,onCancel}:{item:SizeChart;fresh?:boolean;onCancel?:()=>void}){
- const s=useStore(),[draft,setDraft]=useState(item),[busy,setBusy]=useState(false),[status,setStatus]=useState('');useEffect(()=>setDraft(item),[item]);
- async function submit(){if(!draft.name.trim())return setStatus('Name is required.');if(!draft.imageUrl?.trim())return setStatus('Upload the size-chart image first.');setBusy(true);setStatus('');try{await s.commit('sizeCharts',{...draft,unit:'',columns:[],rows:[],notes:''});setStatus('Size chart saved.');onCancel?.()}catch(reason){setStatus(reason instanceof Error?reason.message:'Could not save size chart.')}finally{setBusy(false)}}
- return <Panel title={draft.name}><div className="grid gap-4"><Field label="Name" value={draft.name} onChange={name=>setDraft({...draft,name})}/><UploadField label="Supplier size-chart image" value={draft.imageUrl||''} onChange={imageUrl=>setDraft({...draft,imageUrl})}/>{draft.imageUrl&&<div className="border border-black/10 bg-white p-3"><img src={draft.imageUrl} alt={draft.name} className="mx-auto max-h-[520px] w-full object-contain"/></div>}<p className="text-xs leading-5 text-black/45">No text measurements are required. Customers will see this image when they open Size Guide on the product page.</p></div><EditorActions busy={busy} status={status} save={submit} cancel={()=>{setDraft(item);onCancel?.()}}>{!fresh&&<button onClick={()=>confirm('Delete "'+item.name+'"?')&&s.remove('sizeCharts',item.id)} className="btn border-red-800 text-red-800">Delete</button>}</EditorActions></Panel>
-}
-import type {CourierProvider} from '../../types';
-function DeliveryRates(){
- const s=useStore(),[couriers,setCouriers]=useState(s.admin.couriers),[rates,setRates]=useState(s.admin.deliveryRates),[defaultId,setDefaultId]=useState(s.data.settings.defaultCourierProviderId),[busy,setBusy]=useState(false),[status,setStatus]=useState('');
- useEffect(()=>{setCouriers(s.admin.couriers);setRates(s.admin.deliveryRates);setDefaultId(s.data.settings.defaultCourierProviderId)},[s.admin.couriers,s.admin.deliveryRates,s.data.settings.defaultCourierProviderId]);
- const updateCourier=(id:string,patch:Partial<CourierProvider>)=>setCouriers(items=>items.map(item=>item.id===id?{...item,...patch}:item));
- const updateRate=(id:string,patch:Partial<DeliveryRate>)=>setRates(items=>items.map(item=>item.id===id?{...item,...patch}:item));
- const addCourier=()=>setCouriers(items=>[...items,{id:crypto.randomUUID(),name:'New courier',phone:'',notes:'',pricingMode:'flat',flatRate:400,active:true}]);
- const addZone=(courierId:string)=>setRates(items=>[...items,{id:crypto.randomUUID(),courierProviderId:courierId,name:'New zone',fee:0,active:true,districts:[],cities:[],postalCodes:[],fallback:false,sortOrder:items.length+1}]);
- const removeCourier=(id:string)=>{if(id===defaultId)return;setCouriers(items=>items.filter(item=>item.id!==id));setRates(items=>items.filter(item=>item.courierProviderId!==id))};
- async function submit(){
-  setStatus('');
-  const selected=couriers.find(item=>item.id===defaultId);
-  if(!selected?.active)return setStatus('Choose an active default checkout courier.');
-  if(couriers.some(item=>!item.name.trim()))return setStatus('Every courier needs a name.');
-  for(const courier of couriers){
-   if(!Number.isFinite(courier.flatRate)||courier.flatRate<0)return setStatus(`${courier.name}: flat rate cannot be negative.`);
-   if(courier.pricingMode==='zone'){
-    const courierRates=rates.filter(rate=>rate.courierProviderId===courier.id);
-    if(!courierRates.length)return setStatus(`${courier.name} needs at least one delivery zone.`);
-    if(courierRates.some(rate=>!rate.name.trim()||!Number.isFinite(rate.fee)||rate.fee<0))return setStatus(`${courier.name}: every zone needs a valid name and fee.`);
-    if(courierRates.filter(rate=>rate.active&&rate.fallback).length!==1)return setStatus(`${courier.name} needs exactly one active fallback zone.`);
-   }
-  }
-  setBusy(true);
-  try{await s.saveCourierConfig(couriers,rates,defaultId);setStatus('Courier and delivery configuration saved.')}
-  catch(reason){setStatus(reason instanceof Error?reason.message:'Could not save courier configuration.')}
-  finally{setBusy(false)}
- }
- const selected=couriers.find(item=>item.id===defaultId);
- return <>
-  <Head eyebrow="Checkout logistics" title="Couriers & Delivery" action={<button className="btn btn-dark" onClick={addCourier}><Plus size={15}/> Add courier</button>}/>
-  <div className="mt-7 admin-panel p-5 sm:p-6">
-   <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,420px)] lg:items-end">
-    <div><p className="admin-panel__title">Website checkout courier</p><p className="mt-2 max-w-2xl text-sm leading-6 text-black/55">Customers do not choose the courier at checkout. Select the pricing plan ZEVENRA is currently using. Existing orders keep the courier and fee that were saved when the order was placed.</p></div>
-    <label className="text-xs">Default checkout courier<select className="field mt-2" value={defaultId} onChange={e=>setDefaultId(e.target.value)}><option value="">Select active courier</option>{couriers.filter(item=>item.active).map(item=><option key={item.id} value={item.id}>{item.name||'Unnamed courier'}</option>)}</select></label>
-   </div>
-   {selected?.active&&<div className="mt-5 flex flex-wrap items-center gap-2 border-l-2 border-bronze bg-white/35 px-4 py-3 text-sm"><span className="rounded-full bg-black px-2.5 py-1 text-[10px] uppercase tracking-[.12em] text-white">Default</span><b>{selected.name}</b><span className="text-black/50">· {selected.pricingMode==='flat'?money(selected.flatRate)+' nationwide':'Zone-based pricing'}</span></div>}
-  </div>
-  <div className="mt-5 grid gap-5">
-   {couriers.map(courier=>{
-    const courierRates=rates.filter(rate=>rate.courierProviderId===courier.id);
-    const isDefault=courier.id===defaultId;
-    return <section key={courier.id} className="admin-panel p-5 sm:p-6">
-     <div className="flex flex-wrap items-start justify-between gap-4 border-b border-black/10 pb-5">
-      <div><div className="flex flex-wrap items-center gap-2"><h2 className="text-lg font-medium">{courier.name||'Unnamed courier'}</h2>{isDefault&&<span className="rounded-full bg-black px-2.5 py-1 text-[10px] uppercase tracking-[.12em] text-white">Default checkout</span>}{courier.active?<span className="rounded-full border border-emerald-800/25 bg-emerald-900/[.06] px-2.5 py-1 text-[10px] uppercase tracking-[.12em] text-emerald-900">Active</span>:<span className="rounded-full border border-black/15 px-2.5 py-1 text-[10px] uppercase tracking-[.12em] text-black/45">Inactive</span>}</div><p className="mt-2 text-xs leading-5 text-black/45">{courier.pricingMode==='flat'?'One delivery price for every Sri Lankan address.':'Delivery price is selected from the matching zone rules below.'}</p></div>
-      <button className="text-xs text-red-800 underline underline-offset-4 disabled:cursor-not-allowed disabled:opacity-30" disabled={isDefault} onClick={()=>removeCourier(courier.id)}>{isDefault?'Default courier cannot be removed':'Remove courier'}</button>
-     </div>
-     <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-      <Field label="Courier name" value={courier.name} onChange={name=>updateCourier(courier.id,{name})}/>
-      <Field label="Contact phone (optional)" value={courier.phone||''} onChange={phone=>updateCourier(courier.id,{phone})}/>
-      <label className="mb-3 block text-xs">Pricing mode<select className="field mt-2" value={courier.pricingMode} onChange={e=>updateCourier(courier.id,{pricingMode:e.target.value as CourierProvider['pricingMode']})}><option value="zone">Zone Based</option><option value="flat">Flat Rate</option></select></label>
-      <label className="flex min-h-12 items-center gap-3 rounded-lg border border-black/10 bg-white/35 px-4 text-xs md:col-span-2 xl:col-span-1"><input className="h-5 w-5 accent-black" type="checkbox" checked={courier.active} onChange={e=>updateCourier(courier.id,{active:e.target.checked})}/><span><b>Active courier</b><span className="mt-0.5 block text-[11px] text-black/45">Inactive couriers cannot be selected for checkout.</span></span></label>
-      <label className="text-xs md:col-span-2 xl:col-span-3">Notes (optional)<textarea className="field mt-2 resize-y" rows={2} value={courier.notes||''} onChange={e=>updateCourier(courier.id,{notes:e.target.value})}/></label>
-     </div>
-     {courier.pricingMode==='flat'
-      ?<div className="mt-6 max-w-sm rounded-xl border border-black/10 bg-white/35 p-4"><p className="text-xs font-medium uppercase tracking-[.12em]">Flat nationwide rate</p><label className="mt-4 block text-xs">Delivery fee (LKR)<input className="field mt-2" type="number" min="0" value={courier.flatRate} onChange={e=>updateCourier(courier.id,{flatRate:Number(e.target.value)})}/></label><p className="mt-3 text-[11px] leading-5 text-black/45">This amount applies to all valid Sri Lankan delivery addresses unless free delivery is triggered.</p></div>
-      :<div className="mt-6">
-       <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-medium uppercase tracking-[.12em]">Delivery zones</p><p className="mt-1 text-[11px] leading-5 text-black/45">Matching priority is postal code, then city/area, then district-only rules, then the fallback zone.</p></div><button className="btn" onClick={()=>addZone(courier.id)}><Plus size={14}/> Add zone</button></div>
-       <div className="mt-4 grid gap-4">
-        {courierRates.map(rate=><div key={rate.id} className="rounded-xl border border-black/10 bg-white/35 p-4 sm:p-5">
-         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(220px,1.5fr)_160px_auto_auto_auto] xl:items-end">
-          <Field label="Zone name" value={rate.name} onChange={name=>updateRate(rate.id,{name})}/>
-          <Field label="Fee (LKR)" value={String(rate.fee)} onChange={fee=>updateRate(rate.id,{fee:Number(fee)})}/>
-          <label className="flex min-h-11 items-center gap-2 text-xs"><input className="h-5 w-5 accent-black" type="checkbox" checked={rate.active} onChange={e=>updateRate(rate.id,{active:e.target.checked})}/>Active</label>
-          <label className="flex min-h-11 items-center gap-2 text-xs"><input className="h-5 w-5 accent-black" type="checkbox" checked={rate.fallback} onChange={e=>updateRate(rate.id,{fallback:e.target.checked})}/>Fallback zone</label>
-          <button className="btn text-red-800" onClick={()=>setRates(items=>items.filter(item=>item.id!==rate.id))}><Trash2 size={14}/> Remove</button>
-         </div>
-         <div className="mt-4 grid gap-4 lg:grid-cols-3">
-          <CsvField label="District matches" values={rate.districts} placeholder="Colombo, Gampaha" onChange={districts=>updateRate(rate.id,{districts})}/>
-          <CsvField label="City / area matches" values={rate.cities} placeholder="Nugegoda, Wattala" onChange={cities=>updateRate(rate.id,{cities})}/>
-          <CsvField label="Postal code matches" values={rate.postalCodes} placeholder="10250, 103*" onChange={postalCodes=>updateRate(rate.id,{postalCodes})}/>
-         </div>
-         {rate.fallback&&<p className="mt-4 border-l-2 border-bronze pl-3 text-[11px] leading-5 text-black/50">Fallback zone is used only when no other active rule for this courier matches the customer's address.</p>}
-        </div>)}
-       </div>
-      </div>}
-    </section>
-   })}
-  </div>
-  <div className="mt-6 admin-panel p-5 sm:p-6"><EditorActions busy={busy} status={status} save={submit} cancel={()=>{setCouriers(s.admin.couriers);setRates(s.admin.deliveryRates);setDefaultId(s.data.settings.defaultCourierProviderId)}}/></div>
- </>
-}
-function CsvField({label,values,placeholder,onChange}:{label:string;values:string[];placeholder:string;onChange:(values:string[])=>void}){const[text,setText]=useState(values.join(', '));useEffect(()=>setText(values.join(', ')),[values]);return <label className="text-xs">{label}<input className="field mt-2" value={text} placeholder={placeholder} onChange={event=>setText(event.target.value)} onBlur={()=>onChange(text.split(',').map(item=>item.trim()).filter(Boolean))}/></label>}
-type PreorderAdminDraft={confirmedPrice:string;notes:string;address1:string;address2:string;city:string;district:string;postalCode:string};
-function Preorders(){
- const store=useStore(),[query,setQuery]=useState(''),[filter,setFilter]=useState('active'),[page,setPage]=useState(1),[busy,setBusy]=useState(''),[message,setMessage]=useState(''),[drafts,setDrafts]=useState<Record<string,PreorderAdminDraft>>({}),pageSize=20,batchTarget=6,batchMinimum=5;
- const labels:Record<PreorderStatus,string>={new:'New request',contacted:'Customer contacted',confirmed:'Customer confirmed',batched:'In supplier batch',ordered:'Ordered from supplier',in_transit:'In transit',arrived:'Arrived in Sri Lanka',ready:'Ready for customer',converted:'Converted to order',cancelled:'Cancelled'};
- const next:Partial<Record<PreorderStatus,PreorderStatus>>={new:'contacted',contacted:'confirmed',batched:'ordered',ordered:'in_transit',in_transit:'arrived',arrived:'ready'};
- const nextText:Partial<Record<PreorderStatus,string>>={new:'Mark customer contacted',contacted:'Confirm customer',batched:'Mark supplier order placed',ordered:'Mark in transit',in_transit:'Mark arrived',arrived:'Mark ready for customer'};
- const guidance:Record<PreorderStatus,string>={new:'Contact the customer on WhatsApp. Confirm the exact item, size and that they still want it.',contacted:'Enter the final selling price, then confirm the customer only after they agree.',confirmed:'This request is ready for the next supplier batch. Only confirmed pieces count toward the batch target.',batched:'This piece is grouped into a supplier batch. Place the SHEIN order, then mark it ordered.',ordered:'Supplier order has been placed. Mark it in transit when tracking starts moving.',in_transit:'The supplier parcel is on the way. Mark arrived when you physically receive it.',arrived:'Check the item, size and condition. Keep this customer-reserved piece out of public stock, then mark it ready.',ready:'Create the normal COD or bank order. The arrived pre-order piece stays reserved and is not exposed as public stock.',converted:'This request is finished and is now a normal order.',cancelled:'No further action is required for this cancelled request.'};
- const all=[...store.admin.preorders].sort((a,b)=>new Date(b.createdAt).getTime()-new Date(a.createdAt).getTime()),needle=query.trim().toLowerCase(),confirmedItems=all.filter(x=>x.status==='confirmed'&&!x.batchId).reduce((n,x)=>n+Number(x.quantity||0),0),newCount=all.filter(x=>x.status==='new').length,contacted=all.filter(x=>x.status==='contacted').length,readyCount=all.filter(x=>x.status==='ready').length;
- const filtered=all.filter(item=>{const active=!['converted','cancelled'].includes(item.status),statusOk=filter==='all'||(filter==='active'&&active)||filter===item.status,searchOk=!needle||[item.requestId,item.customerName,item.phone,item.whatsapp,item.email,item.productName,item.color,item.size,item.batchId,item.city,item.district].some(v=>String(v||'').toLowerCase().includes(needle));return statusOk&&searchOk}),pages=Math.max(1,Math.ceil(filtered.length/pageSize)),safe=Math.min(page,pages),visible=filtered.slice((safe-1)*pageSize,safe*pageSize);
- useEffect(()=>setPage(1),[query,filter]);
- const baseDraft=(item:PreorderRequest):PreorderAdminDraft=>({confirmedPrice:String(item.confirmedPrice||''),notes:item.notes||'',address1:item.address1||'',address2:item.address2||'',city:item.city||'',district:item.district||'',postalCode:item.postalCode||''});
- const draftFor=(item:PreorderRequest)=>drafts[item.requestId]||baseDraft(item);
- const editDraft=(item:PreorderRequest,patch:Partial<PreorderAdminDraft>)=>setDrafts(current=>({...current,[item.requestId]:{...(current[item.requestId]||baseDraft(item)),...patch}}));
- async function change(item:PreorderRequest,status:PreorderStatus){setBusy(item.requestId);setMessage('');try{const draft=draftFor(item),confirmedPrice=draft.confirmedPrice===''?item.confirmedPrice:Number(draft.confirmedPrice);await store.updatePreorder({requestId:item.requestId,status,confirmedPrice,notes:draft.notes});setMessage(item.requestId+' → '+labels[status]+'.')}catch(reason){setMessage(reason instanceof Error?reason.message:'Could not update pre-order.')}finally{setBusy('')}}
- async function saveDetails(item:PreorderRequest){setBusy(item.requestId);setMessage('');try{const draft=draftFor(item),price=draft.confirmedPrice===''?undefined:Number(draft.confirmedPrice);if(price!==undefined&&(!Number.isFinite(price)||price<=0))throw new Error('Final price must be a valid amount greater than 0.');if(draft.postalCode&& !/^\d{5}$/.test(draft.postalCode))throw new Error('Postal code must be 5 digits.');await store.updatePreorder({requestId:item.requestId,confirmedPrice:price,notes:draft.notes.trim(),address1:draft.address1.trim(),address2:draft.address2.trim(),city:draft.city.trim(),district:draft.district,postalCode:draft.postalCode.trim()});setMessage(item.requestId+' details saved.')}catch(reason){setMessage(reason instanceof Error?reason.message:'Could not save pre-order details.')}finally{setBusy('')}}
- async function convert(item:PreorderRequest,paymentMethod:'cod'|'bank'){const draft=draftFor(item);if(!draft.address1.trim()||!draft.city.trim()||!draft.district) return setMessage('Complete the delivery address and district before converting this pre-order.');if(draft.postalCode&&!/^\d{5}$/.test(draft.postalCode))return setMessage('Postal code must be 5 digits.');if(!confirm('Convert '+item.requestId+' to a normal '+(paymentMethod==='cod'?'COD':'bank transfer')+' order? Arrived stock will be reserved immediately.'))return;setBusy(item.requestId);setMessage('');try{const price=draft.confirmedPrice===''?Number(item.confirmedPrice||0):Number(draft.confirmedPrice);if(price<=0)throw new Error('Set the final confirmed price first.');await store.updatePreorder({requestId:item.requestId,confirmedPrice:price,notes:draft.notes.trim(),address1:draft.address1.trim(),address2:draft.address2.trim(),city:draft.city.trim(),district:draft.district,postalCode:draft.postalCode.trim()});const order=await adminApi.post<Order>('convertPreorderToOrder',{requestId:item.requestId,paymentMethod});await store.loadAdmin();setMessage(item.requestId+' converted to '+order.orderId+'. Customer can now see the normal order in My Orders if they were signed in.')}catch(reason){setMessage(reason instanceof Error?reason.message:'Could not convert pre-order.')}finally{setBusy('')}}
- async function batch(){if(confirmedItems<batchMinimum)return;if(!confirm('Create a SHEIN batch with '+confirmedItems+' confirmed piece(s)?'))return;setBusy('batch');setMessage('');try{const result=await adminApi.post<{batchId:string;requests:number;items:number}>('createPreorderBatch',{});await store.refreshPreorders();setMessage(result.batchId+' created with '+result.items+' piece(s) from '+result.requests+' customer request(s).')}catch(reason){setMessage(reason instanceof Error?reason.message:'Could not create supplier batch.')}finally{setBusy('')}}
- const waNumber=(value:string)=>{const digits=String(value||'').replace(/\D/g,'');return digits.startsWith('0')?'94'+digits.slice(1):digits};
- return <><Head eyebrow="Supplier planning" title="Pre-orders" action={<button disabled={confirmedItems<batchMinimum||busy==='batch'} onClick={()=>void batch()} className="btn btn-dark disabled:opacity-40">{busy==='batch'?'Creating batch…':confirmedItems<batchMinimum?'Need '+(batchMinimum-confirmedItems)+' more confirmed':'Create SHEIN batch'}</button>}/>
-  <div className="admin-help-card mt-5"><b>Simple flow:</b> Request → WhatsApp contact → Final price agreed → Confirmed → Supplier batch → Ordered → In transit → Arrived → Ready → Normal order. <span>No payment is collected at the request stage.</span></div>
-  <div className="mt-6 grid grid-cols-2 gap-3 xl:grid-cols-4">{[['New requests',newCount,'Contact these customers first'],['Waiting confirmation',contacted,'Final price + customer approval'],['Confirmed pieces',confirmedItems,'Minimum '+batchMinimum+' · target '+batchTarget],['Ready to convert',readyCount,'Turn arrived pieces into orders']].map(([label,value,help])=><div key={String(label)} className="admin-stat-card"><p>{label}</p><strong>{value}</strong><small>{help}</small></div>)}</div>
-  <div className="admin-toolbar mt-5"><div className="admin-search"><Search size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search request ID, customer, WhatsApp, product, city…"/></div><select value={filter} onChange={e=>setFilter(e.target.value)}><option value="active">Active requests</option><option value="all">All requests</option>{(['new','contacted','confirmed','batched','ordered','in_transit','arrived','ready','converted','cancelled'] as PreorderStatus[]).map(status=><option key={status} value={status}>{labels[status]}</option>)}</select></div>
-  {message&&<p className="admin-notice mt-4">{message}</p>}
-  <div className="mt-5 grid gap-4">{visible.length?visible.map(item=>{const draft=draftFor(item),product=store.data.products.find(p=>p.id===item.productId),image=product?.media.find(media=>media.type==='image'),phone=waNumber(item.whatsapp||item.phone),finalPrice=Number(draft.confirmedPrice||item.confirmedPrice||0),nextStatus=next[item.status],statusIndex=['new','contacted','confirmed','batched','ordered','in_transit','arrived','ready'].indexOf(item.status),waMessage='Hi '+item.customerName+', this is ZEVENRA about your pre-order '+item.requestId+' for '+item.productName+' — '+item.color+' / '+item.size+' × '+item.quantity+'. '+(finalPrice>0?'The final price is '+money(finalPrice)+'. ':'')+'Please confirm if you still want this item.',wa='https://wa.me/'+phone+'?text='+encodeURIComponent(waMessage);return <article key={item.requestId} className="preorder-admin-card">
-   <div className="preorder-admin-card__top"><div><div className="flex flex-wrap items-center gap-2"><b>{item.requestId}</b><span className={'preorder-status preorder-status--'+item.status}>{labels[item.status]}</span>{item.batchId&&<span className="preorder-batch">{item.batchId}</span>}</div><p>{new Date(item.createdAt).toLocaleString('en-LK',{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</p></div><a href={wa} target="_blank" rel="noreferrer" className="btn"><MessageCircle size={14}/> WhatsApp customer</a></div>
-   <div className="preorder-admin-grid"><section className="preorder-product-box">{image?<img src={image.url} alt="" loading="lazy"/>:<div className="preorder-product-placeholder"/>}<div><small>Requested item</small><h3>{item.productName}</h3><p>{item.color} / {item.size} · Qty {item.quantity}</p><p>Display price: <b>{money(Number(item.requestedPrice))}</b></p><p>SKU: {item.sku||'—'}</p></div></section><section className="preorder-customer-box"><small>Customer & delivery</small><h3>{item.customerName}</h3><p><b>Mobile:</b> {item.phone}</p><p><b>WhatsApp:</b> {item.whatsapp}</p>{item.email&&<p><b>Email:</b> {item.email}</p>}<p><b>Area:</b> {item.city||'—'}</p><p><b>Delivery address:</b> {[item.address1,item.address2,item.city,item.district,item.postalCode].filter(Boolean).join(', ')||'Collect before final order'}</p></section><section className="preorder-next-box"><small>What to do next</small><h3>{guidance[item.status]}</h3>{item.status==='confirmed'&&<p className="preorder-batch-progress">{confirmedItems} / {batchTarget} confirmed pieces ready for the next batch.</p>}{nextStatus&&<button disabled={busy===item.requestId||(nextStatus==='confirmed'&&finalPrice<=0)} onClick={()=>void change(item,nextStatus)} className="btn btn-dark w-full disabled:opacity-40">{busy===item.requestId?'Saving…':nextText[item.status]}</button>}{item.status==='confirmed'&&<p className="preorder-small-note">Use “Create SHEIN batch” when you have at least {batchMinimum} confirmed pieces.</p>}{item.status==='ready'&&<div className="grid gap-2"><button disabled={busy===item.requestId||finalPrice<=0} onClick={()=>void convert(item,'cod')} className="btn btn-dark">Create COD order</button><button disabled={busy===item.requestId||finalPrice<=0} onClick={()=>void convert(item,'bank')} className="btn">Create bank order</button></div>}{!['converted','cancelled'].includes(item.status)&&<button disabled={busy===item.requestId} onClick={()=>confirm('Cancel '+item.requestId+'?')&&void change(item,'cancelled')} className="preorder-cancel">Cancel request</button>}</section></div>
-   <div className="preorder-admin-card__progress">{(['new','contacted','confirmed','batched','ordered','in_transit','arrived','ready'] as PreorderStatus[]).map((status,index)=><span key={status} className={index<=statusIndex?'is-done':''}>{labels[status]}</span>)}</div>
-   <div className="preorder-edit-row"><label><span>Final selling price</span><input type="number" min="1" step="1" placeholder="Enter after customer agrees" value={draft.confirmedPrice} onChange={e=>editDraft(item,{confirmedPrice:e.target.value})}/></label><label><span>Private admin note</span><input placeholder="e.g. customer confirmed on WhatsApp" value={draft.notes} onChange={e=>editDraft(item,{notes:e.target.value})}/></label><button disabled={busy===item.requestId} onClick={()=>void saveDetails(item)} className="btn">Save details</button></div><details className="mt-4 rounded-xl border border-black/10 bg-white/35 p-4"><summary className="cursor-pointer text-xs font-semibold">Delivery details for final order</summary><p className="mt-2 text-[11px] leading-5 text-black/45">The customer does not need to enter the full address when requesting a pre-order. Collect it on WhatsApp before converting the arrived item into a normal order.</p><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"><label className="text-xs sm:col-span-2">Address line 1<input className="field mt-2" value={draft.address1} onChange={e=>editDraft(item,{address1:e.target.value})}/></label><label className="text-xs">Address line 2<input className="field mt-2" value={draft.address2} onChange={e=>editDraft(item,{address2:e.target.value})}/></label><label className="text-xs">City / area<input className="field mt-2" value={draft.city} onChange={e=>editDraft(item,{city:e.target.value})}/></label><label className="text-xs">District<select className="field mt-2" value={draft.district} onChange={e=>editDraft(item,{district:e.target.value})}><option value="">Select district</option>{sriLankaDistricts.map(d=><option key={d} value={d}>{d}</option>)}</select></label><label className="text-xs">Postal code<input className="field mt-2" inputMode="numeric" maxLength={5} value={draft.postalCode} onChange={e=>editDraft(item,{postalCode:e.target.value.replace(/\D/g,'').slice(0,5)})}/></label></div></details>
-  </article>}):<div className="admin-empty-state"><p className="display">No pre-orders here.</p><span>{store.admin.preorders.length?'Try another search or filter.':'Customer pre-order requests will appear here as soon as someone submits one.'}</span></div>}</div>
-  <div className="mt-5 flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-black/45">Showing {filtered.length?((safe-1)*pageSize)+1:0}–{Math.min(safe*pageSize,filtered.length)} of {filtered.length}</p><div className="flex items-center gap-2"><button className="btn" disabled={safe<=1} onClick={()=>setPage(v=>Math.max(1,v-1))}><ChevronLeft size={15}/> Previous</button><span className="px-2 text-xs">{safe} / {pages}</span><button className="btn" disabled={safe>=pages} onClick={()=>setPage(v=>Math.min(pages,v+1))}>Next <ChevronRight size={15}/></button></div></div>
- </>}
-function downloadOrdersCsv(rows:Order[]){
- const csvCell=(value:unknown)=>'"'+String(value??'').replace(/"/g,'""')+'"';
- const header=['Order ID','Created At','Customer','Phone','Address 1','Address 2','City','District','Postal Code','Checkout Courier','Fulfilment Courier','Tracking Number','COD Amount','Total','Order Status','Payment Status'];
- const lines=[header,...rows.map(order=>[
-  order.orderId,order.createdAt,order.customerName,order.phone,order.address1||'',order.address2||'',order.city,order.district,order.postalCode||'',order.courierName||'',order.fulfilmentCourierName||'',order.trackingNumber||'',order.paymentMethod==='cod'?Number(order.total)||0:0,Number(order.total)||0,order.orderStatus,order.paymentStatus
- ])].map(row=>row.map(csvCell).join(','));
- const blob=new Blob(['\uFEFF'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
- const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download='zevenra-orders-'+new Date().toISOString().slice(0,10)+'.csv';document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url);
-}
-function Orders(){
- const {admin,updateOrder,data,loadAdmin}=useStore(),[query,setQuery]=useState(''),[orderFilter,setOrderFilter]=useState('all'),[paymentFilter,setPaymentFilter]=useState('all'),[dateFilter,setDateFilter]=useState('all'),[page,setPage]=useState(1),[open,setOpen]=useState(''),[details,setDetails]=useState<Record<string,AdminOrderDetail>>({}),[loadingId,setLoadingId]=useState(''),[savingId,setSavingId]=useState(''),[status,setStatus]=useState(''),[creatingManual,setCreatingManual]=useState(false),[manualBusy,setManualBusy]=useState(false),[manualItems,setManualItems]=useState([{key:crypto.randomUUID(),productId:'',variantId:'',quantity:1}]);
- const pageSize=20,now=Date.now(),needle=query.trim().toLowerCase();
- const orders=[...admin.orders].sort((a,b)=>new Date(b.createdAt).getTime()-new Date(a.createdAt).getTime());
- const filtered=orders.filter(order=>{
-  const created=new Date(order.createdAt).getTime(),ageDays=(now-created)/86400000,payment=String(order.paymentStatus||'').toLowerCase();
-  const matchesDate=dateFilter==='all'||(dateFilter==='today'&&new Date(order.createdAt).toDateString()===new Date().toDateString())||(dateFilter==='7'&&ageDays<=7)||(dateFilter==='30'&&ageDays<=30);
-  const matchesPayment=paymentFilter==='all'||paymentFilter===order.paymentMethod||(paymentFilter==='verify'&&order.paymentMethod==='bank'&&['','verification required','receipt submitted'].includes(payment))||(paymentFilter==='paid'&&['paid','verified'].includes(payment));
-  const matchesOrder=orderFilter==='all'||String(order.orderStatus).toLowerCase()===orderFilter;
-  const matchesQuery=!needle||[order.orderId,order.customerName,order.phone,order.email,order.district].some(value=>String(value||'').toLowerCase().includes(needle));
-  return matchesDate&&matchesPayment&&matchesOrder&&matchesQuery;
- });
- const pageCount=Math.max(1,Math.ceil(filtered.length/pageSize)),safePage=Math.min(page,pageCount),visible=filtered.slice((safePage-1)*pageSize,safePage*pageSize);
- useEffect(()=>setPage(1),[query,orderFilter,paymentFilter,dateFilter]);
-
- async function toggle(orderId:string){
-  if(open===orderId){setOpen('');return}
-  setOpen(orderId);setStatus('');
-  if(details[orderId])return;
-  setLoadingId(orderId);
-  try{const detail=await adminApi.get<AdminOrderDetail>('getOrder',{orderId});setDetails(current=>({...current,[orderId]:detail}))}
-  catch(reason){setStatus(reason instanceof Error?reason.message:'Could not load order details.')}
-  finally{setLoadingId('')}
- }
- async function change(orderId:string,patch:Partial<Order>){
-  setSavingId(orderId);setStatus('');
-  try{const updated=await updateOrder({orderId,...patch});setDetails(current=>({...current,[orderId]:{...(current[orderId]||{}),...updated} as AdminOrderDetail}));setStatus('Order updated.')}
-  catch(reason){setStatus(reason instanceof Error?reason.message:'Could not update order.')}
-  finally{setSavingId('')}
- }
- async function createManual(event:React.FormEvent<HTMLFormElement>){event.preventDefault();setManualBusy(true);setStatus('');try{
-  const raw=Object.fromEntries(new FormData(event.currentTarget)),name=String(raw.customerName||'').trim(),phone=String(raw.phone||'').trim(),whatsapp=String(raw.whatsapp||'').trim(),email=String(raw.email||'').trim(),address1=String(raw.address1||'').trim(),city=String(raw.city||'').trim(),district=String(raw.district||'').trim();
-  if(name.length<2)throw new Error('Enter the customer’s full name.');if(!adminPhone.test(phone))throw new Error('Enter a valid customer mobile number.');if(whatsapp&&!adminPhone.test(whatsapp))throw new Error('Enter a valid WhatsApp number or leave it blank.');if(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw new Error('Enter a valid email address or leave it blank.');if(address1.length<5||city.length<2||!sriLankaDistricts.includes(district as typeof sriLankaDistricts[number]))throw new Error('Complete the delivery address and choose a valid district.');
-  const items=manualItems.filter(item=>item.productId&&item.variantId).map(item=>({productId:item.productId,variantId:item.variantId,quantity:item.quantity}));if(!items.length)throw new Error('Add at least one product.');for(const line of manualItems.filter(item=>item.productId&&item.variantId)){const product=data.products.find(p=>p.id===line.productId),variant=product?.variants.find(v=>v.id===line.variantId);if(!variant||line.quantity<1||line.quantity>variant.stock)throw new Error('Check item quantities against the available stock.');}
-  const choice=String(raw.paymentChoice||'cod'),paymentMethod=choice==='cod'?'cod':'bank',paymentStatus=choice==='bank_paid'?'paid':choice==='bank_waiting'?'verification required':'COD';const order=await adminApi.post<Order>('createManualOrder',{source:String(raw.source||'manual'),customerName:name,phone,whatsapp,email,address1,address2:String(raw.address2||'').trim(),city,district,postalCode:String(raw.postalCode||'').trim(),deliveryNotes:String(raw.deliveryNotes||'').trim(),paymentMethod,paymentStatus,items});await loadAdmin();setCreatingManual(false);setManualItems([{key:crypto.randomUUID(),productId:'',variantId:'',quantity:1}]);setStatus('Manual order '+order.orderId+' created. Stock was reserved immediately.');
- }catch(reason){setStatus(reason instanceof Error?reason.message:'Could not create manual order.')}finally{setManualBusy(false)}}
- const pending=orders.filter(order=>String(order.orderStatus).toLowerCase()==='pending').length,bankVerify=orders.filter(order=>order.paymentMethod==='bank'&&['','verification required','receipt submitted'].includes(String(order.paymentStatus||'').toLowerCase())).length,paid=orders.filter(order=>['paid','verified'].includes(String(order.paymentStatus||'').toLowerCase())).length;
- return <><Head eyebrow="Fulfilment" title="Orders" action={<div className="flex flex-wrap gap-2"><button type="button" onClick={()=>downloadOrdersCsv(filtered)} disabled={!filtered.length} className="btn"><Download size={15}/> Export courier CSV</button><button onClick={()=>setCreatingManual(value=>!value)} className="btn btn-dark"><Plus size={15}/>{creatingManual?'Close manual order':'Manual order'}</button></div>}/>
-  {creatingManual&&<form onSubmit={createManual} className="mt-7 border border-black/10 bg-[#f6f3ed] p-4 sm:p-6"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="eyebrow text-black/45">Instagram / WhatsApp sale</p><h2 className="display mt-2 text-3xl">Create manual order</h2></div><p className="max-w-md text-xs leading-5 text-black/45">Use this when you sell through DMs. Stock is reserved immediately so the website cannot oversell the same size.</p></div><div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"><label className="text-xs">Source<select name="source" className="field mt-2"><option value="instagram">Instagram</option><option value="whatsapp">WhatsApp</option><option value="manual">Other / Manual</option></select></label><label className="text-xs">Customer name *<input name="customerName" required className="field mt-2"/></label><label className="text-xs">Phone *<input name="phone" required className="field mt-2" type="tel"/></label><label className="text-xs">WhatsApp<input name="whatsapp" className="field mt-2" type="tel"/></label><label className="text-xs">Email<input name="email" className="field mt-2" type="email"/></label><label className="text-xs">Payment<select name="paymentChoice" className="field mt-2"><option value="cod">Cash on delivery</option><option value="bank_paid">Bank transfer — verified</option><option value="bank_waiting">Bank transfer — awaiting verification</option></select></label><label className="text-xs sm:col-span-2">Address line 1 *<input name="address1" required className="field mt-2"/></label><label className="text-xs">Address line 2<input name="address2" className="field mt-2"/></label><label className="text-xs">City *<input name="city" required className="field mt-2"/></label><label className="text-xs">District *<select name="district" required className="field mt-2" defaultValue=""><option value="" disabled>Select district</option>{sriLankaDistricts.map(d=><option key={d} value={d}>{d}</option>)}</select></label><label className="text-xs">Postal code<input name="postalCode" className="field mt-2"/></label><label className="text-xs sm:col-span-2 lg:col-span-3">Delivery notes<textarea name="deliveryNotes" className="field mt-2" rows={2}/></label></div><div className="mt-6"><div className="flex items-center justify-between"><p className="eyebrow">Items</p><button type="button" className="btn" onClick={()=>setManualItems(items=>[...items,{key:crypto.randomUUID(),productId:'',variantId:'',quantity:1}])}><Plus size={14}/> Add item</button></div><div className="mt-3 grid gap-3">{manualItems.map(line=>{const product=data.products.find(p=>p.id===line.productId),variants=product?.variants.filter(v=>v.active&&v.stock>0)||[];return <div key={line.key} className="grid gap-2 border border-black/10 bg-white/45 p-3 sm:grid-cols-[1fr_1fr_100px_auto]"><select className="field" value={line.productId} onChange={e=>setManualItems(items=>items.map(item=>item.key===line.key?{...item,productId:e.target.value,variantId:''}:item))}><option value="">Select product</option>{data.products.filter(p=>p.status==='published').map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select><select className="field" disabled={!line.productId} value={line.variantId} onChange={e=>setManualItems(items=>items.map(item=>item.key===line.key?{...item,variantId:e.target.value}:item))}><option value="">Select size / colour</option>{variants.map(v=><option key={v.id} value={v.id}>{v.color} / {v.size} — stock {v.stock}</option>)}</select><input className="field" type="number" min="1" max={variants.find(v=>v.id===line.variantId)?.stock||99} value={line.quantity} onChange={e=>setManualItems(items=>items.map(item=>item.key===line.key?{...item,quantity:Math.max(1,Number(e.target.value)||1)}:item))}/><button type="button" disabled={manualItems.length===1} className="btn text-red-800 disabled:opacity-30" onClick={()=>setManualItems(items=>items.filter(item=>item.key!==line.key))}><Trash2 size={14}/><span className="sm:hidden">Remove</span></button></div>})}</div></div><div className="mt-5 flex flex-wrap gap-3"><button disabled={manualBusy} className="btn btn-dark disabled:opacity-50">{manualBusy?'Creating…':'Create & reserve stock'}</button><button type="button" className="btn" onClick={()=>setCreatingManual(false)}>Cancel</button></div></form>}
-  <div className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-4">{[['All orders',orders.length],['Pending',pending],['Bank to verify',bankVerify],['Paid / verified',paid]].map(([label,value])=><div key={label} className="border border-black/10 bg-[#f6f3ed] p-4"><p className="text-xs text-black/45">{label}</p><p className="display mt-2 text-3xl">{value}</p></div>)}</div>
-  <div className="admin-toolbar mt-5 md:grid-cols-[minmax(220px,1fr)_180px_180px_160px]"><div className="admin-search"><Search size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Order ID, customer, phone, email…"/></div><select value={orderFilter} onChange={e=>setOrderFilter(e.target.value)} className="field bg-white/50"><option value="all">All order statuses</option>{['pending','confirmed','sourcing','packed','shipped','delivered','cancelled'].map(value=><option key={value} value={value}>{value}</option>)}</select><select value={paymentFilter} onChange={e=>setPaymentFilter(e.target.value)} className="field bg-white/50"><option value="all">All payments</option><option value="bank">Bank transfer</option><option value="cod">Cash on delivery</option><option value="verify">Needs verification</option><option value="paid">Paid / verified</option></select><select value={dateFilter} onChange={e=>setDateFilter(e.target.value)} className="field bg-white/50"><option value="all">Any date</option><option value="today">Today</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option></select></div>
-  {status&&<p className="mt-4 border-l-2 border-[#96724f] bg-white/40 px-4 py-3 text-xs text-black/60">{status}</p>}
-  <div className="mt-5 overflow-hidden border border-black/10 bg-[#f6f3ed]">
-   <div className="hidden grid-cols-[1.15fr_1fr_.8fr_.8fr_.8fr_auto] gap-3 border-b border-black/10 px-4 py-3 text-[10px] uppercase tracking-[.14em] text-black/40 lg:grid"><span>Order / date</span><span>Customer</span><span>Total</span><span>Payment</span><span>Status</span><span/></div>
-   {visible.length?visible.map(order=>{const detail=details[order.orderId],isOpen=open===order.orderId;return <article key={order.orderId} className="border-b border-black/10 last:border-0">
-    <div className="grid items-center gap-3 px-4 py-4 lg:grid-cols-[1.15fr_1fr_.8fr_.8fr_.8fr_auto]">
-     <button type="button" onClick={()=>void toggle(order.orderId)} className="min-w-0 text-left"><p className="text-sm font-medium">{order.orderId}</p><div className="mt-1 flex flex-wrap items-center gap-2"><p className="text-xs text-black/45">{new Date(order.createdAt).toLocaleString('en-LK',{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</p>{order.hasPreorder&&<span className="border border-[#96724f]/30 bg-[#96724f]/5 px-1.5 py-0.5 text-[8px] font-medium tracking-[.12em] text-[#765638]">PRE-ORDER</span>}</div></button>
-     <div className="min-w-0"><p className="truncate text-sm">{order.customerName}</p><p className="mt-1 truncate text-xs text-black/45">{order.phone} · {order.district}</p></div>
-     <span className="text-sm">{money(Number(order.total))}</span>
-     <div><p className="text-xs">{order.paymentMethod==='cod'?'COD':'BANK'}</p><p className="mt-1 text-[10px] uppercase tracking-wider text-black/45">{order.paymentStatus}</p></div>
-     <span className="w-fit rounded-full border border-black/10 px-2.5 py-1 text-[10px] uppercase tracking-wider">{order.orderStatus}</span>
-     <button type="button" onClick={()=>void toggle(order.orderId)} className="min-h-11 px-2 text-xs underline">{isOpen?'CLOSE':'VIEW'}</button>
+function Head({
+  eyebrow,
+  title,
+  action,
+}: {
+  eyebrow: string;
+  title: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="admin-page-head flex flex-wrap items-end justify-between gap-5">
+      <div>
+        <p className="admin-kicker">{eyebrow}</p>
+        <h1 className="admin-title mt-2">{title}</h1>
+      </div>
+      {action}
     </div>
-    {isOpen&&<div className="border-t border-black/10 bg-white/45 p-5">{loadingId===order.orderId?<p className="py-8 text-center text-sm text-black/45">Loading order details…</p>:detail?<div className="grid gap-8 xl:grid-cols-[1.15fr_.85fr]">
-     <div className="space-y-7">
-      <div><p className="eyebrow text-black/45">Items</p><div className="mt-3 divide-y divide-black/10">{(detail.items||[]).map((item,index)=><div key={item.variantId||index} className="flex justify-between gap-5 py-3 text-sm"><div><p>{item.productName||item.name||'Item'}</p><p className="mt-1 text-xs text-black/45">{item.color} / {item.size} · Qty {item.quantity}{item.sku?' · '+item.sku:''}{String(item.isPreorder).toLowerCase()==='true'?' · PRE-ORDER':''}</p></div><b className="font-normal">{money(Number(item.lineTotal||Number(item.unitPrice)*Number(item.quantity)))}</b></div>)}</div></div>
-      <div><p className="eyebrow text-black/45">Customer & delivery</p><div className="mt-3 grid gap-3 text-sm sm:grid-cols-2"><Info label="Source" value={(detail.source||'web').replace('_',' ')}/><Info label="Name" value={detail.customerName}/><Info label="Phone" value={detail.phone}/><Info label="WhatsApp" value={detail.whatsapp||'—'}/><Info label="Email" value={detail.email||'—'}/><Info label="District / city" value={[detail.district,detail.city].filter(Boolean).join(' · ')}/><Info label="Postal code" value={detail.postalCode||'—'}/><div className="sm:col-span-2"><Info label="Delivery address" value={[detail.address1,detail.address2,detail.city,detail.district,detail.postalCode].filter(Boolean).join(', ')}/></div>{detail.deliveryNotes&&<div className="sm:col-span-2"><Info label="Delivery instructions" value={detail.deliveryNotes}/></div>}</div></div>
-     </div>
-     <div className="space-y-5">
-      <Panel title="Order control"><label className="mb-3 block text-xs">Order status<select disabled={savingId===order.orderId} className="field mt-2" value={String(detail.orderStatus||'pending').toLowerCase()} onChange={e=>void change(order.orderId,{orderStatus:e.target.value})}>{['pending','confirmed','sourcing','packed','shipped','delivered','cancelled'].map(value=><option key={value} value={value}>{value}</option>)}</select></label><label className="block text-xs">Payment status<select disabled={savingId===order.orderId} className="field mt-2" value={String(detail.paymentStatus||'')} onChange={e=>void change(order.orderId,{paymentStatus:e.target.value})}>{(detail.paymentMethod==='bank'?['verification required','receipt submitted','paid','verified','rejected','refunded']:['COD','paid','refunded']).map(value=><option key={value} value={value}>{value}</option>)}</select></label></Panel>
-      <Panel title="Payment"><div className="space-y-3 text-sm"><Info label="Method" value={detail.paymentMethod==='cod'?'Cash on delivery':'Bank transfer'}/>{detail.paymentReference&&<Info label="Transfer reference" value={detail.paymentReference}/>}<Info label="Payment status" value={detail.paymentStatus}/>{detail.paymentMethod==='bank'&&<ProtectedReceipt url={detail.paymentReceiptUrl}/>} </div></Panel>
-      <Panel title="Totals"><div className="space-y-2 text-sm"><div className="flex justify-between"><span>Subtotal</span><span>{money(Number(detail.subtotal))}</span></div><div className="flex justify-between"><span>Delivery</span><span>{Number(detail.deliveryFee)?money(Number(detail.deliveryFee)):'Complimentary'}</span></div><div className="flex justify-between border-t border-black/10 pt-3"><b>Total</b><b>{money(Number(detail.total))}</b></div></div></Panel>
-      <FulfilmentPanel order={detail} couriers={admin.couriers} busy={savingId===order.orderId} save={patch=>void change(order.orderId,patch)}/>
-     </div>
-    </div>:<p className="py-8 text-center text-sm text-black/45">Order details unavailable.</p>}</div>}
-   </article>}):<Empty text={admin.orders.length?'No orders match these filters.':'No orders yet.'}/>}
-  </div>
-  <div className="mt-5 flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-black/45">Showing {filtered.length?((safePage-1)*pageSize)+1:0}–{Math.min(safePage*pageSize,filtered.length)} of {filtered.length} orders</p><div className="flex items-center gap-2"><button className="btn" disabled={safePage<=1} onClick={()=>setPage(value=>Math.max(1,value-1))}><ChevronLeft size={15}/> Previous</button><span className="px-2 text-xs">Page {safePage} / {pageCount}</span><button className="btn" disabled={safePage>=pageCount} onClick={()=>setPage(value=>Math.min(pageCount,value+1))}>Next <ChevronRight size={15}/></button></div></div>
- </>}
-function ProtectedReceipt({url}:{url?:string}){const[busy,setBusy]=useState(false),[error,setError]=useState('');async function open(){if(!url)return;setBusy(true);setError('');try{const response=await fetch('/api/payment-receipt-access',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url}),cache:'no-store'}),payload=await response.json() as{url?:string;error?:string};if(!response.ok||!payload.url)throw new Error(payload.error||'Could not open receipt.');window.open(payload.url,'_blank','noopener,noreferrer')}catch(reason){setError(reason instanceof Error?reason.message:'Could not open receipt.')}finally{setBusy(false)}}return <div><p className="text-[10px] uppercase tracking-[.14em] text-black/40">Receipt</p>{url?<><button type="button" disabled={busy} onClick={()=>void open()} className="btn mt-2 w-full justify-center">{busy?'Opening secure receipt…':'Open protected receipt'} <ExternalLink size={14}/></button><p className="mt-2 text-[10px] leading-5 text-black/45">Receipt access is generated for an authorised admin session only.</p>{error&&<p className="mt-2 text-xs text-red-800" role="alert">{error}</p>}</>:<p className="mt-2 border border-amber-900/20 bg-amber-900/[.05] p-3 text-xs text-amber-950">No receipt attached.</p>}</div>}
-function FulfilmentPanel({order,couriers,busy,save}:{order:AdminOrderDetail;couriers:CourierProvider[];busy:boolean;save:(patch:Partial<Order>)=>void}){const[courierId,setCourierId]=useState(order.fulfilmentCourierProviderId||order.courierProviderId||''),[trackingNumber,setTrackingNumber]=useState(order.trackingNumber||''),[trackingUrl,setTrackingUrl]=useState(order.trackingUrl||''),[sentDate,setSentDate]=useState(order.courierSentDate||''),[error,setError]=useState('');const submit=()=>{const url=trackingUrl.trim();if(url&&!/^https:\/\//i.test(url)){setError('Tracking URL must start with https://');return}setError('');const courier=couriers.find(item=>item.id===courierId);save({fulfilmentCourierProviderId:courierId,fulfilmentCourierName:courier?.name||'',trackingNumber:trackingNumber.trim(),trackingUrl:url,courierSentDate:sentDate})};return <Panel title="Courier & tracking"><div className="mb-4 border-l-2 border-bronze pl-3 text-xs leading-5"><b>Checkout rate:</b> {order.courierName||'Legacy delivery'} · {order.deliveryPricingMode==='flat'?'Flat rate':order.deliveryZoneName||'Zone based'} · {money(Number(order.deliveryFee))}</div><div className="grid gap-3"><label className="text-xs">Actual fulfilment courier<select className="field mt-2" value={courierId} onChange={e=>setCourierId(e.target.value)}><option value="">Select courier</option>{couriers.map(courier=><option key={courier.id} value={courier.id}>{courier.name}{courier.active?'':' (inactive)'}</option>)}</select></label><Field label="Tracking number" value={trackingNumber} onChange={setTrackingNumber}/><Field label="Tracking URL" value={trackingUrl} onChange={setTrackingUrl}/><label className="text-xs">Courier sent date<input className="field mt-2" type="date" value={sentDate} onChange={e=>setSentDate(e.target.value)}/></label>{error&&<p className="text-xs text-red-800" role="alert">{error}</p>}<button disabled={busy} className="btn btn-dark" onClick={submit}>Save fulfilment</button></div></Panel>}
-type AdminOrderLine={variantId?:string;productName?:string;name?:string;color?:string;size?:string;quantity?:number;unitPrice?:number;lineTotal?:number;sku?:string;isPreorder?:boolean|string};
-type AdminOrderDetail=Omit<Order,'items'>&{items:AdminOrderLine[]};
-function Info({label,value}:{label:string;value:React.ReactNode}){return <div><p className="text-[10px] uppercase tracking-[.14em] text-black/40">{label}</p><div className="mt-1 break-words text-sm leading-6 text-black/70">{value||'—'}</div></div>}
-
-function Media(){const[config,setConfig]=useState<{timestamp:number;folder:string;signature:string;apiKey:string;cloudName:string}|null>(null),[checking,setChecking]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState(''),[uploads,setUploads]=useState<string[]>([]);useEffect(()=>{fetch('/api/admin/cloudinary-sign',{method:'POST'}).then(async response=>{if(!response.ok)throw new Error();setConfig(await response.json())}).catch(()=>setError('Cloudinary is not configured yet. Add the three Cloudinary environment variables to enable signed uploads.')).finally(()=>setChecking(false))},[]);async function upload(file:File){if(!config)return;setBusy(true);setError('');try{const fresh=await fetch('/api/admin/cloudinary-sign',{method:'POST'}),signed=await fresh.json() as typeof config;if(!fresh.ok)throw new Error();const form=new FormData();form.append('file',file);form.append('api_key',signed.apiKey);form.append('timestamp',String(signed.timestamp));form.append('folder',signed.folder);form.append('signature',signed.signature);const kind=file.type.startsWith('video/')?'video':'image',response=await fetch(`https://api.cloudinary.com/v1_1/${signed.cloudName}/${kind}/upload`,{method:'POST',body:form}),result=await response.json() as{secure_url?:string};if(!response.ok||!result.secure_url)throw new Error();setUploads(x=>[result.secure_url!,...x])}catch{setError('Upload failed. Check the file type and Cloudinary configuration.')}finally{setBusy(false)}}return <><Head eyebrow="Asset library" title="Media"/><div className="mt-7 border-2 border-dashed border-black/15 bg-[#f6f3ed] p-8 text-center sm:p-12"><p className="display text-3xl">Images and video, securely signed.</p><p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-black/45">Upload approved catalogue media. Copy the returned URL into a product or homepage section.</p>{checking?<p className="mt-6 text-xs">Checking Cloudinary…</p>:config?<label className="btn btn-dark mt-6 cursor-pointer">{busy?'Uploading…':'Choose media'}<input className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,image/avif,video/mp4,video/webm" disabled={busy} onChange={e=>e.target.files?.[0]&&void upload(e.target.files[0])}/></label>:null}{error&&<p className="mx-auto mt-5 max-w-xl bg-red-950 p-3 text-xs text-white" role="alert">{error}</p>}</div>{uploads.length>0&&<div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{uploads.map(url=><div key={url} className="bg-[#f6f3ed] p-3">{/\.(mp4|webm|mov)(\?|$)/i.test(url)?<video src={url} controls muted playsInline className="aspect-[4/3] w-full bg-black object-cover"/>:<img src={url} alt="Uploaded media" className="aspect-[4/3] w-full object-cover"/>}<button className="mt-3 w-full truncate text-left text-xs underline" onClick={()=>void navigator.clipboard.writeText(url)}>{url}</button></div>)}</div>}</>}
-function ExplicitSettings({focus}:{focus:string}){
- const s=useStore(),[draft,setDraft]=useState(s.data.settings),[busy,setBusy]=useState(false),[status,setStatus]=useState('');
- useEffect(()=>setDraft(s.data.settings),[s.data.settings]);
- const change=<K extends keyof typeof draft>(key:K,value:typeof draft[K])=>setDraft(x=>({...x,[key]:value}));
- const validUrl=(value:string)=>{if(!value.trim())return true;try{const url=new URL(value);return url.protocol==='https:'||url.protocol==='http:'}catch{return false}};
- async function submit(){
-  setStatus('');
-  if(!draft.brandName.trim())return setStatus('Brand name is required.');
-  if(draft.email.trim()&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email.trim()))return setStatus('Enter a valid contact email.');
-  if(draft.whatsapp.trim()&&!adminPhone.test(draft.whatsapp.trim()))return setStatus('Enter a valid WhatsApp number.');
-  if(draft.phone.trim()&&!adminPhone.test(draft.phone.trim()))return setStatus('Enter a valid phone number.');
-  if(!validUrl(draft.instagram)||!validUrl(draft.tiktok))return setStatus('Instagram and TikTok must be valid http(s) URLs or left blank.');
-  if(!Number.isFinite(draft.deliveryFee)||draft.deliveryFee<0||!Number.isFinite(draft.freeDeliveryThreshold)||draft.freeDeliveryThreshold<0)return setStatus('Delivery amounts cannot be negative.');
-  if(draft.ordersEnabled&&!draft.codEnabled&&!draft.bankEnabled)return setStatus('Enable at least one payment method before enabling online orders.');
-  if(draft.bankEnabled&&(!draft.bankName.trim()||!draft.accountName.trim()||!draft.accountNumber.trim()))return setStatus('Complete bank name, account name and account number before enabling bank transfer.');
-  setBusy(true);try{await s.commitSettings(draft);setStatus('Settings saved.')}catch(reason){setStatus(reason instanceof Error?reason.message:'Could not save settings.')}finally{setBusy(false)}
- }
- return <><Head eyebrow="Store configuration" title={focus==='delivery'?'Delivery':'Settings'}/><div className="mt-7 grid gap-5 lg:grid-cols-2">{focus!=='delivery'&&<><Panel title="Brand & contact"><Field label="Brand name" value={draft.brandName} onChange={v=>change('brandName',v)}/><Field label="Tagline" value={draft.tagline} onChange={v=>change('tagline',v)}/><Field label="Announcement" value={draft.announcement} onChange={v=>change('announcement',v)}/><Field label="WhatsApp" value={draft.whatsapp} onChange={v=>change('whatsapp',v)}/><Field label="Phone" value={draft.phone} onChange={v=>change('phone',v)}/><Field label="Email" value={draft.email} onChange={v=>change('email',v)}/><Field label="Instagram URL" value={draft.instagram} onChange={v=>change('instagram',v)}/><Field label="TikTok URL" value={draft.tiktok} onChange={v=>change('tiktok',v)}/><p className="text-xs leading-5 text-black/45">These details power the Contact page and footer social links.</p></Panel><Panel title="Payments"><Toggles items={[["Cash on delivery",draft.codEnabled,v=>change('codEnabled',v)],["Bank transfer",draft.bankEnabled,v=>change('bankEnabled',v)]]}/><Field label="Bank" value={draft.bankName} onChange={v=>change('bankName',v)}/><Field label="Account name" value={draft.accountName} onChange={v=>change('accountName',v)}/><Field label="Account number" value={draft.accountNumber} onChange={v=>change('accountNumber',v)}/><Field label="Branch" value={draft.branch} onChange={v=>change('branch',v)}/></Panel></>}<Panel title="Delivery"><Toggles items={[["Islandwide delivery",draft.deliveryEnabled,v=>change('deliveryEnabled',v)]]}/><Field label="Free delivery threshold (LKR)" value={String(draft.freeDeliveryThreshold)} onChange={v=>change('freeDeliveryThreshold',Number(v))}/><p className="mt-2 text-xs leading-5 text-black/45">Courier prices and delivery zones are managed separately so changing courier companies never changes your store settings.</p><Link to="/admin/delivery" className="btn mt-4 w-full">Manage couriers & delivery</Link></Panel>{focus==='delivery'&&<DeliveryRates/>}<Panel title="Store & SEO"><Toggles items={[["Store open",draft.storeOpen,v=>change('storeOpen',v)],["Orders enabled",draft.ordersEnabled,v=>change('ordersEnabled',v)]]}/><Field label="Default title" value={draft.defaultTitle} onChange={v=>change('defaultTitle',v)}/><Field label="Description" value={draft.defaultDescription} onChange={v=>change('defaultDescription',v)}/></Panel></div><div className="sticky bottom-4 mt-6 bg-[#e9e5de]/95 p-3 backdrop-blur"><EditorActions busy={busy} status={status} save={submit} cancel={()=>setDraft(s.data.settings)}/></div></>
+  );
 }
-function Panel({title,children}:{title:string;children:React.ReactNode}){return <section className="admin-panel p-5 sm:p-6"><p className="admin-panel__title mb-5">{title}</p>{children}</section>}
-function Empty({text}:{text:string}){return <div className="admin-empty grid min-h-44 place-content-center px-5 text-center text-sm leading-6">{text}</div>}
-function Field({label,value,onChange}:{label:string;value:string;onChange:(v:string)=>void}){return <label className="mb-3 block text-xs">{label}<input className="field mt-2" value={value} onChange={e=>onChange(e.target.value)}/></label>}
-function Toggles({items}:{items:[string,boolean,(v:boolean)=>void][]}){return <div className="my-4 flex flex-wrap gap-4">{items.map(([label,value,set])=><label key={label} className="flex min-h-11 items-center gap-2 text-xs"><input type="checkbox" checked={value} onChange={e=>set(e.target.checked)} className="h-5 w-5 accent-black"/>{label}</label>)}</div>}
-function EditorActions({busy,status,save,cancel,children}:{busy:boolean;status:string;save:()=>void;cancel:()=>void;children?:React.ReactNode}){return <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-black/10 pt-4"><button disabled={busy} onClick={save} className="btn btn-dark disabled:opacity-50">{busy?'Saving…':'Save Changes'}</button><button disabled={busy} onClick={cancel} className="btn">Cancel</button>{children}{status&&<span className="text-xs text-black/55" role="status">{status}</span>}</div>}
-function slugify(value:string){return value.toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')}
+function UploadField({
+  label,
+  value,
+  onChange,
+  accept = "image/jpeg,image/png,image/webp,image/avif",
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  accept?: string;
+}) {
+  const [busy, setBusy] = useState(false),
+    [error, setError] = useState("");
+  async function upload(file?: File) {
+    if (!file) return;
+    setBusy(true);
+    setError("");
+    try {
+      onChange(await uploadAdminMedia(file));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Upload failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div>
+      <p className="text-xs">{label}</p>
+      <div className="mt-2 flex gap-2">
+        <input
+          className="field min-w-0 flex-1"
+          value={value}
+          placeholder="Upload or paste URL"
+          onChange={(e) => onChange(e.target.value)}
+        />
+        <label className="btn btn-dark shrink-0 cursor-pointer">
+          {busy ? "Uploading…" : "Upload"}
+          <input
+            className="sr-only"
+            type="file"
+            accept={accept}
+            disabled={busy}
+            onChange={(e) => {
+              void upload(e.target.files?.[0]);
+              e.currentTarget.value = "";
+            }}
+          />
+        </label>
+      </div>
+      {value && accept.startsWith("image") && (
+        <img
+          src={value}
+          alt=""
+          className="mt-2 h-24 w-20 border border-black/10 object-cover"
+        />
+      )}
+      {error && <p className="mt-2 text-xs text-red-800">{error}</p>}
+    </div>
+  );
+}
+function Dashboard() {
+  const { data, admin } = useStore(),
+    stats = admin.dashboard,
+    low = data.products.filter(
+      (p) =>
+        p.status === "published" &&
+        p.variants.some((v) => v.active && v.stock <= v.lowStockThreshold),
+    );
+  return (
+    <>
+      <Head
+        eyebrow="Your store today"
+        title="Dashboard"
+        action={
+          <Link to="/admin/products/new" className="btn btn-dark">
+            <PackagePlus size={16} /> Add product
+          </Link>
+        }
+      />
+      <div className="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {[
+          [
+            "Published products",
+            data.products.filter((p) => p.status === "published").length,
+          ],
+          ["Low stock", low.length],
+          ["Orders today", stats?.ordersToday || 0],
+          ["Pending orders", stats?.pending || 0],
+          ["Delivered", stats?.delivered || 0],
+          [
+            "Product revenue",
+            money(stats?.productRevenue ?? stats?.revenue ?? 0),
+          ],
+          ["Delivery collected", money(stats?.deliveryCollected || 0)],
+          ["Items sold", stats?.itemsSold || 0],
+          ["Pre-order requests", stats?.preorderNew || 0],
+          [
+            "Batch progress",
+            (stats?.preorderConfirmed || 0) +
+              " / " +
+              (stats?.preorderBatchTarget || 6),
+          ],
+        ].map(([label, value]) => (
+          <div key={label} className="admin-metric-card border p-4 sm:p-5">
+            <p className="text-xs text-black/50">{label}</p>
+            <p className="display mt-3 break-words text-2xl sm:mt-4 sm:text-3xl">
+              {value}
+            </p>
+          </div>
+        ))}
+      </div>
+      <p className="mt-4 text-xs leading-5 text-black/45">
+        Revenue shows delivered product value only. Delivery fees are shown
+        separately, so shipping charges are not mixed into product sales.
+      </p>
+      <div className="mt-6 grid gap-5 xl:grid-cols-2">
+        <Panel title="Top selling products">
+          {stats?.topProducts?.length ? (
+            stats.topProducts.map((product, index) => (
+              <div
+                key={product.productId}
+                className="grid grid-cols-[32px_1fr_auto] items-center gap-3 border-b border-black/10 py-3"
+              >
+                <span className="display text-xl text-black/30">
+                  {String(index + 1).padStart(2, "0")}
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-sm">{product.name}</p>
+                  <p className="mt-1 text-xs text-black/45">
+                    {product.quantity} items sold
+                  </p>
+                </div>
+                <span className="text-sm">{money(product.revenue)}</span>
+              </div>
+            ))
+          ) : (
+            <Empty text="Delivered sales will appear here." />
+          )}
+        </Panel>
+        <Panel title="Recent orders">
+          {stats?.recent?.length ? (
+            stats.recent.slice(0, 6).map((order) => (
+              <Link
+                to="/admin/orders"
+                key={order.orderId}
+                className="flex items-center justify-between gap-4 border-b border-black/10 py-3 text-sm"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate">
+                    {order.orderId} · {order.customerName}
+                  </span>
+                  <span className="mt-1 block text-xs uppercase tracking-wider text-black/40">
+                    {order.orderStatus}
+                  </span>
+                </span>
+                <span className="shrink-0">{money(Number(order.total))}</span>
+              </Link>
+            ))
+          ) : (
+            <Empty text="No orders yet." />
+          )}
+        </Panel>
+      </div>
+      <div className="mt-5">
+        <Panel title="Stock attention">
+          {low.length ? (
+            <div className="grid gap-2 md:grid-cols-2">
+              {low.slice(0, 10).map((p) => {
+                const image = p.media.find((m) => m.type === "image"),
+                  stock = p.variants
+                    .filter((v) => v.active)
+                    .reduce((sum, v) => sum + v.stock, 0);
+                return (
+                  <Link
+                    to={"/admin/products/" + p.id}
+                    key={p.id}
+                    className="flex items-center gap-3 border border-black/10 bg-white/25 p-3"
+                  >
+                    {image ? (
+                      <img
+                        src={image.url}
+                        alt=""
+                        loading="lazy"
+                        className="h-16 w-12 object-cover"
+                      />
+                    ) : (
+                      <div className="h-16 w-12 bg-black/5" />
+                    )}
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm">{p.name}</span>
+                      <span className="mt-1 block text-xs text-black/45">
+                        {stock} units left
+                        {p.preorderEnabled ? " · pre-order enabled" : ""}
+                      </span>
+                    </span>
+                    <span className="text-xs underline">EDIT</span>
+                  </Link>
+                );
+              })}
+            </div>
+          ) : (
+            <Empty text="No products need stock attention." />
+          )}
+        </Panel>
+      </div>
+    </>
+  );
+}
+function Products() {
+  const { data, duplicate, remove, commit } = useStore(),
+    [query, setQuery] = useState(""),
+    [status, setStatus] = useState("all"),
+    [category, setCategory] = useState("all"),
+    [page, setPage] = useState(1),
+    pageSize = 20;
+  const mainCategories = data.categories
+      .filter((cat) => !cat.parentId && cat.active)
+      .sort((a, b) => a.sortOrder - b.sortOrder),
+    needle = query.trim().toLowerCase();
+  const filtered = data.products
+    .filter((product) => {
+      const cat = data.categories.find((x) => x.id === product.categoryId),
+        parent = cat?.parentId
+          ? data.categories.find((x) => x.id === cat.parentId)
+          : cat,
+        haystack = [
+          product.name,
+          product.slug,
+          product.tags.join(" "),
+          cat?.name,
+          parent?.name,
+        ]
+          .join(" ")
+          .toLowerCase(),
+        matchCategory =
+          category === "all" ||
+          product.categoryId === category ||
+          cat?.parentId === category;
+      return (
+        (!needle || haystack.includes(needle)) &&
+        (status === "all" || product.status === status) &&
+        matchCategory
+      );
+    })
+    .sort((a, b) => b.sortOrder - a.sortOrder);
+  const pages = Math.max(1, Math.ceil(filtered.length / pageSize)),
+    safePage = Math.min(page, pages),
+    visible = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+  useEffect(() => setPage(1), [query, status, category]);
+  return (
+    <>
+      <Head
+        eyebrow="Catalogue"
+        title="Products"
+        action={
+          <Link to="/admin/products/new" className="btn btn-dark">
+            <PackagePlus size={16} /> Add product
+          </Link>
+        }
+      />
+      <div className="mt-7 grid gap-3 rounded-sm bg-[#f6f3ed] p-4 md:grid-cols-[minmax(220px,1fr)_180px_200px]">
+        <div className="relative">
+          <Search className="absolute left-3 top-3" size={18} />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="field bg-white/55 pl-10"
+            placeholder="Search product, category, tag…"
+          />
+        </div>
+        <select
+          value={status}
+          onChange={(e) => setStatus(e.target.value)}
+          className="field bg-white/55"
+        >
+          <option value="all">All statuses</option>
+          <option value="published">Published</option>
+          <option value="draft">Draft</option>
+          <option value="archived">Archived</option>
+        </select>
+        <select
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          className="field bg-white/55"
+        >
+          <option value="all">All categories</option>
+          {mainCategories.map((cat) => (
+            <option key={cat.id} value={cat.id}>
+              {cat.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="mt-4 overflow-hidden border border-black/10 bg-[#f6f3ed]">
+        {visible.length ? (
+          visible.map((p) => {
+            const image = p.media.find((media) => media.type === "image"),
+              cat = data.categories.find((x) => x.id === p.categoryId),
+              parent = cat?.parentId
+                ? data.categories.find((x) => x.id === cat.parentId)
+                : undefined,
+              stock = p.variants
+                .filter((v) => v.active)
+                .reduce((n, v) => n + v.stock, 0);
+            return (
+              <div
+                key={p.id}
+                className="grid grid-cols-[64px_minmax(0,1fr)_auto] items-center gap-3 border-b border-black/10 p-3 last:border-0 sm:grid-cols-[72px_minmax(0,1fr)_110px_110px_auto] sm:gap-4"
+              >
+                {image ? (
+                  <img
+                    src={image.url}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    className="aspect-[4/5] w-full border border-black/5 object-cover"
+                  />
+                ) : (
+                  <div className="aspect-[4/5] w-full bg-black/5" />
+                )}
+                <div className="min-w-0">
+                  <p className="truncate text-sm">{p.name}</p>
+                  <p className="mt-1 truncate text-xs text-black/45">
+                    {parent ? parent.name + " → " : ""}
+                    {cat?.name || "No category"} · {stock} units
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    <span className="border border-black/10 px-2 py-1 text-[9px] uppercase tracking-wider">
+                      {p.status}
+                    </span>
+                    {p.preorderEnabled && (
+                      <span className="border border-[#96724f]/30 bg-[#96724f]/5 px-2 py-1 text-[9px] uppercase tracking-wider text-[#765638]">
+                        Pre-order
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <span className="hidden text-sm sm:block">
+                  {money(p.price)}
+                </span>
+                <button
+                  onClick={() =>
+                    void commit("products", {
+                      ...p,
+                      status: p.status === "published" ? "draft" : "published",
+                    })
+                  }
+                  className="hidden min-h-11 text-xs underline sm:block"
+                >
+                  {p.status === "published" ? "UNPUBLISH" : "PUBLISH"}
+                </button>
+                <div className="flex items-center">
+                  <Link
+                    className="grid min-h-11 min-w-11 place-items-center text-xs underline"
+                    to={`/admin/products/${p.id}`}
+                  >
+                    EDIT
+                  </Link>
+                  <button
+                    onClick={() => duplicate("products", p.id)}
+                    className="hidden min-h-11 min-w-11 place-items-center sm:grid"
+                    title="Duplicate"
+                  >
+                    <Copy size={15} />
+                  </button>
+                  <button
+                    onClick={() =>
+                      confirm(`Delete ${p.name}?`) && remove("products", p.id)
+                    }
+                    className="hidden min-h-11 min-w-11 place-items-center text-red-800 sm:grid"
+                    title="Delete"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              </div>
+            );
+          })
+        ) : (
+          <Empty text="No products match these filters." />
+        )}
+      </div>
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-xs text-black/45">
+          Showing {filtered.length ? (safePage - 1) * pageSize + 1 : 0}–
+          {Math.min(safePage * pageSize, filtered.length)} of {filtered.length}{" "}
+          products
+        </p>
+        <div className="flex items-center gap-2">
+          <button
+            className="btn"
+            disabled={safePage <= 1}
+            onClick={() => setPage((value) => Math.max(1, value - 1))}
+          >
+            <ChevronLeft size={15} /> Previous
+          </button>
+          <span className="px-2 text-xs">
+            Page {safePage} / {pages}
+          </span>
+          <button
+            className="btn"
+            disabled={safePage >= pages}
+            onClick={() => setPage((value) => Math.min(pages, value + 1))}
+          >
+            Next <ChevronRight size={15} />
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+function Categories() {
+  const store = useStore(),
+    [creating, setCreating] = useState<"main" | "sub" | null>(null),
+    main = [...store.data.categories]
+      .filter((category) => !category.parentId)
+      .sort((a, b) => a.sortOrder - b.sortOrder);
+  const blank: Category = {
+    id: crypto.randomUUID(),
+    name: "",
+    slug: "",
+    description: "",
+    imageUrl: "",
+    active: true,
+    featured: false,
+    showInNavigation: creating === "main",
+    showOnHomepage: false,
+    parentId: creating === "sub" ? main[0]?.id : undefined,
+    sortOrder: store.data.categories.length + 1,
+  };
+  return (
+    <>
+      <Head
+        eyebrow="Catalogue structure"
+        title="Categories"
+        action={
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setCreating("main")}
+              className="btn btn-dark"
+            >
+              <Plus size={16} /> Main category
+            </button>
+            <button
+              disabled={!main.length}
+              onClick={() => setCreating("sub")}
+              className="btn disabled:opacity-40"
+            >
+              <Plus size={16} /> Subcategory
+            </button>
+          </div>
+        }
+      />
+      <p className="mt-4 max-w-3xl text-sm leading-7 text-black/55">
+        Use main categories for the top menu, such as WOMEN, MEN and
+        ACCESSORIES. Put more specific groups such as Crop Tops under a main
+        category. Products can then be assigned to the exact subcategory.
+      </p>
+      {creating && (
+        <div className="mt-7">
+          <CategoryCard
+            key={creating}
+            item={blank}
+            fresh
+            onCancel={() => setCreating(null)}
+          />
+        </div>
+      )}
+      <div className="mt-7 space-y-5">
+        {main.map((parent) => {
+          const children = store.data.categories
+            .filter((child) => child.parentId === parent.id)
+            .sort((a, b) => a.sortOrder - b.sortOrder);
+          return (
+            <section
+              key={parent.id}
+              className="border border-black/10 bg-white/25 p-4 sm:p-5"
+            >
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <p className="eyebrow text-black/45">Main category</p>
+                  <h2 className="display mt-1 text-2xl">{parent.name}</h2>
+                </div>
+                <span className="text-xs text-black/45">
+                  {children.length} subcategories
+                </span>
+              </div>
+              <div className="grid gap-4 lg:grid-cols-2">
+                <CategoryCard item={parent} />
+                {children.map((child) => (
+                  <CategoryCard key={child.id} item={child} />
+                ))}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+function CategoryCard({
+  item,
+  fresh = false,
+  onCancel,
+}: {
+  item: Category;
+  fresh?: boolean;
+  onCancel?: () => void;
+}) {
+  const s = useStore(),
+    [draft, setDraft] = useState(item),
+    [busy, setBusy] = useState(false),
+    [status, setStatus] = useState("");
+  useEffect(() => setDraft(item), [item]);
+  const change = <K extends keyof Category>(key: K, value: Category[K]) =>
+      setDraft((x) => ({ ...x, [key]: value })),
+    name = (value: string) =>
+      setDraft((x) => ({
+        ...x,
+        name: value,
+        slug: !x.slug || x.slug === slugify(x.name) ? slugify(value) : x.slug,
+      }));
+  const parents = s.data.categories.filter(
+      (category) => category.id !== draft.id && !category.parentId,
+    ),
+    childCount = s.data.categories.filter(
+      (category) => category.parentId === draft.id,
+    ).length,
+    parent = s.data.categories.find(
+      (category) => category.id === draft.parentId,
+    );
+  async function submit() {
+    if (!draft.name.trim()) return setStatus("Name is required.");
+    if (draft.parentId === draft.id)
+      return setStatus("A category cannot be its own parent.");
+    setBusy(true);
+    setStatus("");
+    try {
+      await s.commit("categories", {
+        ...draft,
+        slug: draft.slug || slugify(draft.name),
+        showInNavigation: draft.parentId ? false : draft.showInNavigation,
+      });
+      setStatus("Category saved.");
+      onCancel?.();
+    } catch (reason) {
+      setStatus(
+        reason instanceof Error
+          ? reason.message
+          : "Could not save category. Try again.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Panel
+      title={
+        (draft.parentId ? "Subcategory" : "Main category") +
+        " — " +
+        (draft.name || "New category")
+      }
+    >
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Category name" value={draft.name} onChange={name} />
+        <Field
+          label="Slug"
+          value={draft.slug}
+          onChange={(slug) => change("slug", slug)}
+        />
+        <label className="block text-xs">
+          Parent category
+          <select
+            className="field mt-2"
+            disabled={childCount > 0 && !draft.parentId}
+            value={draft.parentId || ""}
+            onChange={(e) => change("parentId", e.target.value || undefined)}
+          >
+            <option value="">None — main category</option>
+            {parents.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <Field
+          label="Sort order"
+          value={String(draft.sortOrder)}
+          onChange={(value) => change("sortOrder", Number(value) || 0)}
+        />
+        <UploadField
+          label="Category image (optional)"
+          value={draft.imageUrl}
+          onChange={(value) => change("imageUrl", value)}
+        />
+        <UploadField
+          label="Mobile image (optional)"
+          value={draft.mobileImageUrl || ""}
+          onChange={(value) => change("mobileImageUrl", value)}
+        />
+      </div>
+      {parent && (
+        <p className="mt-3 border-l-2 border-[#96724f] pl-3 text-xs text-black/50">
+          Storefront path: {parent.name} → {draft.name || "Subcategory"}
+        </p>
+      )}
+      {childCount > 0 && !draft.parentId && (
+        <p className="mt-3 text-xs text-amber-900">
+          This main category has {childCount} subcategories. Move them first
+          before changing this category into a subcategory.
+        </p>
+      )}
+      <label className="mt-3 block text-xs">
+        Description (optional)
+        <textarea
+          className="field mt-2"
+          value={draft.description}
+          onChange={(e) => change("description", e.target.value)}
+        />
+      </label>
+      <Toggles
+        items={[
+          ["Published", draft.active, (v) => change("active", v)],
+          ["Featured", draft.featured, (v) => change("featured", v)],
+          ...(!draft.parentId
+            ? [
+                [
+                  "Show in navigation",
+                  draft.showInNavigation,
+                  (v: boolean) => change("showInNavigation", v),
+                ] as [string, boolean, (v: boolean) => void],
+              ]
+            : []),
+          [
+            "Show on homepage",
+            draft.showOnHomepage,
+            (v) => change("showOnHomepage", v),
+          ],
+        ]}
+      />
+      {draft.parentId && (
+        <p className="mt-2 text-xs leading-5 text-black/45">
+          Published subcategories appear automatically inside their main
+          category menu and on that category’s shop page.
+        </p>
+      )}
+      <EditorActions
+        busy={busy}
+        status={status}
+        save={submit}
+        cancel={() => {
+          setDraft(item);
+          onCancel?.();
+        }}
+      >
+        {!fresh && (
+          <button
+            onClick={() =>
+              confirm('Delete "' + item.name + '"?') &&
+              s.remove("categories", item.id)
+            }
+            className="btn border-red-800 text-red-800"
+          >
+            Delete
+          </button>
+        )}
+      </EditorActions>
+    </Panel>
+  );
+}
+function Collections() {
+  const s = useStore(),
+    [creating, setCreating] = useState(false),
+    blank: Collection = {
+      id: crypto.randomUUID(),
+      name: "",
+      slug: "",
+      description: "",
+      heroImage: "",
+      active: false,
+      showInNavigation: false,
+      showOnHomepage: false,
+      sortOrder: s.data.collections.length + 1,
+    };
+  return (
+    <>
+      <Head
+        eyebrow="How pieces are grouped"
+        title="Collections"
+        action={
+          <button onClick={() => setCreating(true)} className="btn btn-dark">
+            <Plus size={16} /> Add collection
+          </button>
+        }
+      />
+      {creating && (
+        <div className="mt-7">
+          <CollectionCard
+            item={blank}
+            fresh
+            onCancel={() => setCreating(false)}
+          />
+        </div>
+      )}
+      <div className="mt-7 grid gap-4 lg:grid-cols-2">
+        {s.data.collections.map((c) => (
+          <CollectionCard key={c.id} item={c} />
+        ))}
+      </div>
+    </>
+  );
+}
+function CollectionCard({
+  item,
+  fresh = false,
+  onCancel,
+}: {
+  item: Collection;
+  fresh?: boolean;
+  onCancel?: () => void;
+}) {
+  const s = useStore(),
+    [draft, setDraft] = useState(item),
+    [busy, setBusy] = useState(false),
+    [status, setStatus] = useState("");
+  useEffect(() => setDraft(item), [item]);
+  const change = <K extends keyof Collection>(key: K, value: Collection[K]) =>
+    setDraft((x) => ({ ...x, [key]: value }));
+  async function submit() {
+    if (!draft.name.trim()) return setStatus("Name is required.");
+    setBusy(true);
+    try {
+      await s.commit("collections", {
+        ...draft,
+        slug: draft.slug || slugify(draft.name),
+      });
+      setStatus("Collection saved.");
+      onCancel?.();
+    } catch {
+      setStatus("Could not save collection.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Panel title={draft.name || "New collection"}>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field
+          label="Title"
+          value={draft.name}
+          onChange={(value) => change("name", value)}
+        />
+        <Field
+          label="Slug"
+          value={draft.slug}
+          onChange={(value) => change("slug", value)}
+        />
+        <UploadField
+          label="Hero image"
+          value={draft.heroImage}
+          onChange={(value) => change("heroImage", value)}
+        />
+        <UploadField
+          label="Optional video"
+          value={draft.videoUrl || ""}
+          onChange={(value) => change("videoUrl", value)}
+          accept="video/mp4,video/webm"
+        />
+      </div>
+      <label className="mt-3 block text-xs">
+        Description
+        <textarea
+          className="field mt-2"
+          value={draft.description}
+          onChange={(e) => change("description", e.target.value)}
+        />
+      </label>
+      <Toggles
+        items={[
+          ["Published", draft.active, (v) => change("active", v)],
+          [
+            "Navigation",
+            draft.showInNavigation,
+            (v) => change("showInNavigation", v),
+          ],
+          [
+            "Homepage",
+            draft.showOnHomepage,
+            (v) => change("showOnHomepage", v),
+          ],
+        ]}
+      />
+      <EditorActions
+        busy={busy}
+        status={status}
+        save={submit}
+        cancel={() => {
+          setDraft(item);
+          onCancel?.();
+        }}
+      >
+        {!fresh && (
+          <button
+            onClick={() =>
+              confirm(`Delete "${item.name}"?`) &&
+              s.remove("collections", item.id)
+            }
+            className="btn border-red-800 text-red-800"
+          >
+            Delete
+          </button>
+        )}
+      </EditorActions>
+    </Panel>
+  );
+}
+function Navigation() {
+  const s = useStore(),
+    [creating, setCreating] = useState(false);
+  const blank: NavigationItem = {
+    id: crypto.randomUUID(),
+    label: "",
+    linkType: "page",
+    target: "/shop",
+    visible: true,
+    sortOrder: s.data.navigation.length + 1,
+  };
+  return (
+    <>
+      <Head
+        eyebrow="Storefront header"
+        title="Navigation"
+        action={
+          <button onClick={() => setCreating(true)} className="btn btn-dark">
+            <Plus size={16} /> Add item
+          </button>
+        }
+      />
+      <p className="mt-4 max-w-2xl text-sm leading-7 text-black/55">
+        NEW, SHOP and ABOUT are permanent storefront links. Main categories
+        marked “Show in navigation” are inserted automatically between them.
+        Every published subcategory under that main category appears
+        automatically in its dropdown. Use this editor only for optional
+        collections, campaigns or custom links.
+      </p>
+      {creating && (
+        <div className="mt-7">
+          <NavRow item={blank} fresh onCancel={() => setCreating(false)} />
+        </div>
+      )}
+      <div className="mt-7 grid gap-2">
+        {[...s.data.navigation]
+          .sort((a, b) => a.sortOrder - b.sortOrder)
+          .map((n) => (
+            <NavRow key={n.id} item={n} />
+          ))}
+      </div>
+    </>
+  );
+}
+function NavRow({
+  item,
+  fresh = false,
+  onCancel,
+}: {
+  item: NavigationItem;
+  fresh?: boolean;
+  onCancel?: () => void;
+}) {
+  const s = useStore(),
+    [draft, setDraft] = useState(item),
+    [busy, setBusy] = useState(false),
+    [status, setStatus] = useState("");
+  useEffect(() => setDraft(item), [item]);
+  function changeType(linkType: NavigationItem["linkType"]) {
+    const target =
+      linkType === "category"
+        ? s.data.categories.find((c) => c.active && !c.parentId)?.id || ""
+        : linkType === "collection"
+          ? s.data.collections.find((c) => c.active)?.id || ""
+          : linkType === "page"
+            ? "/shop"
+            : "";
+    setDraft({ ...draft, linkType, target });
+  }
+  async function submit() {
+    if (!draft.label.trim()) return setStatus("Label is required.");
+    if (!draft.target.trim()) return setStatus("Choose a destination.");
+    setBusy(true);
+    setStatus("");
+    try {
+      await s.commit("navigation", draft);
+      setStatus("Navigation saved.");
+      onCancel?.();
+    } catch (reason) {
+      setStatus(
+        reason instanceof Error ? reason.message : "Could not save navigation.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  const target =
+    draft.linkType === "category" ? (
+      <select
+        className="field"
+        value={draft.target}
+        onChange={(e) => setDraft({ ...draft, target: e.target.value })}
+      >
+        <option value="">Select main category</option>
+        {s.data.categories
+          .filter((c) => c.active && !c.parentId)
+          .map((cat) => (
+            <option key={cat.id} value={cat.id}>
+              {cat.name}
+            </option>
+          ))}
+      </select>
+    ) : draft.linkType === "collection" ? (
+      <select
+        className="field"
+        value={draft.target}
+        onChange={(e) => setDraft({ ...draft, target: e.target.value })}
+      >
+        <option value="">Select collection</option>
+        {s.data.collections
+          .filter((col) => col.active)
+          .map((col) => (
+            <option key={col.id} value={col.id}>
+              {col.name}
+            </option>
+          ))}
+      </select>
+    ) : (
+      <input
+        className="field"
+        value={draft.target}
+        placeholder={draft.linkType === "url" ? "https://…" : "/shop"}
+        onChange={(e) => setDraft({ ...draft, target: e.target.value })}
+      />
+    );
+  return (
+    <div className="bg-[#f6f3ed] p-4">
+      <div className="grid gap-3 sm:grid-cols-[1fr_150px_1fr_auto]">
+        <input
+          className="field"
+          placeholder="Menu label"
+          value={draft.label}
+          onChange={(e) => setDraft({ ...draft, label: e.target.value })}
+        />
+        <select
+          className="field"
+          value={draft.linkType}
+          onChange={(e) =>
+            changeType(e.target.value as NavigationItem["linkType"])
+          }
+        >
+          <option>category</option>
+          <option>collection</option>
+          <option>page</option>
+          <option>url</option>
+        </select>
+        {target}
+        <button
+          onClick={() => setDraft({ ...draft, visible: !draft.visible })}
+          className="min-h-11 px-3 text-xs"
+        >
+          {draft.visible ? "VISIBLE" : "HIDDEN"}
+        </button>
+      </div>
+      <EditorActions
+        busy={busy}
+        status={status}
+        save={submit}
+        cancel={() => {
+          setDraft(item);
+          onCancel?.();
+        }}
+      >
+        {!fresh && (
+          <button
+            onClick={() =>
+              confirm('Delete "' + item.label + '"?') &&
+              s.remove("navigation", item.id)
+            }
+            className="btn border-red-800 text-red-800"
+          >
+            Delete
+          </button>
+        )}
+      </EditorActions>
+    </div>
+  );
+}
+function Homepage() {
+  const s = useStore(),
+    [creating, setCreating] = useState(false),
+    blank: HomepageSection = {
+      id: crypto.randomUUID(),
+      type: "editorial-image",
+      enabled: false,
+      title: "New section",
+      subtitle: "",
+      textPosition: "left",
+      overlay: 25,
+      spacing: "normal",
+      sortOrder: s.data.homepageSections.length + 1,
+    };
+  return (
+    <>
+      <Head
+        eyebrow="Controlled page builder"
+        title="Homepage"
+        action={
+          <button onClick={() => setCreating(true)} className="btn btn-dark">
+            <Plus size={16} /> Add section
+          </button>
+        }
+      />
+      <HeroEditor />
+      {creating && (
+        <div className="mt-8">
+          <SectionRow item={blank} fresh onCancel={() => setCreating(false)} />
+        </div>
+      )}
+      <div className="mt-8 grid gap-3">
+        {[...s.data.homepageSections]
+          .sort((a, b) => a.sortOrder - b.sortOrder)
+          .map((x) => (
+            <SectionRow key={x.id} item={x} />
+          ))}
+      </div>
+    </>
+  );
+}
+function HeroEditor() {
+  return (
+    <Panel title="Hero">
+      <div className="border-l-2 border-[#96724f] bg-white/40 px-4 py-4 text-sm leading-6 text-black/60">
+        <p className="font-medium text-black/80">
+          Hero is managed from the website code.
+        </p>
+        <p className="mt-1">
+          Localhost and Vercel now use the same hero configuration and video
+          asset. Edit the hero in VS Code, then commit and push it to deploy the
+          exact same version.
+        </p>
+        <p className="mt-2 text-xs">
+          Current video: <code>/media/hero-final-v2.mp4</code>
+        </p>
+      </div>
+    </Panel>
+  );
+}
+function SectionRow({
+  item,
+  fresh = false,
+  onCancel,
+}: {
+  item: HomepageSection;
+  fresh?: boolean;
+  onCancel?: () => void;
+}) {
+  const s = useStore(),
+    [draft, setDraft] = useState(item),
+    [busy, setBusy] = useState(false),
+    [status, setStatus] = useState("");
+  useEffect(() => setDraft(item), [item]);
+  async function submit() {
+    setBusy(true);
+    try {
+      await s.commit("homepageSections", draft);
+      setStatus("Section saved.");
+      onCancel?.();
+    } catch {
+      setStatus("Could not save section.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="bg-[#f6f3ed] p-4">
+      <div className="grid gap-3 sm:grid-cols-[180px_1fr_1fr_auto]">
+        <select
+          className="field"
+          value={draft.type}
+          onChange={(e) =>
+            setDraft({
+              ...draft,
+              type: e.target.value as HomepageSection["type"],
+            })
+          }
+        >
+          {[
+            "product-grid",
+            "collection-feature",
+            "category-grid",
+            "editorial-image",
+            "full-width-campaign",
+            "text-statement",
+            "new-arrivals",
+            "featured-products",
+            "social",
+            "service-strip",
+          ].map((x) => (
+            <option key={x}>{x}</option>
+          ))}
+        </select>
+        <input
+          className="field"
+          value={draft.title}
+          onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+        />
+        <input
+          className="field"
+          value={draft.desktopMedia || ""}
+          placeholder="Desktop media URL"
+          onChange={(e) => setDraft({ ...draft, desktopMedia: e.target.value })}
+        />
+        <button
+          onClick={() => setDraft({ ...draft, enabled: !draft.enabled })}
+          className="min-h-11 text-xs"
+        >
+          {draft.enabled ? "VISIBLE" : "HIDDEN"}
+        </button>
+      </div>
+      <EditorActions
+        busy={busy}
+        status={status}
+        save={submit}
+        cancel={() => {
+          setDraft(item);
+          onCancel?.();
+        }}
+      >
+        {!fresh && (
+          <button
+            onClick={() =>
+              confirm(`Delete "${item.title}"?`) &&
+              s.remove("homepageSections", item.id)
+            }
+            className="btn border-red-800 text-red-800"
+          >
+            Delete
+          </button>
+        )}
+      </EditorActions>
+    </div>
+  );
+}
+function SizeCharts() {
+  const s = useStore(),
+    [creating, setCreating] = useState(false),
+    blank: SizeChart = {
+      id: crypto.randomUUID(),
+      name: "New Size Chart",
+      unit: "",
+      columns: [],
+      rows: [],
+      imageUrl: "",
+      notes: "",
+    };
+  return (
+    <>
+      <Head
+        eyebrow="Product-specific sizing"
+        title="Size Charts"
+        action={
+          <button onClick={() => setCreating(true)} className="btn btn-dark">
+            <Plus size={16} /> Add chart
+          </button>
+        }
+      />
+      <p className="mt-4 max-w-3xl text-sm leading-7 text-black/55">
+        Size charts are image-only. Upload the supplier chart and assign it to
+        the matching product. You can also upload or replace a chart directly
+        inside the Product editor.
+      </p>
+      {creating && (
+        <div className="mt-7">
+          <ChartCard item={blank} fresh onCancel={() => setCreating(false)} />
+        </div>
+      )}
+      <div className="mt-7 grid gap-4 lg:grid-cols-2">
+        {s.data.sizeCharts.map((chart) => (
+          <ChartCard key={chart.id} item={chart} />
+        ))}
+      </div>
+    </>
+  );
+}
+function ChartCard({
+  item,
+  fresh = false,
+  onCancel,
+}: {
+  item: SizeChart;
+  fresh?: boolean;
+  onCancel?: () => void;
+}) {
+  const s = useStore(),
+    [draft, setDraft] = useState(item),
+    [busy, setBusy] = useState(false),
+    [status, setStatus] = useState("");
+  useEffect(() => setDraft(item), [item]);
+  async function submit() {
+    if (!draft.name.trim()) return setStatus("Name is required.");
+    if (!draft.imageUrl?.trim())
+      return setStatus("Upload the size-chart image first.");
+    setBusy(true);
+    setStatus("");
+    try {
+      await s.commit("sizeCharts", {
+        ...draft,
+        unit: "",
+        columns: [],
+        rows: [],
+        notes: "",
+      });
+      setStatus("Size chart saved.");
+      onCancel?.();
+    } catch (reason) {
+      setStatus(
+        reason instanceof Error ? reason.message : "Could not save size chart.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Panel title={draft.name}>
+      <div className="grid gap-4">
+        <Field
+          label="Name"
+          value={draft.name}
+          onChange={(name) => setDraft({ ...draft, name })}
+        />
+        <UploadField
+          label="Supplier size-chart image"
+          value={draft.imageUrl || ""}
+          onChange={(imageUrl) => setDraft({ ...draft, imageUrl })}
+        />
+        {draft.imageUrl && (
+          <div className="border border-black/10 bg-white p-3">
+            <img
+              src={draft.imageUrl}
+              alt={draft.name}
+              className="mx-auto max-h-[520px] w-full object-contain"
+            />
+          </div>
+        )}
+        <p className="text-xs leading-5 text-black/45">
+          No text measurements are required. Customers will see this image when
+          they open Size Guide on the product page.
+        </p>
+      </div>
+      <EditorActions
+        busy={busy}
+        status={status}
+        save={submit}
+        cancel={() => {
+          setDraft(item);
+          onCancel?.();
+        }}
+      >
+        {!fresh && (
+          <button
+            onClick={() =>
+              confirm('Delete "' + item.name + '"?') &&
+              s.remove("sizeCharts", item.id)
+            }
+            className="btn border-red-800 text-red-800"
+          >
+            Delete
+          </button>
+        )}
+      </EditorActions>
+    </Panel>
+  );
+}
+import type { CourierProvider } from "../../types";
+function DeliveryRates() {
+  const s = useStore(),
+    [couriers, setCouriers] = useState(s.admin.couriers),
+    [rates, setRates] = useState(s.admin.deliveryRates),
+    [defaultId, setDefaultId] = useState(
+      s.data.settings.defaultCourierProviderId,
+    ),
+    [busy, setBusy] = useState(false),
+    [status, setStatus] = useState("");
+  useEffect(() => {
+    setCouriers(s.admin.couriers);
+    setRates(s.admin.deliveryRates);
+    setDefaultId(s.data.settings.defaultCourierProviderId);
+  }, [
+    s.admin.couriers,
+    s.admin.deliveryRates,
+    s.data.settings.defaultCourierProviderId,
+  ]);
+  const updateCourier = (id: string, patch: Partial<CourierProvider>) =>
+    setCouriers((items) =>
+      items.map((item) => (item.id === id ? { ...item, ...patch } : item)),
+    );
+  const updateRate = (id: string, patch: Partial<DeliveryRate>) =>
+    setRates((items) =>
+      items.map((item) => (item.id === id ? { ...item, ...patch } : item)),
+    );
+  const addCourier = () =>
+    setCouriers((items) => [
+      ...items,
+      {
+        id: crypto.randomUUID(),
+        name: "New courier",
+        phone: "",
+        notes: "",
+        pricingMode: "flat",
+        flatRate: 400,
+        active: true,
+      },
+    ]);
+  const addZone = (courierId: string) =>
+    setRates((items) => [
+      ...items,
+      {
+        id: crypto.randomUUID(),
+        courierProviderId: courierId,
+        name: "New zone",
+        fee: 0,
+        active: true,
+        districts: [],
+        cities: [],
+        postalCodes: [],
+        fallback: false,
+        sortOrder: items.length + 1,
+      },
+    ]);
+  const removeCourier = (id: string) => {
+    if (id === defaultId) return;
+    setCouriers((items) => items.filter((item) => item.id !== id));
+    setRates((items) => items.filter((item) => item.courierProviderId !== id));
+  };
+  async function submit() {
+    setStatus("");
+    const selected = couriers.find((item) => item.id === defaultId);
+    if (!selected?.active)
+      return setStatus("Choose an active default checkout courier.");
+    if (couriers.some((item) => !item.name.trim()))
+      return setStatus("Every courier needs a name.");
+    for (const courier of couriers) {
+      if (!Number.isFinite(courier.flatRate) || courier.flatRate < 0)
+        return setStatus(`${courier.name}: flat rate cannot be negative.`);
+      if (courier.pricingMode === "zone") {
+        const courierRates = rates.filter(
+          (rate) => rate.courierProviderId === courier.id,
+        );
+        if (!courierRates.length)
+          return setStatus(`${courier.name} needs at least one delivery zone.`);
+        if (
+          courierRates.some(
+            (rate) =>
+              !rate.name.trim() || !Number.isFinite(rate.fee) || rate.fee < 0,
+          )
+        )
+          return setStatus(
+            `${courier.name}: every zone needs a valid name and fee.`,
+          );
+        if (
+          courierRates.filter((rate) => rate.active && rate.fallback).length !==
+          1
+        )
+          return setStatus(
+            `${courier.name} needs exactly one active fallback zone.`,
+          );
+      }
+    }
+    setBusy(true);
+    try {
+      await s.saveCourierConfig(couriers, rates, defaultId);
+      setStatus("Courier and delivery configuration saved.");
+    } catch (reason) {
+      setStatus(
+        reason instanceof Error
+          ? reason.message
+          : "Could not save courier configuration.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  const selected = couriers.find((item) => item.id === defaultId);
+  return (
+    <>
+      <Head
+        eyebrow="Checkout logistics"
+        title="Couriers & Delivery"
+        action={
+          <button className="btn btn-dark" onClick={addCourier}>
+            <Plus size={15} /> Add courier
+          </button>
+        }
+      />
+      <div className="mt-7 admin-panel p-5 sm:p-6">
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,420px)] lg:items-end">
+          <div>
+            <p className="admin-panel__title">Website checkout courier</p>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-black/55">
+              Customers do not choose the courier at checkout. Select the
+              pricing plan ZEVENRA is currently using. Existing orders keep the
+              courier and fee that were saved when the order was placed.
+            </p>
+          </div>
+          <label className="text-xs">
+            Default checkout courier
+            <select
+              className="field mt-2"
+              value={defaultId}
+              onChange={(e) => setDefaultId(e.target.value)}
+            >
+              <option value="">Select active courier</option>
+              {couriers
+                .filter((item) => item.active)
+                .map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name || "Unnamed courier"}
+                  </option>
+                ))}
+            </select>
+          </label>
+        </div>
+        {selected?.active && (
+          <div className="mt-5 flex flex-wrap items-center gap-2 border-l-2 border-bronze bg-white/35 px-4 py-3 text-sm">
+            <span className="rounded-full bg-black px-2.5 py-1 text-[10px] uppercase tracking-[.12em] text-white">
+              Default
+            </span>
+            <b>{selected.name}</b>
+            <span className="text-black/50">
+              ·{" "}
+              {selected.pricingMode === "flat"
+                ? money(selected.flatRate) + " nationwide"
+                : "Zone-based pricing"}
+            </span>
+          </div>
+        )}
+      </div>
+      <div className="mt-5 grid gap-5">
+        {couriers.map((courier) => {
+          const courierRates = rates.filter(
+            (rate) => rate.courierProviderId === courier.id,
+          );
+          const isDefault = courier.id === defaultId;
+          return (
+            <section key={courier.id} className="admin-panel p-5 sm:p-6">
+              <div className="flex flex-wrap items-start justify-between gap-4 border-b border-black/10 pb-5">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-lg font-medium">
+                      {courier.name || "Unnamed courier"}
+                    </h2>
+                    {isDefault && (
+                      <span className="rounded-full bg-black px-2.5 py-1 text-[10px] uppercase tracking-[.12em] text-white">
+                        Default checkout
+                      </span>
+                    )}
+                    {courier.active ? (
+                      <span className="rounded-full border border-emerald-800/25 bg-emerald-900/[.06] px-2.5 py-1 text-[10px] uppercase tracking-[.12em] text-emerald-900">
+                        Active
+                      </span>
+                    ) : (
+                      <span className="rounded-full border border-black/15 px-2.5 py-1 text-[10px] uppercase tracking-[.12em] text-black/45">
+                        Inactive
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-2 text-xs leading-5 text-black/45">
+                    {courier.pricingMode === "flat"
+                      ? "One delivery price for every Sri Lankan address."
+                      : "Delivery price is selected from the matching zone rules below."}
+                  </p>
+                </div>
+                <button
+                  className="text-xs text-red-800 underline underline-offset-4 disabled:cursor-not-allowed disabled:opacity-30"
+                  disabled={isDefault}
+                  onClick={() => removeCourier(courier.id)}
+                >
+                  {isDefault
+                    ? "Default courier cannot be removed"
+                    : "Remove courier"}
+                </button>
+              </div>
+              <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <Field
+                  label="Courier name"
+                  value={courier.name}
+                  onChange={(name) => updateCourier(courier.id, { name })}
+                />
+                <Field
+                  label="Contact phone (optional)"
+                  value={courier.phone || ""}
+                  onChange={(phone) => updateCourier(courier.id, { phone })}
+                />
+                <label className="mb-3 block text-xs">
+                  Pricing mode
+                  <select
+                    className="field mt-2"
+                    value={courier.pricingMode}
+                    onChange={(e) =>
+                      updateCourier(courier.id, {
+                        pricingMode: e.target
+                          .value as CourierProvider["pricingMode"],
+                      })
+                    }
+                  >
+                    <option value="zone">Zone Based</option>
+                    <option value="flat">Flat Rate</option>
+                  </select>
+                </label>
+                <label className="flex min-h-12 items-center gap-3 rounded-lg border border-black/10 bg-white/35 px-4 text-xs md:col-span-2 xl:col-span-1">
+                  <input
+                    className="h-5 w-5 accent-black"
+                    type="checkbox"
+                    checked={courier.active}
+                    onChange={(e) =>
+                      updateCourier(courier.id, { active: e.target.checked })
+                    }
+                  />
+                  <span>
+                    <b>Active courier</b>
+                    <span className="mt-0.5 block text-[11px] text-black/45">
+                      Inactive couriers cannot be selected for checkout.
+                    </span>
+                  </span>
+                </label>
+                <label className="text-xs md:col-span-2 xl:col-span-3">
+                  Notes (optional)
+                  <textarea
+                    className="field mt-2 resize-y"
+                    rows={2}
+                    value={courier.notes || ""}
+                    onChange={(e) =>
+                      updateCourier(courier.id, { notes: e.target.value })
+                    }
+                  />
+                </label>
+              </div>
+              {courier.pricingMode === "flat" ? (
+                <div className="mt-6 max-w-sm rounded-xl border border-black/10 bg-white/35 p-4">
+                  <p className="text-xs font-medium uppercase tracking-[.12em]">
+                    Flat nationwide rate
+                  </p>
+                  <label className="mt-4 block text-xs">
+                    Delivery fee (LKR)
+                    <input
+                      className="field mt-2"
+                      type="number"
+                      min="0"
+                      value={courier.flatRate}
+                      onChange={(e) =>
+                        updateCourier(courier.id, {
+                          flatRate: Number(e.target.value),
+                        })
+                      }
+                    />
+                  </label>
+                  <p className="mt-3 text-[11px] leading-5 text-black/45">
+                    This amount applies to all valid Sri Lankan delivery
+                    addresses unless free delivery is triggered.
+                  </p>
+                </div>
+              ) : (
+                <div className="mt-6">
+                  <div className="flex flex-wrap items-end justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-[.12em]">
+                        Delivery zones
+                      </p>
+                      <p className="mt-1 text-[11px] leading-5 text-black/45">
+                        Matching priority is postal code, then city/area, then
+                        district-only rules, then the fallback zone.
+                      </p>
+                    </div>
+                    <button className="btn" onClick={() => addZone(courier.id)}>
+                      <Plus size={14} /> Add zone
+                    </button>
+                  </div>
+                  <div className="mt-4 grid gap-4">
+                    {courierRates.map((rate) => (
+                      <div
+                        key={rate.id}
+                        className="rounded-xl border border-black/10 bg-white/35 p-4 sm:p-5"
+                      >
+                        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(220px,1.5fr)_160px_auto_auto_auto] xl:items-end">
+                          <Field
+                            label="Zone name"
+                            value={rate.name}
+                            onChange={(name) => updateRate(rate.id, { name })}
+                          />
+                          <Field
+                            label="Fee (LKR)"
+                            value={String(rate.fee)}
+                            onChange={(fee) =>
+                              updateRate(rate.id, { fee: Number(fee) })
+                            }
+                          />
+                          <label className="flex min-h-11 items-center gap-2 text-xs">
+                            <input
+                              className="h-5 w-5 accent-black"
+                              type="checkbox"
+                              checked={rate.active}
+                              onChange={(e) =>
+                                updateRate(rate.id, {
+                                  active: e.target.checked,
+                                })
+                              }
+                            />
+                            Active
+                          </label>
+                          <label className="flex min-h-11 items-center gap-2 text-xs">
+                            <input
+                              className="h-5 w-5 accent-black"
+                              type="checkbox"
+                              checked={rate.fallback}
+                              onChange={(e) =>
+                                updateRate(rate.id, {
+                                  fallback: e.target.checked,
+                                })
+                              }
+                            />
+                            Fallback zone
+                          </label>
+                          <button
+                            className="btn text-red-800"
+                            onClick={() =>
+                              setRates((items) =>
+                                items.filter((item) => item.id !== rate.id),
+                              )
+                            }
+                          >
+                            <Trash2 size={14} /> Remove
+                          </button>
+                        </div>
+                        <div className="mt-4 grid gap-4 lg:grid-cols-3">
+                          <CsvField
+                            label="District matches"
+                            values={rate.districts}
+                            placeholder="Colombo, Gampaha"
+                            onChange={(districts) =>
+                              updateRate(rate.id, { districts })
+                            }
+                          />
+                          <CsvField
+                            label="City / area matches"
+                            values={rate.cities}
+                            placeholder="Nugegoda, Wattala"
+                            onChange={(cities) =>
+                              updateRate(rate.id, { cities })
+                            }
+                          />
+                          <CsvField
+                            label="Postal code matches"
+                            values={rate.postalCodes}
+                            placeholder="10250, 103*"
+                            onChange={(postalCodes) =>
+                              updateRate(rate.id, { postalCodes })
+                            }
+                          />
+                        </div>
+                        {rate.fallback && (
+                          <p className="mt-4 border-l-2 border-bronze pl-3 text-[11px] leading-5 text-black/50">
+                            Fallback zone is used only when no other active rule
+                            for this courier matches the customer's address.
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </section>
+          );
+        })}
+      </div>
+      <div className="mt-6 admin-panel p-5 sm:p-6">
+        <EditorActions
+          busy={busy}
+          status={status}
+          save={submit}
+          cancel={() => {
+            setCouriers(s.admin.couriers);
+            setRates(s.admin.deliveryRates);
+            setDefaultId(s.data.settings.defaultCourierProviderId);
+          }}
+        />
+      </div>
+    </>
+  );
+}
+function CsvField({
+  label,
+  values,
+  placeholder,
+  onChange,
+}: {
+  label: string;
+  values: string[];
+  placeholder: string;
+  onChange: (values: string[]) => void;
+}) {
+  const [text, setText] = useState(values.join(", "));
+  useEffect(() => setText(values.join(", ")), [values]);
+  return (
+    <label className="text-xs">
+      {label}
+      <input
+        className="field mt-2"
+        value={text}
+        placeholder={placeholder}
+        onChange={(event) => setText(event.target.value)}
+        onBlur={() =>
+          onChange(
+            text
+              .split(",")
+              .map((item) => item.trim())
+              .filter(Boolean),
+          )
+        }
+      />
+    </label>
+  );
+}
+type PreorderAdminDraft = {
+  confirmedPrice: string;
+  notes: string;
+  address1: string;
+  address2: string;
+  city: string;
+  district: string;
+  postalCode: string;
+};
+function Preorders() {
+  const store = useStore(),
+    [query, setQuery] = useState(""),
+    [filter, setFilter] = useState("active"),
+    [page, setPage] = useState(1),
+    [busy, setBusy] = useState(""),
+    [message, setMessage] = useState(""),
+    [drafts, setDrafts] = useState<Record<string, PreorderAdminDraft>>({}),
+    pageSize = 20,
+    batchTarget = 6,
+    batchMinimum = 5;
+  const labels: Record<PreorderStatus, string> = {
+    new: "New request",
+    contacted: "Customer contacted",
+    confirmed: "Customer confirmed",
+    batched: "In supplier batch",
+    ordered: "Ordered from supplier",
+    in_transit: "In transit",
+    arrived: "Arrived in Sri Lanka",
+    ready: "Ready for customer",
+    converted: "Converted to order",
+    cancelled: "Cancelled",
+  };
+  const next: Partial<Record<PreorderStatus, PreorderStatus>> = {
+    new: "contacted",
+    contacted: "confirmed",
+    batched: "ordered",
+    ordered: "in_transit",
+    in_transit: "arrived",
+    arrived: "ready",
+  };
+  const nextText: Partial<Record<PreorderStatus, string>> = {
+    new: "Mark customer contacted",
+    contacted: "Confirm customer",
+    batched: "Mark supplier order placed",
+    ordered: "Mark in transit",
+    in_transit: "Mark arrived",
+    arrived: "Mark ready for customer",
+  };
+  const guidance: Record<PreorderStatus, string> = {
+    new: "Contact the customer on WhatsApp. Confirm the exact item, size and that they still want it.",
+    contacted:
+      "Enter the final selling price, then confirm the customer only after they agree.",
+    confirmed:
+      "This request is ready for the next supplier batch. Only confirmed pieces count toward the batch target.",
+    batched:
+      "This piece is grouped into a supplier batch. Place the SHEIN order, then mark it ordered.",
+    ordered:
+      "Supplier order has been placed. Mark it in transit when tracking starts moving.",
+    in_transit:
+      "The supplier parcel is on the way. Mark arrived when you physically receive it.",
+    arrived:
+      "Check the item, size and condition. Keep this customer-reserved piece out of public stock, then mark it ready.",
+    ready:
+      "Create the normal COD or bank order. The arrived pre-order piece stays reserved and is not exposed as public stock.",
+    converted: "This request is finished and is now a normal order.",
+    cancelled: "No further action is required for this cancelled request.",
+  };
+  const all = [...store.admin.preorders].sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    ),
+    needle = query.trim().toLowerCase(),
+    confirmedItems = all
+      .filter((x) => x.status === "confirmed" && !x.batchId)
+      .reduce((n, x) => n + Number(x.quantity || 0), 0),
+    newCount = all.filter((x) => x.status === "new").length,
+    contacted = all.filter((x) => x.status === "contacted").length,
+    readyCount = all.filter((x) => x.status === "ready").length;
+  const filtered = all.filter((item) => {
+      const active = !["converted", "cancelled"].includes(item.status),
+        statusOk =
+          filter === "all" ||
+          (filter === "active" && active) ||
+          filter === item.status,
+        searchOk =
+          !needle ||
+          [
+            item.requestId,
+            item.customerName,
+            item.phone,
+            item.whatsapp,
+            item.email,
+            item.productName,
+            item.color,
+            item.size,
+            item.batchId,
+            item.city,
+            item.district,
+          ].some((v) =>
+            String(v || "")
+              .toLowerCase()
+              .includes(needle),
+          );
+      return statusOk && searchOk;
+    }),
+    pages = Math.max(1, Math.ceil(filtered.length / pageSize)),
+    safe = Math.min(page, pages),
+    visible = filtered.slice((safe - 1) * pageSize, safe * pageSize);
+  useEffect(() => setPage(1), [query, filter]);
+  const baseDraft = (item: PreorderRequest): PreorderAdminDraft => ({
+    confirmedPrice: String(item.confirmedPrice || ""),
+    notes: item.notes || "",
+    address1: item.address1 || "",
+    address2: item.address2 || "",
+    city: item.city || "",
+    district: item.district || "",
+    postalCode: item.postalCode || "",
+  });
+  const draftFor = (item: PreorderRequest) =>
+    drafts[item.requestId] || baseDraft(item);
+  const editDraft = (
+    item: PreorderRequest,
+    patch: Partial<PreorderAdminDraft>,
+  ) =>
+    setDrafts((current) => ({
+      ...current,
+      [item.requestId]: {
+        ...(current[item.requestId] || baseDraft(item)),
+        ...patch,
+      },
+    }));
+  async function change(item: PreorderRequest, status: PreorderStatus) {
+    setBusy(item.requestId);
+    setMessage("");
+    try {
+      const draft = draftFor(item),
+        confirmedPrice =
+          draft.confirmedPrice === ""
+            ? item.confirmedPrice
+            : Number(draft.confirmedPrice);
+      await store.updatePreorder({
+        requestId: item.requestId,
+        status,
+        confirmedPrice,
+        notes: draft.notes,
+      });
+      setMessage(item.requestId + " → " + labels[status] + ".");
+    } catch (reason) {
+      setMessage(
+        reason instanceof Error
+          ? reason.message
+          : "Could not update pre-order.",
+      );
+    } finally {
+      setBusy("");
+    }
+  }
+  async function saveDetails(item: PreorderRequest) {
+    setBusy(item.requestId);
+    setMessage("");
+    try {
+      const draft = draftFor(item),
+        price =
+          draft.confirmedPrice === ""
+            ? undefined
+            : Number(draft.confirmedPrice);
+      if (price !== undefined && (!Number.isFinite(price) || price <= 0))
+        throw new Error("Final price must be a valid amount greater than 0.");
+      if (draft.postalCode && !/^\d{5}$/.test(draft.postalCode))
+        throw new Error("Postal code must be 5 digits.");
+      await store.updatePreorder({
+        requestId: item.requestId,
+        confirmedPrice: price,
+        notes: draft.notes.trim(),
+        address1: draft.address1.trim(),
+        address2: draft.address2.trim(),
+        city: draft.city.trim(),
+        district: draft.district,
+        postalCode: draft.postalCode.trim(),
+      });
+      setMessage(item.requestId + " details saved.");
+    } catch (reason) {
+      setMessage(
+        reason instanceof Error
+          ? reason.message
+          : "Could not save pre-order details.",
+      );
+    } finally {
+      setBusy("");
+    }
+  }
+  async function convert(item: PreorderRequest, paymentMethod: "cod" | "bank") {
+    const draft = draftFor(item);
+    if (!draft.address1.trim() || !draft.city.trim() || !draft.district)
+      return setMessage(
+        "Complete the delivery address and district before converting this pre-order.",
+      );
+    if (draft.postalCode && !/^\d{5}$/.test(draft.postalCode))
+      return setMessage("Postal code must be 5 digits.");
+    if (
+      !confirm(
+        "Convert " +
+          item.requestId +
+          " to a normal " +
+          (paymentMethod === "cod" ? "COD" : "bank transfer") +
+          " order? Arrived stock will be reserved immediately.",
+      )
+    )
+      return;
+    setBusy(item.requestId);
+    setMessage("");
+    try {
+      const price =
+        draft.confirmedPrice === ""
+          ? Number(item.confirmedPrice || 0)
+          : Number(draft.confirmedPrice);
+      if (price <= 0) throw new Error("Set the final confirmed price first.");
+      await store.updatePreorder({
+        requestId: item.requestId,
+        confirmedPrice: price,
+        notes: draft.notes.trim(),
+        address1: draft.address1.trim(),
+        address2: draft.address2.trim(),
+        city: draft.city.trim(),
+        district: draft.district,
+        postalCode: draft.postalCode.trim(),
+      });
+      const order = await adminApi.post<Order>("convertPreorderToOrder", {
+        requestId: item.requestId,
+        paymentMethod,
+      });
+      await store.loadAdmin();
+      setMessage(
+        item.requestId +
+          " converted to " +
+          order.orderId +
+          ". Customer can now see the normal order in My Orders if they were signed in.",
+      );
+    } catch (reason) {
+      setMessage(
+        reason instanceof Error
+          ? reason.message
+          : "Could not convert pre-order.",
+      );
+    } finally {
+      setBusy("");
+    }
+  }
+  async function batch() {
+    if (confirmedItems < batchMinimum) return;
+    if (
+      !confirm(
+        "Create a SHEIN batch with " + confirmedItems + " confirmed piece(s)?",
+      )
+    )
+      return;
+    setBusy("batch");
+    setMessage("");
+    try {
+      const result = await adminApi.post<{
+        batchId: string;
+        requests: number;
+        items: number;
+      }>("createPreorderBatch", {});
+      await store.refreshPreorders();
+      setMessage(
+        result.batchId +
+          " created with " +
+          result.items +
+          " piece(s) from " +
+          result.requests +
+          " customer request(s).",
+      );
+    } catch (reason) {
+      setMessage(
+        reason instanceof Error
+          ? reason.message
+          : "Could not create supplier batch.",
+      );
+    } finally {
+      setBusy("");
+    }
+  }
+  const waNumber = (value: string) => {
+    const digits = String(value || "").replace(/\D/g, "");
+    return digits.startsWith("0") ? "94" + digits.slice(1) : digits;
+  };
+  return (
+    <>
+      <Head
+        eyebrow="Supplier planning"
+        title="Pre-orders"
+        action={
+          <button
+            disabled={confirmedItems < batchMinimum || busy === "batch"}
+            onClick={() => void batch()}
+            className="btn btn-dark disabled:opacity-40"
+          >
+            {busy === "batch"
+              ? "Creating batch…"
+              : confirmedItems < batchMinimum
+                ? "Need " + (batchMinimum - confirmedItems) + " more confirmed"
+                : "Create SHEIN batch"}
+          </button>
+        }
+      />
+      <div className="admin-help-card mt-5">
+        <b>Simple flow:</b> Request → WhatsApp contact → Final price agreed →
+        Confirmed → Supplier batch → Ordered → In transit → Arrived → Ready →
+        Normal order. <span>No payment is collected at the request stage.</span>
+      </div>
+      <div className="mt-6 grid grid-cols-2 gap-3 xl:grid-cols-4">
+        {[
+          ["New requests", newCount, "Contact these customers first"],
+          [
+            "Waiting confirmation",
+            contacted,
+            "Final price + customer approval",
+          ],
+          [
+            "Confirmed pieces",
+            confirmedItems,
+            "Minimum " + batchMinimum + " · target " + batchTarget,
+          ],
+          ["Ready to convert", readyCount, "Turn arrived pieces into orders"],
+        ].map(([label, value, help]) => (
+          <div key={String(label)} className="admin-stat-card">
+            <p>{label}</p>
+            <strong>{value}</strong>
+            <small>{help}</small>
+          </div>
+        ))}
+      </div>
+      <div className="admin-toolbar mt-5">
+        <div className="admin-search">
+          <Search size={17} />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search request ID, customer, WhatsApp, product, city…"
+          />
+        </div>
+        <select value={filter} onChange={(e) => setFilter(e.target.value)}>
+          <option value="active">Active requests</option>
+          <option value="all">All requests</option>
+          {(
+            [
+              "new",
+              "contacted",
+              "confirmed",
+              "batched",
+              "ordered",
+              "in_transit",
+              "arrived",
+              "ready",
+              "converted",
+              "cancelled",
+            ] as PreorderStatus[]
+          ).map((status) => (
+            <option key={status} value={status}>
+              {labels[status]}
+            </option>
+          ))}
+        </select>
+      </div>
+      {message && <p className="admin-notice mt-4">{message}</p>}
+      <div className="mt-5 grid gap-4">
+        {visible.length ? (
+          visible.map((item) => {
+            const draft = draftFor(item),
+              product = store.data.products.find(
+                (p) => p.id === item.productId,
+              ),
+              image = product?.media.find((media) => media.type === "image"),
+              phone = waNumber(item.whatsapp || item.phone),
+              finalPrice = Number(
+                draft.confirmedPrice || item.confirmedPrice || 0,
+              ),
+              nextStatus = next[item.status],
+              statusIndex = [
+                "new",
+                "contacted",
+                "confirmed",
+                "batched",
+                "ordered",
+                "in_transit",
+                "arrived",
+                "ready",
+              ].indexOf(item.status),
+              waMessage =
+                "Hi " +
+                item.customerName +
+                ", this is ZEVENRA about your pre-order " +
+                item.requestId +
+                " for " +
+                item.productName +
+                " — " +
+                item.color +
+                " / " +
+                item.size +
+                " × " +
+                item.quantity +
+                ". " +
+                (finalPrice > 0
+                  ? "The final price is " + money(finalPrice) + ". "
+                  : "") +
+                "Please confirm if you still want this item.",
+              wa =
+                "https://wa.me/" +
+                phone +
+                "?text=" +
+                encodeURIComponent(waMessage);
+            return (
+              <article key={item.requestId} className="preorder-admin-card">
+                <div className="preorder-admin-card__top">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <b>{item.requestId}</b>
+                      <span
+                        className={
+                          "preorder-status preorder-status--" + item.status
+                        }
+                      >
+                        {labels[item.status]}
+                      </span>
+                      {item.batchId && (
+                        <span className="preorder-batch">{item.batchId}</span>
+                      )}
+                    </div>
+                    <p>
+                      {new Date(item.createdAt).toLocaleString("en-LK", {
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </p>
+                  </div>
+                  <a href={wa} target="_blank" rel="noreferrer" className="btn">
+                    <MessageCircle size={14} /> WhatsApp customer
+                  </a>
+                </div>
+                <div className="preorder-admin-grid">
+                  <section className="preorder-product-box">
+                    {image ? (
+                      <img src={image.url} alt="" loading="lazy" />
+                    ) : (
+                      <div className="preorder-product-placeholder" />
+                    )}
+                    <div>
+                      <small>Requested item</small>
+                      <h3>{item.productName}</h3>
+                      <p>
+                        {item.color} / {item.size} · Qty {item.quantity}
+                      </p>
+                      <p>
+                        Display price:{" "}
+                        <b>{money(Number(item.requestedPrice))}</b>
+                      </p>
+                      <p>SKU: {item.sku || "—"}</p>
+                    </div>
+                  </section>
+                  <section className="preorder-customer-box">
+                    <small>Customer & delivery</small>
+                    <h3>{item.customerName}</h3>
+                    <p>
+                      <b>Mobile:</b> {item.phone}
+                    </p>
+                    <p>
+                      <b>WhatsApp:</b> {item.whatsapp}
+                    </p>
+                    {item.email && (
+                      <p>
+                        <b>Email:</b> {item.email}
+                      </p>
+                    )}
+                    <p>
+                      <b>Area:</b> {item.city || "—"}
+                    </p>
+                    <p>
+                      <b>Delivery address:</b>{" "}
+                      {[
+                        item.address1,
+                        item.address2,
+                        item.city,
+                        item.district,
+                        item.postalCode,
+                      ]
+                        .filter(Boolean)
+                        .join(", ") || "Collect before final order"}
+                    </p>
+                  </section>
+                  <section className="preorder-next-box">
+                    <small>What to do next</small>
+                    <h3>{guidance[item.status]}</h3>
+                    {item.status === "confirmed" && (
+                      <p className="preorder-batch-progress">
+                        {confirmedItems} / {batchTarget} confirmed pieces ready
+                        for the next batch.
+                      </p>
+                    )}
+                    {nextStatus && (
+                      <button
+                        disabled={
+                          busy === item.requestId ||
+                          (nextStatus === "confirmed" && finalPrice <= 0)
+                        }
+                        onClick={() => void change(item, nextStatus)}
+                        className="btn btn-dark w-full disabled:opacity-40"
+                      >
+                        {busy === item.requestId
+                          ? "Saving…"
+                          : nextText[item.status]}
+                      </button>
+                    )}
+                    {item.status === "confirmed" && (
+                      <p className="preorder-small-note">
+                        Use “Create SHEIN batch” when you have at least{" "}
+                        {batchMinimum} confirmed pieces.
+                      </p>
+                    )}
+                    {item.status === "ready" && (
+                      <div className="grid gap-2">
+                        <button
+                          disabled={busy === item.requestId || finalPrice <= 0}
+                          onClick={() => void convert(item, "cod")}
+                          className="btn btn-dark"
+                        >
+                          Create COD order
+                        </button>
+                        <button
+                          disabled={busy === item.requestId || finalPrice <= 0}
+                          onClick={() => void convert(item, "bank")}
+                          className="btn"
+                        >
+                          Create bank order
+                        </button>
+                      </div>
+                    )}
+                    {!["converted", "cancelled"].includes(item.status) && (
+                      <button
+                        disabled={busy === item.requestId}
+                        onClick={() =>
+                          confirm("Cancel " + item.requestId + "?") &&
+                          void change(item, "cancelled")
+                        }
+                        className="preorder-cancel"
+                      >
+                        Cancel request
+                      </button>
+                    )}
+                  </section>
+                </div>
+                <div className="preorder-admin-card__progress">
+                  {(
+                    [
+                      "new",
+                      "contacted",
+                      "confirmed",
+                      "batched",
+                      "ordered",
+                      "in_transit",
+                      "arrived",
+                      "ready",
+                    ] as PreorderStatus[]
+                  ).map((status, index) => (
+                    <span
+                      key={status}
+                      className={index <= statusIndex ? "is-done" : ""}
+                    >
+                      {labels[status]}
+                    </span>
+                  ))}
+                </div>
+                <div className="preorder-edit-row">
+                  <label>
+                    <span>Final selling price</span>
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      placeholder="Enter after customer agrees"
+                      value={draft.confirmedPrice}
+                      onChange={(e) =>
+                        editDraft(item, { confirmedPrice: e.target.value })
+                      }
+                    />
+                  </label>
+                  <label>
+                    <span>Private admin note</span>
+                    <input
+                      placeholder="e.g. customer confirmed on WhatsApp"
+                      value={draft.notes}
+                      onChange={(e) =>
+                        editDraft(item, { notes: e.target.value })
+                      }
+                    />
+                  </label>
+                  <button
+                    disabled={busy === item.requestId}
+                    onClick={() => void saveDetails(item)}
+                    className="btn"
+                  >
+                    Save details
+                  </button>
+                </div>
+                <details className="mt-4 rounded-xl border border-black/10 bg-white/35 p-4">
+                  <summary className="cursor-pointer text-xs font-semibold">
+                    Delivery details for final order
+                  </summary>
+                  <p className="mt-2 text-[11px] leading-5 text-black/45">
+                    The customer does not need to enter the full address when
+                    requesting a pre-order. Collect it on WhatsApp before
+                    converting the arrived item into a normal order.
+                  </p>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <label className="text-xs sm:col-span-2">
+                      Address line 1
+                      <input
+                        className="field mt-2"
+                        value={draft.address1}
+                        onChange={(e) =>
+                          editDraft(item, { address1: e.target.value })
+                        }
+                      />
+                    </label>
+                    <label className="text-xs">
+                      Address line 2
+                      <input
+                        className="field mt-2"
+                        value={draft.address2}
+                        onChange={(e) =>
+                          editDraft(item, { address2: e.target.value })
+                        }
+                      />
+                    </label>
+                    <label className="text-xs">
+                      City / area
+                      <input
+                        className="field mt-2"
+                        value={draft.city}
+                        onChange={(e) =>
+                          editDraft(item, { city: e.target.value })
+                        }
+                      />
+                    </label>
+                    <label className="text-xs">
+                      District
+                      <select
+                        className="field mt-2"
+                        value={draft.district}
+                        onChange={(e) =>
+                          editDraft(item, { district: e.target.value })
+                        }
+                      >
+                        <option value="">Select district</option>
+                        {sriLankaDistricts.map((d) => (
+                          <option key={d} value={d}>
+                            {d}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="text-xs">
+                      Postal code
+                      <input
+                        className="field mt-2"
+                        inputMode="numeric"
+                        maxLength={5}
+                        value={draft.postalCode}
+                        onChange={(e) =>
+                          editDraft(item, {
+                            postalCode: e.target.value
+                              .replace(/\D/g, "")
+                              .slice(0, 5),
+                          })
+                        }
+                      />
+                    </label>
+                  </div>
+                </details>
+              </article>
+            );
+          })
+        ) : (
+          <div className="admin-empty-state">
+            <p className="display">No pre-orders here.</p>
+            <span>
+              {store.admin.preorders.length
+                ? "Try another search or filter."
+                : "Customer pre-order requests will appear here as soon as someone submits one."}
+            </span>
+          </div>
+        )}
+      </div>
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-xs text-black/45">
+          Showing {filtered.length ? (safe - 1) * pageSize + 1 : 0}–
+          {Math.min(safe * pageSize, filtered.length)} of {filtered.length}
+        </p>
+        <div className="flex items-center gap-2">
+          <button
+            className="btn"
+            disabled={safe <= 1}
+            onClick={() => setPage((v) => Math.max(1, v - 1))}
+          >
+            <ChevronLeft size={15} /> Previous
+          </button>
+          <span className="px-2 text-xs">
+            {safe} / {pages}
+          </span>
+          <button
+            className="btn"
+            disabled={safe >= pages}
+            onClick={() => setPage((v) => Math.min(pages, v + 1))}
+          >
+            Next <ChevronRight size={15} />
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+function downloadOrdersCsv(rows: Order[]) {
+  const csvCell = (value: unknown) =>
+    '"' + String(value ?? "").replace(/"/g, '""') + '"';
+  const header = [
+    "Order ID",
+    "Created At",
+    "Customer",
+    "Phone",
+    "Address 1",
+    "Address 2",
+    "City",
+    "District",
+    "Postal Code",
+    "Checkout Courier",
+    "Fulfilment Courier",
+    "Tracking Number",
+    "COD Amount",
+    "Total",
+    "Order Status",
+    "Payment Status",
+  ];
+  const lines = [
+    header,
+    ...rows.map((order) => [
+      order.orderId,
+      order.createdAt,
+      order.customerName,
+      order.phone,
+      order.address1 || "",
+      order.address2 || "",
+      order.city,
+      order.district,
+      order.postalCode || "",
+      order.courierName || "",
+      order.fulfilmentCourierName || "",
+      order.trackingNumber || "",
+      order.paymentMethod === "cod" ? Number(order.total) || 0 : 0,
+      Number(order.total) || 0,
+      order.orderStatus,
+      order.paymentStatus,
+    ]),
+  ].map((row) => row.map(csvCell).join(","));
+  const blob = new Blob(["\uFEFF" + lines.join("\r\n")], {
+    type: "text/csv;charset=utf-8",
+  });
+  const url = URL.createObjectURL(blob),
+    link = document.createElement("a");
+  link.href = url;
+  link.download =
+    "zevenra-orders-" + new Date().toISOString().slice(0, 10) + ".csv";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+function Orders() {
+  const { admin, updateOrder, data, loadAdmin } = useStore(),
+    [query, setQuery] = useState(""),
+    [orderFilter, setOrderFilter] = useState("all"),
+    [paymentFilter, setPaymentFilter] = useState("all"),
+    [dateFilter, setDateFilter] = useState("all"),
+    [page, setPage] = useState(1),
+    [open, setOpen] = useState(""),
+    [details, setDetails] = useState<Record<string, AdminOrderDetail>>({}),
+    [loadingId, setLoadingId] = useState(""),
+    [savingId, setSavingId] = useState(""),
+    [status, setStatus] = useState(""),
+    [creatingManual, setCreatingManual] = useState(false),
+    [manualBusy, setManualBusy] = useState(false),
+    [manualItems, setManualItems] = useState([
+      { key: crypto.randomUUID(), productId: "", variantId: "", quantity: 1 },
+    ]);
+  const pageSize = 20,
+    now = Date.now(),
+    needle = query.trim().toLowerCase();
+  const orders = [...admin.orders].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+  const filtered = orders.filter((order) => {
+    const created = new Date(order.createdAt).getTime(),
+      ageDays = (now - created) / 86400000,
+      payment = String(order.paymentStatus || "").toLowerCase();
+    const matchesDate =
+      dateFilter === "all" ||
+      (dateFilter === "today" &&
+        new Date(order.createdAt).toDateString() ===
+          new Date().toDateString()) ||
+      (dateFilter === "7" && ageDays <= 7) ||
+      (dateFilter === "30" && ageDays <= 30);
+    const matchesPayment =
+      paymentFilter === "all" ||
+      paymentFilter === order.paymentMethod ||
+      (paymentFilter === "verify" &&
+        order.paymentMethod === "bank" &&
+        ["", "verification required", "receipt submitted"].includes(payment)) ||
+      (paymentFilter === "paid" && ["paid", "verified"].includes(payment));
+    const matchesOrder =
+      orderFilter === "all" ||
+      String(order.orderStatus).toLowerCase() === orderFilter;
+    const matchesQuery =
+      !needle ||
+      [
+        order.orderId,
+        order.customerName,
+        order.phone,
+        order.email,
+        order.district,
+      ].some((value) =>
+        String(value || "")
+          .toLowerCase()
+          .includes(needle),
+      );
+    return matchesDate && matchesPayment && matchesOrder && matchesQuery;
+  });
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize)),
+    safePage = Math.min(page, pageCount),
+    visible = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+  useEffect(() => setPage(1), [query, orderFilter, paymentFilter, dateFilter]);
+
+  async function toggle(orderId: string) {
+    if (open === orderId) {
+      setOpen("");
+      return;
+    }
+    setOpen(orderId);
+    setStatus("");
+    if (details[orderId]) return;
+    setLoadingId(orderId);
+    try {
+      const detail = await adminApi.get<AdminOrderDetail>("getOrder", {
+        orderId,
+      });
+      setDetails((current) => ({ ...current, [orderId]: detail }));
+    } catch (reason) {
+      setStatus(
+        reason instanceof Error
+          ? reason.message
+          : "Could not load order details.",
+      );
+    } finally {
+      setLoadingId("");
+    }
+  }
+  async function change(orderId: string, patch: Partial<Order>) {
+    setSavingId(orderId);
+    setStatus("");
+    try {
+      const updated = await updateOrder({ orderId, ...patch });
+      setDetails((current) => ({
+        ...current,
+        [orderId]: {
+          ...(current[orderId] || {}),
+          ...updated,
+        } as AdminOrderDetail,
+      }));
+      setStatus("Order updated.");
+    } catch (reason) {
+      setStatus(
+        reason instanceof Error ? reason.message : "Could not update order.",
+      );
+    } finally {
+      setSavingId("");
+    }
+  }
+  async function createManual(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setManualBusy(true);
+    setStatus("");
+    try {
+      const raw = Object.fromEntries(new FormData(event.currentTarget)),
+        name = String(raw.customerName || "").trim(),
+        phone = String(raw.phone || "").trim(),
+        whatsapp = String(raw.whatsapp || "").trim(),
+        email = String(raw.email || "").trim(),
+        address1 = String(raw.address1 || "").trim(),
+        city = String(raw.city || "").trim(),
+        district = String(raw.district || "").trim();
+      if (name.length < 2) throw new Error("Enter the customer’s full name.");
+      if (!adminPhone.test(phone))
+        throw new Error("Enter a valid customer mobile number.");
+      if (whatsapp && !adminPhone.test(whatsapp))
+        throw new Error("Enter a valid WhatsApp number or leave it blank.");
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+        throw new Error("Enter a valid email address or leave it blank.");
+      if (
+        address1.length < 5 ||
+        city.length < 2 ||
+        !sriLankaDistricts.includes(
+          district as (typeof sriLankaDistricts)[number],
+        )
+      )
+        throw new Error(
+          "Complete the delivery address and choose a valid district.",
+        );
+      const items = manualItems
+        .filter((item) => item.productId && item.variantId)
+        .map((item) => ({
+          productId: item.productId,
+          variantId: item.variantId,
+          quantity: item.quantity,
+        }));
+      if (!items.length) throw new Error("Add at least one product.");
+      for (const line of manualItems.filter(
+        (item) => item.productId && item.variantId,
+      )) {
+        const product = data.products.find((p) => p.id === line.productId),
+          variant = product?.variants.find((v) => v.id === line.variantId);
+        if (!variant || line.quantity < 1 || line.quantity > variant.stock)
+          throw new Error("Check item quantities against the available stock.");
+      }
+      const choice = String(raw.paymentChoice || "cod"),
+        paymentMethod = choice === "cod" ? "cod" : "bank",
+        paymentStatus =
+          choice === "bank_paid"
+            ? "paid"
+            : choice === "bank_waiting"
+              ? "verification required"
+              : "COD";
+      const order = await adminApi.post<Order>("createManualOrder", {
+        source: String(raw.source || "manual"),
+        customerName: name,
+        phone,
+        whatsapp,
+        email,
+        address1,
+        address2: String(raw.address2 || "").trim(),
+        city,
+        district,
+        postalCode: String(raw.postalCode || "").trim(),
+        deliveryNotes: String(raw.deliveryNotes || "").trim(),
+        paymentMethod,
+        paymentStatus,
+        items,
+      });
+      await loadAdmin();
+      setCreatingManual(false);
+      setManualItems([
+        { key: crypto.randomUUID(), productId: "", variantId: "", quantity: 1 },
+      ]);
+      setStatus(
+        "Manual order " +
+          order.orderId +
+          " created. Stock was reserved immediately.",
+      );
+    } catch (reason) {
+      setStatus(
+        reason instanceof Error
+          ? reason.message
+          : "Could not create manual order.",
+      );
+    } finally {
+      setManualBusy(false);
+    }
+  }
+  const pending = orders.filter(
+      (order) => String(order.orderStatus).toLowerCase() === "pending",
+    ).length,
+    bankVerify = orders.filter(
+      (order) =>
+        order.paymentMethod === "bank" &&
+        ["", "verification required", "receipt submitted"].includes(
+          String(order.paymentStatus || "").toLowerCase(),
+        ),
+    ).length,
+    paid = orders.filter((order) =>
+      ["paid", "verified"].includes(
+        String(order.paymentStatus || "").toLowerCase(),
+      ),
+    ).length;
+  return (
+    <>
+      <Head
+        eyebrow="Fulfilment"
+        title="Orders"
+        action={
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => downloadOrdersCsv(filtered)}
+              disabled={!filtered.length}
+              className="btn"
+            >
+              <Download size={15} /> Export courier CSV
+            </button>
+            <button
+              onClick={() => setCreatingManual((value) => !value)}
+              className="btn btn-dark"
+            >
+              <Plus size={15} />
+              {creatingManual ? "Close manual order" : "Manual order"}
+            </button>
+          </div>
+        }
+      />
+      {creatingManual && (
+        <form
+          onSubmit={createManual}
+          className="mt-7 border border-black/10 bg-[#f6f3ed] p-4 sm:p-6"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="eyebrow text-black/45">Instagram / WhatsApp sale</p>
+              <h2 className="display mt-2 text-3xl">Create manual order</h2>
+            </div>
+            <p className="max-w-md text-xs leading-5 text-black/45">
+              Use this when you sell through DMs. Stock is reserved immediately
+              so the website cannot oversell the same size.
+            </p>
+          </div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <label className="text-xs">
+              Source
+              <select name="source" className="field mt-2">
+                <option value="instagram">Instagram</option>
+                <option value="whatsapp">WhatsApp</option>
+                <option value="manual">Other / Manual</option>
+              </select>
+            </label>
+            <label className="text-xs">
+              Customer name *
+              <input name="customerName" required className="field mt-2" />
+            </label>
+            <label className="text-xs">
+              Phone *
+              <input name="phone" required className="field mt-2" type="tel" />
+            </label>
+            <label className="text-xs">
+              WhatsApp
+              <input name="whatsapp" className="field mt-2" type="tel" />
+            </label>
+            <label className="text-xs">
+              Email
+              <input name="email" className="field mt-2" type="email" />
+            </label>
+            <label className="text-xs">
+              Payment
+              <select name="paymentChoice" className="field mt-2">
+                <option value="cod">Cash on delivery</option>
+                <option value="bank_paid">Bank transfer — verified</option>
+                <option value="bank_waiting">
+                  Bank transfer — awaiting verification
+                </option>
+              </select>
+            </label>
+            <label className="text-xs sm:col-span-2">
+              Address line 1 *
+              <input name="address1" required className="field mt-2" />
+            </label>
+            <label className="text-xs">
+              Address line 2<input name="address2" className="field mt-2" />
+            </label>
+            <label className="text-xs">
+              City *<input name="city" required className="field mt-2" />
+            </label>
+            <label className="text-xs">
+              District *
+              <select
+                name="district"
+                required
+                className="field mt-2"
+                defaultValue=""
+              >
+                <option value="" disabled>
+                  Select district
+                </option>
+                {sriLankaDistricts.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-xs">
+              Postal code
+              <input name="postalCode" className="field mt-2" />
+            </label>
+            <label className="text-xs sm:col-span-2 lg:col-span-3">
+              Delivery notes
+              <textarea name="deliveryNotes" className="field mt-2" rows={2} />
+            </label>
+          </div>
+          <div className="mt-6">
+            <div className="flex items-center justify-between">
+              <p className="eyebrow">Items</p>
+              <button
+                type="button"
+                className="btn"
+                onClick={() =>
+                  setManualItems((items) => [
+                    ...items,
+                    {
+                      key: crypto.randomUUID(),
+                      productId: "",
+                      variantId: "",
+                      quantity: 1,
+                    },
+                  ])
+                }
+              >
+                <Plus size={14} /> Add item
+              </button>
+            </div>
+            <div className="mt-3 grid gap-3">
+              {manualItems.map((line) => {
+                const product = data.products.find(
+                    (p) => p.id === line.productId,
+                  ),
+                  variants =
+                    product?.variants.filter((v) => v.active && v.stock > 0) ||
+                    [];
+                return (
+                  <div
+                    key={line.key}
+                    className="grid gap-2 border border-black/10 bg-white/45 p-3 sm:grid-cols-[1fr_1fr_100px_auto]"
+                  >
+                    <select
+                      className="field"
+                      value={line.productId}
+                      onChange={(e) =>
+                        setManualItems((items) =>
+                          items.map((item) =>
+                            item.key === line.key
+                              ? {
+                                  ...item,
+                                  productId: e.target.value,
+                                  variantId: "",
+                                }
+                              : item,
+                          ),
+                        )
+                      }
+                    >
+                      <option value="">Select product</option>
+                      {data.products
+                        .filter((p) => p.status === "published")
+                        .map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                          </option>
+                        ))}
+                    </select>
+                    <select
+                      className="field"
+                      disabled={!line.productId}
+                      value={line.variantId}
+                      onChange={(e) =>
+                        setManualItems((items) =>
+                          items.map((item) =>
+                            item.key === line.key
+                              ? { ...item, variantId: e.target.value }
+                              : item,
+                          ),
+                        )
+                      }
+                    >
+                      <option value="">Select size / colour</option>
+                      {variants.map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.color} / {v.size} — stock {v.stock}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      className="field"
+                      type="number"
+                      min="1"
+                      max={
+                        variants.find((v) => v.id === line.variantId)?.stock ||
+                        99
+                      }
+                      value={line.quantity}
+                      onChange={(e) =>
+                        setManualItems((items) =>
+                          items.map((item) =>
+                            item.key === line.key
+                              ? {
+                                  ...item,
+                                  quantity: Math.max(
+                                    1,
+                                    Number(e.target.value) || 1,
+                                  ),
+                                }
+                              : item,
+                          ),
+                        )
+                      }
+                    />
+                    <button
+                      type="button"
+                      disabled={manualItems.length === 1}
+                      className="btn text-red-800 disabled:opacity-30"
+                      onClick={() =>
+                        setManualItems((items) =>
+                          items.filter((item) => item.key !== line.key),
+                        )
+                      }
+                    >
+                      <Trash2 size={14} />
+                      <span className="sm:hidden">Remove</span>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <button
+              disabled={manualBusy}
+              className="btn btn-dark disabled:opacity-50"
+            >
+              {manualBusy ? "Creating…" : "Create & reserve stock"}
+            </button>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => setCreatingManual(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+      <div className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {[
+          ["All orders", orders.length],
+          ["Pending", pending],
+          ["Bank to verify", bankVerify],
+          ["Paid / verified", paid],
+        ].map(([label, value]) => (
+          <div key={label} className="border border-black/10 bg-[#f6f3ed] p-4">
+            <p className="text-xs text-black/45">{label}</p>
+            <p className="display mt-2 text-3xl">{value}</p>
+          </div>
+        ))}
+      </div>
+      <div className="admin-toolbar mt-5 md:grid-cols-[minmax(220px,1fr)_180px_180px_160px]">
+        <div className="admin-search">
+          <Search size={17} />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Order ID, customer, phone, email…"
+          />
+        </div>
+        <select
+          value={orderFilter}
+          onChange={(e) => setOrderFilter(e.target.value)}
+          className="field bg-white/50"
+        >
+          <option value="all">All order statuses</option>
+          {[
+            "pending",
+            "confirmed",
+            "sourcing",
+            "packed",
+            "shipped",
+            "delivered",
+            "cancelled",
+          ].map((value) => (
+            <option key={value} value={value}>
+              {value}
+            </option>
+          ))}
+        </select>
+        <select
+          value={paymentFilter}
+          onChange={(e) => setPaymentFilter(e.target.value)}
+          className="field bg-white/50"
+        >
+          <option value="all">All payments</option>
+          <option value="bank">Bank transfer</option>
+          <option value="cod">Cash on delivery</option>
+          <option value="verify">Needs verification</option>
+          <option value="paid">Paid / verified</option>
+        </select>
+        <select
+          value={dateFilter}
+          onChange={(e) => setDateFilter(e.target.value)}
+          className="field bg-white/50"
+        >
+          <option value="all">Any date</option>
+          <option value="today">Today</option>
+          <option value="7">Last 7 days</option>
+          <option value="30">Last 30 days</option>
+        </select>
+      </div>
+      {status && (
+        <p className="mt-4 border-l-2 border-[#96724f] bg-white/40 px-4 py-3 text-xs text-black/60">
+          {status}
+        </p>
+      )}
+      <div className="mt-5 overflow-hidden border border-black/10 bg-[#f6f3ed]">
+        <div className="hidden grid-cols-[1.15fr_1fr_.8fr_.8fr_.8fr_auto] gap-3 border-b border-black/10 px-4 py-3 text-[10px] uppercase tracking-[.14em] text-black/40 lg:grid">
+          <span>Order / date</span>
+          <span>Customer</span>
+          <span>Total</span>
+          <span>Payment</span>
+          <span>Status</span>
+          <span />
+        </div>
+        {visible.length ? (
+          visible.map((order) => {
+            const detail = details[order.orderId],
+              isOpen = open === order.orderId;
+            return (
+              <article
+                key={order.orderId}
+                className="border-b border-black/10 last:border-0"
+              >
+                <div className="grid items-center gap-3 px-4 py-4 lg:grid-cols-[1.15fr_1fr_.8fr_.8fr_.8fr_auto]">
+                  <button
+                    type="button"
+                    onClick={() => void toggle(order.orderId)}
+                    className="min-w-0 text-left"
+                  >
+                    <p className="text-sm font-medium">{order.orderId}</p>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <p className="text-xs text-black/45">
+                        {new Date(order.createdAt).toLocaleString("en-LK", {
+                          year: "numeric",
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </p>
+                      {order.hasPreorder && (
+                        <span className="border border-[#96724f]/30 bg-[#96724f]/5 px-1.5 py-0.5 text-[8px] font-medium tracking-[.12em] text-[#765638]">
+                          PRE-ORDER
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm">{order.customerName}</p>
+                    <p className="mt-1 truncate text-xs text-black/45">
+                      {order.phone} · {order.district}
+                    </p>
+                  </div>
+                  <span className="text-sm">{money(Number(order.total))}</span>
+                  <div>
+                    <p className="text-xs">
+                      {order.paymentMethod === "cod" ? "COD" : "BANK"}
+                    </p>
+                    <p className="mt-1 text-[10px] uppercase tracking-wider text-black/45">
+                      {order.paymentStatus}
+                    </p>
+                  </div>
+                  <span className="w-fit rounded-full border border-black/10 px-2.5 py-1 text-[10px] uppercase tracking-wider">
+                    {order.orderStatus}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => void toggle(order.orderId)}
+                    className="min-h-11 px-2 text-xs underline"
+                  >
+                    {isOpen ? "CLOSE" : "VIEW"}
+                  </button>
+                </div>
+                {isOpen && (
+                  <div className="border-t border-black/10 bg-white/45 p-5">
+                    {loadingId === order.orderId ? (
+                      <p className="py-8 text-center text-sm text-black/45">
+                        Loading order details…
+                      </p>
+                    ) : detail ? (
+                      <div className="grid gap-8 xl:grid-cols-[1.15fr_.85fr]">
+                        <div className="space-y-7">
+                          <div>
+                            <p className="eyebrow text-black/45">Items</p>
+                            <div className="mt-3 divide-y divide-black/10">
+                              {(detail.items || []).map((item, index) => (
+                                <div
+                                  key={item.variantId || index}
+                                  className="flex justify-between gap-5 py-3 text-sm"
+                                >
+                                  <div>
+                                    <p>
+                                      {item.productName || item.name || "Item"}
+                                    </p>
+                                    <p className="mt-1 text-xs text-black/45">
+                                      {item.color} / {item.size} · Qty{" "}
+                                      {item.quantity}
+                                      {item.sku ? " · " + item.sku : ""}
+                                      {String(item.isPreorder).toLowerCase() ===
+                                      "true"
+                                        ? " · PRE-ORDER"
+                                        : ""}
+                                    </p>
+                                  </div>
+                                  <b className="font-normal">
+                                    {money(
+                                      Number(
+                                        item.lineTotal ||
+                                          Number(item.unitPrice) *
+                                            Number(item.quantity),
+                                      ),
+                                    )}
+                                  </b>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          <div>
+                            <p className="eyebrow text-black/45">
+                              Customer & delivery
+                            </p>
+                            <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+                              <Info
+                                label="Source"
+                                value={(detail.source || "web").replace(
+                                  "_",
+                                  " ",
+                                )}
+                              />
+                              <Info label="Name" value={detail.customerName} />
+                              <Info label="Phone" value={detail.phone} />
+                              <Info
+                                label="WhatsApp"
+                                value={detail.whatsapp || "—"}
+                              />
+                              <Info label="Email" value={detail.email || "—"} />
+                              <Info
+                                label="District / city"
+                                value={[detail.district, detail.city]
+                                  .filter(Boolean)
+                                  .join(" · ")}
+                              />
+                              <Info
+                                label="Postal code"
+                                value={detail.postalCode || "—"}
+                              />
+                              <div className="sm:col-span-2">
+                                <Info
+                                  label="Delivery address"
+                                  value={[
+                                    detail.address1,
+                                    detail.address2,
+                                    detail.city,
+                                    detail.district,
+                                    detail.postalCode,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(", ")}
+                                />
+                              </div>
+                              {detail.deliveryNotes && (
+                                <div className="sm:col-span-2">
+                                  <Info
+                                    label="Delivery instructions"
+                                    value={detail.deliveryNotes}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="space-y-5">
+                          <Panel title="Order control">
+                            <label className="mb-3 block text-xs">
+                              Order status
+                              <select
+                                disabled={savingId === order.orderId}
+                                className="field mt-2"
+                                value={String(
+                                  detail.orderStatus || "pending",
+                                ).toLowerCase()}
+                                onChange={(e) =>
+                                  void change(order.orderId, {
+                                    orderStatus: e.target.value,
+                                  })
+                                }
+                              >
+                                {[
+                                  "pending",
+                                  "confirmed",
+                                  "sourcing",
+                                  "packed",
+                                  "shipped",
+                                  "delivered",
+                                  "cancelled",
+                                ].map((value) => (
+                                  <option key={value} value={value}>
+                                    {value}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="block text-xs">
+                              Payment status
+                              <select
+                                disabled={savingId === order.orderId}
+                                className="field mt-2"
+                                value={String(detail.paymentStatus || "")}
+                                onChange={(e) =>
+                                  void change(order.orderId, {
+                                    paymentStatus: e.target.value,
+                                  })
+                                }
+                              >
+                                {(detail.paymentMethod === "bank"
+                                  ? [
+                                      "verification required",
+                                      "receipt submitted",
+                                      "paid",
+                                      "verified",
+                                      "rejected",
+                                      "refunded",
+                                    ]
+                                  : ["COD", "paid", "refunded"]
+                                ).map((value) => (
+                                  <option key={value} value={value}>
+                                    {value}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          </Panel>
+                          <Panel title="Payment">
+                            <div className="space-y-3 text-sm">
+                              <Info
+                                label="Method"
+                                value={
+                                  detail.paymentMethod === "cod"
+                                    ? "Cash on delivery"
+                                    : "Bank transfer"
+                                }
+                              />
+                              {detail.paymentReference && (
+                                <Info
+                                  label="Transfer reference"
+                                  value={detail.paymentReference}
+                                />
+                              )}
+                              <Info
+                                label="Payment status"
+                                value={detail.paymentStatus}
+                              />
+                              {detail.paymentMethod === "bank" && (
+                                <ProtectedReceipt
+                                  url={detail.paymentReceiptUrl}
+                                />
+                              )}{" "}
+                            </div>
+                          </Panel>
+                          <Panel title="Totals">
+                            <div className="space-y-2 text-sm">
+                              <div className="flex justify-between">
+                                <span>Subtotal</span>
+                                <span>{money(Number(detail.subtotal))}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>Delivery</span>
+                                <span>
+                                  {Number(detail.deliveryFee)
+                                    ? money(Number(detail.deliveryFee))
+                                    : "Complimentary"}
+                                </span>
+                              </div>
+                              <div className="flex justify-between border-t border-black/10 pt-3">
+                                <b>Total</b>
+                                <b>{money(Number(detail.total))}</b>
+                              </div>
+                            </div>
+                          </Panel>
+                          <FulfilmentPanel
+                            order={detail}
+                            couriers={admin.couriers}
+                            busy={savingId === order.orderId}
+                            save={(patch) => void change(order.orderId, patch)}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="py-8 text-center text-sm text-black/45">
+                        Order details unavailable.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </article>
+            );
+          })
+        ) : (
+          <Empty
+            text={
+              admin.orders.length
+                ? "No orders match these filters."
+                : "No orders yet."
+            }
+          />
+        )}
+      </div>
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-xs text-black/45">
+          Showing {filtered.length ? (safePage - 1) * pageSize + 1 : 0}–
+          {Math.min(safePage * pageSize, filtered.length)} of {filtered.length}{" "}
+          orders
+        </p>
+        <div className="flex items-center gap-2">
+          <button
+            className="btn"
+            disabled={safePage <= 1}
+            onClick={() => setPage((value) => Math.max(1, value - 1))}
+          >
+            <ChevronLeft size={15} /> Previous
+          </button>
+          <span className="px-2 text-xs">
+            Page {safePage} / {pageCount}
+          </span>
+          <button
+            className="btn"
+            disabled={safePage >= pageCount}
+            onClick={() => setPage((value) => Math.min(pageCount, value + 1))}
+          >
+            Next <ChevronRight size={15} />
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+function ProtectedReceipt({ url }: { url?: string }) {
+  const [busy, setBusy] = useState(false),
+    [error, setError] = useState("");
+  async function open() {
+    if (!url) return;
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch("/api/payment-receipt-access", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url }),
+          cache: "no-store",
+        }),
+        payload = (await response.json()) as { url?: string; error?: string };
+      if (!response.ok || !payload.url)
+        throw new Error(payload.error || "Could not open receipt.");
+      window.open(payload.url, "_blank", "noopener,noreferrer");
+    } catch (reason) {
+      setError(
+        reason instanceof Error ? reason.message : "Could not open receipt.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div>
+      <p className="text-[10px] uppercase tracking-[.14em] text-black/40">
+        Receipt
+      </p>
+      {url ? (
+        <>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void open()}
+            className="btn mt-2 w-full justify-center"
+          >
+            {busy ? "Opening secure receipt…" : "Open protected receipt"}{" "}
+            <ExternalLink size={14} />
+          </button>
+          <p className="mt-2 text-[10px] leading-5 text-black/45">
+            Receipt access is generated for an authorised admin session only.
+          </p>
+          {error && (
+            <p className="mt-2 text-xs text-red-800" role="alert">
+              {error}
+            </p>
+          )}
+        </>
+      ) : (
+        <p className="mt-2 border border-amber-900/20 bg-amber-900/[.05] p-3 text-xs text-amber-950">
+          No receipt attached.
+        </p>
+      )}
+    </div>
+  );
+}
+function FulfilmentPanel({
+  order,
+  couriers,
+  busy,
+  save,
+}: {
+  order: AdminOrderDetail;
+  couriers: CourierProvider[];
+  busy: boolean;
+  save: (patch: Partial<Order>) => void;
+}) {
+  const [courierId, setCourierId] = useState(
+      order.fulfilmentCourierProviderId || order.courierProviderId || "",
+    ),
+    [trackingNumber, setTrackingNumber] = useState(order.trackingNumber || ""),
+    [trackingUrl, setTrackingUrl] = useState(order.trackingUrl || ""),
+    [sentDate, setSentDate] = useState(order.courierSentDate || ""),
+    [error, setError] = useState("");
+  const submit = () => {
+    const url = trackingUrl.trim();
+    if (url && !/^https:\/\//i.test(url)) {
+      setError("Tracking URL must start with https://");
+      return;
+    }
+    setError("");
+    const courier = couriers.find((item) => item.id === courierId);
+    save({
+      fulfilmentCourierProviderId: courierId,
+      fulfilmentCourierName: courier?.name || "",
+      trackingNumber: trackingNumber.trim(),
+      trackingUrl: url,
+      courierSentDate: sentDate,
+    });
+  };
+  return (
+    <Panel title="Courier & tracking">
+      <div className="mb-4 border-l-2 border-bronze pl-3 text-xs leading-5">
+        <b>Checkout rate:</b> {order.courierName || "Legacy delivery"} ·{" "}
+        {order.deliveryPricingMode === "flat"
+          ? "Flat rate"
+          : order.deliveryZoneName || "Zone based"}{" "}
+        · {money(Number(order.deliveryFee))}
+      </div>
+      <div className="grid gap-3">
+        <label className="text-xs">
+          Actual fulfilment courier
+          <select
+            className="field mt-2"
+            value={courierId}
+            onChange={(e) => setCourierId(e.target.value)}
+          >
+            <option value="">Select courier</option>
+            {couriers.map((courier) => (
+              <option key={courier.id} value={courier.id}>
+                {courier.name}
+                {courier.active ? "" : " (inactive)"}
+              </option>
+            ))}
+          </select>
+        </label>
+        <Field
+          label="Tracking number"
+          value={trackingNumber}
+          onChange={setTrackingNumber}
+        />
+        <Field
+          label="Tracking URL"
+          value={trackingUrl}
+          onChange={setTrackingUrl}
+        />
+        <label className="text-xs">
+          Courier sent date
+          <input
+            className="field mt-2"
+            type="date"
+            value={sentDate}
+            onChange={(e) => setSentDate(e.target.value)}
+          />
+        </label>
+        {error && (
+          <p className="text-xs text-red-800" role="alert">
+            {error}
+          </p>
+        )}
+        <button disabled={busy} className="btn btn-dark" onClick={submit}>
+          Save fulfilment
+        </button>
+      </div>
+    </Panel>
+  );
+}
+type AdminOrderLine = {
+  variantId?: string;
+  productName?: string;
+  name?: string;
+  color?: string;
+  size?: string;
+  quantity?: number;
+  unitPrice?: number;
+  lineTotal?: number;
+  sku?: string;
+  isPreorder?: boolean | string;
+};
+type AdminOrderDetail = Omit<Order, "items"> & { items: AdminOrderLine[] };
+function Info({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div>
+      <p className="text-[10px] uppercase tracking-[.14em] text-black/40">
+        {label}
+      </p>
+      <div className="mt-1 break-words text-sm leading-6 text-black/70">
+        {value || "—"}
+      </div>
+    </div>
+  );
+}
+
+function Media() {
+  const [config, setConfig] = useState<{
+      timestamp: number;
+      folder: string;
+      signature: string;
+      apiKey: string;
+      cloudName: string;
+    } | null>(null),
+    [checking, setChecking] = useState(true),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState(""),
+    [uploads, setUploads] = useState<string[]>([]);
+  useEffect(() => {
+    fetch("/api/admin/cloudinary-sign", { method: "POST" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error();
+        setConfig(await response.json());
+      })
+      .catch(() =>
+        setError(
+          "Cloudinary is not configured yet. Add the three Cloudinary environment variables to enable signed uploads.",
+        ),
+      )
+      .finally(() => setChecking(false));
+  }, []);
+  async function upload(file: File) {
+    if (!config) return;
+    setBusy(true);
+    setError("");
+    try {
+      const fresh = await fetch("/api/admin/cloudinary-sign", {
+          method: "POST",
+        }),
+        signed = (await fresh.json()) as typeof config;
+      if (!fresh.ok) throw new Error();
+      const form = new FormData();
+      form.append("file", file);
+      form.append("api_key", signed.apiKey);
+      form.append("timestamp", String(signed.timestamp));
+      form.append("folder", signed.folder);
+      form.append("signature", signed.signature);
+      const kind = file.type.startsWith("video/") ? "video" : "image",
+        response = await fetch(
+          `https://api.cloudinary.com/v1_1/${signed.cloudName}/${kind}/upload`,
+          { method: "POST", body: form },
+        ),
+        result = (await response.json()) as { secure_url?: string };
+      if (!response.ok || !result.secure_url) throw new Error();
+      setUploads((x) => [result.secure_url!, ...x]);
+    } catch {
+      setError(
+        "Upload failed. Check the file type and Cloudinary configuration.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <>
+      <Head eyebrow="Asset library" title="Media" />
+      <div className="mt-7 border-2 border-dashed border-black/15 bg-[#f6f3ed] p-8 text-center sm:p-12">
+        <p className="display text-3xl">Images and video, securely signed.</p>
+        <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-black/45">
+          Upload approved catalogue media. Copy the returned URL into a product
+          or homepage section.
+        </p>
+        {checking ? (
+          <p className="mt-6 text-xs">Checking Cloudinary…</p>
+        ) : config ? (
+          <label className="btn btn-dark mt-6 cursor-pointer">
+            {busy ? "Uploading…" : "Choose media"}
+            <input
+              className="sr-only"
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/avif,video/mp4,video/webm"
+              disabled={busy}
+              onChange={(e) =>
+                e.target.files?.[0] && void upload(e.target.files[0])
+              }
+            />
+          </label>
+        ) : null}
+        {error && (
+          <p
+            className="mx-auto mt-5 max-w-xl bg-red-950 p-3 text-xs text-white"
+            role="alert"
+          >
+            {error}
+          </p>
+        )}
+      </div>
+      {uploads.length > 0 && (
+        <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {uploads.map((url) => (
+            <div key={url} className="bg-[#f6f3ed] p-3">
+              {/\.(mp4|webm|mov)(\?|$)/i.test(url) ? (
+                <video
+                  src={url}
+                  controls
+                  muted
+                  playsInline
+                  className="aspect-[4/3] w-full bg-black object-cover"
+                />
+              ) : (
+                <img
+                  src={url}
+                  alt="Uploaded media"
+                  className="aspect-[4/3] w-full object-cover"
+                />
+              )}
+              <button
+                className="mt-3 w-full truncate text-left text-xs underline"
+                onClick={() => void navigator.clipboard.writeText(url)}
+              >
+                {url}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+function ExplicitSettings({ focus }: { focus: string }) {
+  const s = useStore(),
+    [draft, setDraft] = useState(s.data.settings),
+    [busy, setBusy] = useState(false),
+    [status, setStatus] = useState("");
+  useEffect(() => setDraft(s.data.settings), [s.data.settings]);
+  const change = <K extends keyof typeof draft>(
+    key: K,
+    value: (typeof draft)[K],
+  ) => setDraft((x) => ({ ...x, [key]: value }));
+  const validUrl = (value: string) => {
+    if (!value.trim()) return true;
+    try {
+      const url = new URL(value);
+      return url.protocol === "https:" || url.protocol === "http:";
+    } catch {
+      return false;
+    }
+  };
+  async function submit() {
+    setStatus("");
+    if (!draft.brandName.trim()) return setStatus("Brand name is required.");
+    if (
+      draft.email.trim() &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email.trim())
+    )
+      return setStatus("Enter a valid contact email.");
+    if (draft.whatsapp.trim() && !adminPhone.test(draft.whatsapp.trim()))
+      return setStatus("Enter a valid WhatsApp number.");
+    if (draft.phone.trim() && !adminPhone.test(draft.phone.trim()))
+      return setStatus("Enter a valid phone number.");
+    if (!validUrl(draft.instagram) || !validUrl(draft.tiktok))
+      return setStatus(
+        "Instagram and TikTok must be valid http(s) URLs or left blank.",
+      );
+    if (
+      !Number.isFinite(draft.deliveryFee) ||
+      draft.deliveryFee < 0 ||
+      !Number.isFinite(draft.freeDeliveryThreshold) ||
+      draft.freeDeliveryThreshold < 0
+    )
+      return setStatus("Delivery amounts cannot be negative.");
+    if (draft.ordersEnabled && !draft.codEnabled && !draft.bankEnabled)
+      return setStatus(
+        "Enable at least one payment method before enabling online orders.",
+      );
+    if (
+      draft.bankEnabled &&
+      (!draft.bankName.trim() ||
+        !draft.accountName.trim() ||
+        !draft.accountNumber.trim())
+    )
+      return setStatus(
+        "Complete bank name, account name and account number before enabling bank transfer.",
+      );
+    setBusy(true);
+    try {
+      await s.commitSettings(draft);
+      setStatus("Settings saved.");
+    } catch (reason) {
+      setStatus(
+        reason instanceof Error ? reason.message : "Could not save settings.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <>
+      <Head
+        eyebrow="Store configuration"
+        title={focus === "delivery" ? "Delivery" : "Settings"}
+      />
+      <div className="mt-7 grid gap-5 lg:grid-cols-2">
+        {focus !== "delivery" && (
+          <>
+            <Panel title="Brand & contact">
+              <Field
+                label="Brand name"
+                value={draft.brandName}
+                onChange={(v) => change("brandName", v)}
+              />
+              <Field
+                label="Tagline"
+                value={draft.tagline}
+                onChange={(v) => change("tagline", v)}
+              />
+              <Field
+                label="Announcement"
+                value={draft.announcement}
+                onChange={(v) => change("announcement", v)}
+              />
+              <Field
+                label="WhatsApp"
+                value={draft.whatsapp}
+                onChange={(v) => change("whatsapp", v)}
+              />
+              <Field
+                label="Phone"
+                value={draft.phone}
+                onChange={(v) => change("phone", v)}
+              />
+              <Field
+                label="Email"
+                value={draft.email}
+                onChange={(v) => change("email", v)}
+              />
+              <Field
+                label="Instagram URL"
+                value={draft.instagram}
+                onChange={(v) => change("instagram", v)}
+              />
+              <Field
+                label="TikTok URL"
+                value={draft.tiktok}
+                onChange={(v) => change("tiktok", v)}
+              />
+              <p className="text-xs leading-5 text-black/45">
+                These details power the Contact page and footer social links.
+              </p>
+            </Panel>
+            <Panel title="Payments">
+              <Toggles
+                items={[
+                  [
+                    "Cash on delivery",
+                    draft.codEnabled,
+                    (v) => change("codEnabled", v),
+                  ],
+                  [
+                    "Bank transfer",
+                    draft.bankEnabled,
+                    (v) => change("bankEnabled", v),
+                  ],
+                ]}
+              />
+              <Field
+                label="Bank"
+                value={draft.bankName}
+                onChange={(v) => change("bankName", v)}
+              />
+              <Field
+                label="Account name"
+                value={draft.accountName}
+                onChange={(v) => change("accountName", v)}
+              />
+              <Field
+                label="Account number"
+                value={draft.accountNumber}
+                onChange={(v) => change("accountNumber", v)}
+              />
+              <Field
+                label="Branch"
+                value={draft.branch}
+                onChange={(v) => change("branch", v)}
+              />
+            </Panel>
+          </>
+        )}
+        <Panel title="Delivery">
+          <Toggles
+            items={[
+              [
+                "Islandwide delivery",
+                draft.deliveryEnabled,
+                (v) => change("deliveryEnabled", v),
+              ],
+            ]}
+          />
+          <Field
+            label="Free delivery threshold (LKR)"
+            value={String(draft.freeDeliveryThreshold)}
+            onChange={(v) => change("freeDeliveryThreshold", Number(v))}
+          />
+          <p className="mt-2 text-xs leading-5 text-black/45">
+            Courier prices and delivery zones are managed separately so changing
+            courier companies never changes your store settings.
+          </p>
+          <Link to="/admin/delivery" className="btn mt-4 w-full">
+            Manage couriers & delivery
+          </Link>
+        </Panel>
+        {focus === "delivery" && <DeliveryRates />}
+        <Panel title="Store & SEO">
+          <Toggles
+            items={[
+              ["Store open", draft.storeOpen, (v) => change("storeOpen", v)],
+              [
+                "Orders enabled",
+                draft.ordersEnabled,
+                (v) => change("ordersEnabled", v),
+              ],
+            ]}
+          />
+          <Field
+            label="Default title"
+            value={draft.defaultTitle}
+            onChange={(v) => change("defaultTitle", v)}
+          />
+          <Field
+            label="Description"
+            value={draft.defaultDescription}
+            onChange={(v) => change("defaultDescription", v)}
+          />
+        </Panel>
+      </div>
+      <div className="sticky bottom-4 mt-6 bg-[#e9e5de]/95 p-3 backdrop-blur">
+        <EditorActions
+          busy={busy}
+          status={status}
+          save={submit}
+          cancel={() => setDraft(s.data.settings)}
+        />
+      </div>
+    </>
+  );
+}
+function Panel({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="admin-panel p-5 sm:p-6">
+      <p className="admin-panel__title mb-5">{title}</p>
+      {children}
+    </section>
+  );
+}
+function Empty({ text }: { text: string }) {
+  return (
+    <div className="admin-empty grid min-h-44 place-content-center px-5 text-center text-sm leading-6">
+      {text}
+    </div>
+  );
+}
+function Field({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <label className="mb-3 block text-xs">
+      {label}
+      <input
+        className="field mt-2"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </label>
+  );
+}
+function Toggles({
+  items,
+}: {
+  items: [string, boolean, (v: boolean) => void][];
+}) {
+  return (
+    <div className="my-4 flex flex-wrap gap-4">
+      {items.map(([label, value, set]) => (
+        <label key={label} className="flex min-h-11 items-center gap-2 text-xs">
+          <input
+            type="checkbox"
+            checked={value}
+            onChange={(e) => set(e.target.checked)}
+            className="h-5 w-5 accent-black"
+          />
+          {label}
+        </label>
+      ))}
+    </div>
+  );
+}
+function EditorActions({
+  busy,
+  status,
+  save,
+  cancel,
+  children,
+}: {
+  busy: boolean;
+  status: string;
+  save: () => void;
+  cancel: () => void;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-black/10 pt-4">
+      <button
+        disabled={busy}
+        onClick={save}
+        className="btn btn-dark disabled:opacity-50"
+      >
+        {busy ? "Saving…" : "Save Changes"}
+      </button>
+      <button disabled={busy} onClick={cancel} className="btn">
+        Cancel
+      </button>
+      {children}
+      {status && (
+        <span className="text-xs text-black/55" role="status">
+          {status}
+        </span>
+      )}
+    </div>
+  );
+}
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}

@@ -1,3 +1,21 @@
-import type {VercelRequest,VercelResponse} from '@vercel/node';
-import{adminCookie,authEnv,ConfigurationError,json,methodNotAllowed,validOrigin}from'../_shared.js';
-export default function handler(req:VercelRequest,res:VercelResponse){if(req.method!=='POST')return methodNotAllowed(res,['POST']);try{if(!validOrigin(req,authEnv()))return json(res,{error:'Invalid request'},403);return json(res,{ok:true},200,{'Set-Cookie':adminCookie('',0)})}catch(error){return error instanceof ConfigurationError?json(res,{error:'Server configuration unavailable'},500):json(res,{error:'Logout service unavailable'},500)}}
+import type { VercelRequest, VercelResponse } from "@vercel/node";
+import {
+  adminCookie,
+  authEnv,
+  ConfigurationError,
+  json,
+  methodNotAllowed,
+  validOrigin,
+} from "../_shared.js";
+export default function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== "POST") return methodNotAllowed(res, ["POST"]);
+  try {
+    if (!validOrigin(req, authEnv()))
+      return json(res, { error: "Invalid request" }, 403);
+    return json(res, { ok: true }, 200, { "Set-Cookie": adminCookie("", 0) });
+  } catch (error) {
+    return error instanceof ConfigurationError
+      ? json(res, { error: "Server configuration unavailable" }, 500)
+      : json(res, { error: "Logout service unavailable" }, 500);
+  }
+}

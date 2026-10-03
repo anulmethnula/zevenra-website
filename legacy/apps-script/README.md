@@ -1,6 +1,8 @@
-# ZEVENRA Apps Script backend
+# Archived ZEVENRA Apps Script backend
 
-`Code.gs` is the temporary Google Sheets backend used by the Vercel API.
+`Code.gs` is retained only as historical reference for the one-time Neon migration. No frontend or Vercel API route imports or calls it.
+
+Do not deploy this file as part of the new runtime. Do not delete the existing Sheet or Apps Script deployment until the Neon import and new production deployment have been independently verified.
 
 ## Deploy/update
 

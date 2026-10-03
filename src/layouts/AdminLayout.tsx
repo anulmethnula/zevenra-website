@@ -1,17 +1,204 @@
 /* eslint-disable react-hooks/exhaustive-deps -- loadAdmin is stable in the store provider. */
-import {useEffect,useState} from 'react';
-import {NavLink,Outlet,useLocation,useNavigate} from 'react-router-dom';
-import {BarChart3,Boxes,FolderKanban,Gauge,Home,Inbox,LogOut,Menu,Settings,Truck,X} from 'lucide-react';
-import {useStore} from '../features/store/StoreContext';
+import { useEffect, useState } from "react";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import {
+  BarChart3,
+  Boxes,
+  FolderKanban,
+  Gauge,
+  Home,
+  Inbox,
+  LogOut,
+  Menu,
+  Settings,
+  Truck,
+  X,
+} from "lucide-react";
+import { useStore } from "../features/store/StoreContext";
 
-const links=[['/admin',Gauge,'Dashboard'],['/admin/products',Boxes,'Products'],['/admin/categories',FolderKanban,'Categories'],['/admin/collections',FolderKanban,'Collections'],['/admin/preorders',Inbox,'Pre-orders'],['/admin/orders',BarChart3,'Orders'],['/admin/homepage',Home,'Homepage'],['/admin/delivery',Truck,'Couriers & Delivery'],['/admin/settings',Settings,'Settings']] as const;
+const links = [
+  ["/admin", Gauge, "Dashboard"],
+  ["/admin/products", Boxes, "Products"],
+  ["/admin/categories", FolderKanban, "Categories"],
+  ["/admin/collections", FolderKanban, "Collections"],
+  ["/admin/preorders", Inbox, "Pre-orders"],
+  ["/admin/orders", BarChart3, "Orders"],
+  ["/admin/homepage", Home, "Homepage"],
+  ["/admin/delivery", Truck, "Couriers & Delivery"],
+  ["/admin/settings", Settings, "Settings"],
+] as const;
 
-export function AdminLayout(){
- const[open,setOpen]=useState(false),[checking,setChecking]=useState(true),[sessionError,setSessionError]=useState(''),navigate=useNavigate(),location=useLocation(),store=useStore();
- useEffect(()=>{let active=true;async function boot(){setChecking(true);setSessionError('');if(!store.live){await store.loadAdmin();if(active)setChecking(false);return}try{const response=await fetch('/api/admin/session',{cache:'no-store'});if(response.status===401){navigate('/admin/login?next='+encodeURIComponent(location.pathname+location.search),{replace:true});return}if(!response.ok)throw new Error('Admin session service is temporarily unavailable.');await store.loadAdmin()}catch(reason){if(active)setSessionError(reason instanceof Error?reason.message:'Admin session unavailable.')}finally{if(active)setChecking(false)}}void boot();return()=>{active=false}},[store.loadAdmin]);
- async function logout(){if(store.live)await fetch('/api/admin/logout',{method:'POST'}).catch(()=>undefined);sessionStorage.removeItem('admin-demo');navigate('/admin/login',{replace:true})}
- if(checking)return <div className="grid min-h-dvh place-content-center bg-[#e9e4dc] text-center"><span className="mx-auto mb-5 h-6 w-6 animate-spin rounded-full border border-black/15 border-t-black"/><p className="eyebrow text-black/45">Checking secure admin session…</p></div>;
- if(sessionError)return <div className="grid min-h-dvh place-content-center bg-[#e9e4dc] px-6 text-center"><h1 className="display text-4xl">Admin unavailable.</h1><p className="mt-3 max-w-md text-sm text-black/55">{sessionError}</p><button className="btn btn-dark mx-auto mt-6" onClick={()=>window.location.reload()}>Try again</button></div>;
- const sidebar=<><div className="admin-sidebar__brand flex items-center justify-between border-b border-white/10 pb-6"><img src="/brand/logo-light.svg" alt="ZEVENRA" className="w-36"/><button className="grid min-h-11 min-w-11 place-items-center text-white/70 md:hidden" onClick={()=>setOpen(false)} aria-label="Close navigation"><X size={19}/></button></div><p className="admin-sidebar__label mt-7">CONTROL ROOM</p><nav className="admin-nav mt-5 grid gap-1 overflow-y-auto">{links.map(([to,Icon,label])=><NavLink end={to==='/admin'} key={to} to={to} onClick={()=>setOpen(false)} className={({isActive})=>`admin-nav-link group flex min-h-12 items-center gap-3 px-4 transition ${isActive?'is-active':''}`}><Icon size={16} strokeWidth={1.6}/><span>{label}</span></NavLink>)}</nav><button onClick={()=>void logout()} className="admin-signout mt-auto flex min-h-12 items-center gap-3 border-t border-white/10 px-4 pt-5 transition"><LogOut size={16}/> Sign out</button></>;
- return <div className="admin-shell min-h-dvh"><aside className="admin-sidebar fixed inset-y-0 left-0 z-40 hidden w-64 flex-col p-6 md:flex">{sidebar}</aside>{open&&<aside className="admin-sidebar fixed inset-0 z-50 flex flex-col p-6 md:hidden">{sidebar}</aside>}<div className="admin-content md:pl-64"><header className="admin-topbar sticky top-0 z-30 flex h-16 items-center justify-between px-4 sm:px-7"><button className="grid min-h-11 min-w-11 place-items-center md:hidden" onClick={()=>setOpen(true)} aria-label="Open navigation"><Menu size={19}/></button><div className="admin-topbar__brand hidden items-center gap-3 sm:flex"><span/><p>ZEVENRA / OPERATIONS</p></div><span className={`admin-live-badge ${store.live?'is-live':'is-demo'}`}>{store.live?'LIVE DATA':'DEMO MODE'}</span></header><main className="admin-main p-4 sm:p-8 lg:p-12 xl:p-14">{store.adminLoading?<div className="grid min-h-[65vh] place-content-center text-center"><span className="mx-auto mb-5 h-6 w-6 animate-spin rounded-full border border-black/15 border-t-black"/><p className="eyebrow text-black/45">Loading control room…</p></div>:<>{store.adminError&&<div className="mb-6 border border-amber-900/15 bg-amber-950/[.07] p-4 text-sm text-amber-950" role="alert"><div className="flex flex-wrap items-center justify-between gap-4"><span>{store.adminError}</span><button className="border-b border-current pb-1 text-[10px] tracking-[.18em]" onClick={()=>void store.loadAdmin()}>RETRY ALL</button></div></div>}<Outlet/></>}</main></div></div>
+export function AdminLayout() {
+  const [open, setOpen] = useState(false),
+    [checking, setChecking] = useState(true),
+    [sessionError, setSessionError] = useState(""),
+    navigate = useNavigate(),
+    location = useLocation(),
+    store = useStore();
+  useEffect(() => {
+    let active = true;
+    async function boot() {
+      setChecking(true);
+      setSessionError("");
+      if (!store.live) {
+        await store.loadAdmin();
+        if (active) setChecking(false);
+        return;
+      }
+      try {
+        const response = await fetch("/api/admin/session", {
+          cache: "no-store",
+        });
+        if (response.status === 401) {
+          navigate(
+            "/admin/login?next=" +
+              encodeURIComponent(location.pathname + location.search),
+            { replace: true },
+          );
+          return;
+        }
+        if (!response.ok)
+          throw new Error("Admin session service is temporarily unavailable.");
+        await store.loadAdmin();
+      } catch (reason) {
+        if (active)
+          setSessionError(
+            reason instanceof Error
+              ? reason.message
+              : "Admin session unavailable.",
+          );
+      } finally {
+        if (active) setChecking(false);
+      }
+    }
+    void boot();
+    return () => {
+      active = false;
+    };
+  }, [store.loadAdmin]);
+  async function logout() {
+    if (store.live)
+      await fetch("/api/admin/logout", { method: "POST" }).catch(
+        () => undefined,
+      );
+    sessionStorage.removeItem("admin-demo");
+    navigate("/admin/login", { replace: true });
+  }
+  if (checking)
+    return (
+      <div className="grid min-h-dvh place-content-center bg-[#e9e4dc] text-center">
+        <span className="mx-auto mb-5 h-6 w-6 animate-spin rounded-full border border-black/15 border-t-black" />
+        <p className="eyebrow text-black/45">Checking secure admin session…</p>
+      </div>
+    );
+  if (sessionError)
+    return (
+      <div className="grid min-h-dvh place-content-center bg-[#e9e4dc] px-6 text-center">
+        <h1 className="display text-4xl">Admin unavailable.</h1>
+        <p className="mt-3 max-w-md text-sm text-black/55">{sessionError}</p>
+        <button
+          className="btn btn-dark mx-auto mt-6"
+          onClick={() => window.location.reload()}
+        >
+          Try again
+        </button>
+      </div>
+    );
+  const sidebar = (
+    <>
+      <div className="admin-sidebar__brand flex items-center justify-between border-b border-white/10 pb-6">
+        <img src="/brand/logo-light.svg" alt="ZEVENRA" className="w-36" />
+        <button
+          className="grid min-h-11 min-w-11 place-items-center text-white/70 md:hidden"
+          onClick={() => setOpen(false)}
+          aria-label="Close navigation"
+        >
+          <X size={19} />
+        </button>
+      </div>
+      <p className="admin-sidebar__label mt-7">CONTROL ROOM</p>
+      <nav className="admin-nav mt-5 grid gap-1 overflow-y-auto">
+        {links.map(([to, Icon, label]) => (
+          <NavLink
+            end={to === "/admin"}
+            key={to}
+            to={to}
+            onClick={() => setOpen(false)}
+            className={({ isActive }) =>
+              `admin-nav-link group flex min-h-12 items-center gap-3 px-4 transition ${isActive ? "is-active" : ""}`
+            }
+          >
+            <Icon size={16} strokeWidth={1.6} />
+            <span>{label}</span>
+          </NavLink>
+        ))}
+      </nav>
+      <button
+        onClick={() => void logout()}
+        className="admin-signout mt-auto flex min-h-12 items-center gap-3 border-t border-white/10 px-4 pt-5 transition"
+      >
+        <LogOut size={16} /> Sign out
+      </button>
+    </>
+  );
+  return (
+    <div className="admin-shell min-h-dvh">
+      <aside className="admin-sidebar fixed inset-y-0 left-0 z-40 hidden w-64 flex-col p-6 md:flex">
+        {sidebar}
+      </aside>
+      {open && (
+        <aside className="admin-sidebar fixed inset-0 z-50 flex flex-col p-6 md:hidden">
+          {sidebar}
+        </aside>
+      )}
+      <div className="admin-content md:pl-64">
+        <header className="admin-topbar sticky top-0 z-30 flex h-16 items-center justify-between px-4 sm:px-7">
+          <button
+            className="grid min-h-11 min-w-11 place-items-center md:hidden"
+            onClick={() => setOpen(true)}
+            aria-label="Open navigation"
+          >
+            <Menu size={19} />
+          </button>
+          <div className="admin-topbar__brand hidden items-center gap-3 sm:flex">
+            <span />
+            <p>ZEVENRA / OPERATIONS</p>
+          </div>
+          <span
+            className={`admin-live-badge ${store.live ? "is-live" : "is-demo"}`}
+          >
+            {store.live ? "LIVE DATA" : "DEMO MODE"}
+          </span>
+        </header>
+        <main className="admin-main p-4 sm:p-8 lg:p-12 xl:p-14">
+          {store.adminLoading ? (
+            <div className="grid min-h-[65vh] place-content-center text-center">
+              <span className="mx-auto mb-5 h-6 w-6 animate-spin rounded-full border border-black/15 border-t-black" />
+              <p className="eyebrow text-black/45">Loading control room…</p>
+            </div>
+          ) : (
+            <>
+              {store.adminError && (
+                <div
+                  className="mb-6 border border-amber-900/15 bg-amber-950/[.07] p-4 text-sm text-amber-950"
+                  role="alert"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <span>{store.adminError}</span>
+                    <button
+                      className="border-b border-current pb-1 text-[10px] tracking-[.18em]"
+                      onClick={() => void store.loadAdmin()}
+                    >
+                      RETRY ALL
+                    </button>
+                  </div>
+                </div>
+              )}
+              <Outlet />
+            </>
+          )}
+        </main>
+      </div>
+    </div>
+  );
 }

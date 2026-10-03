@@ -1,0 +1,66 @@
+import process from "node:process";
+import { neonConfig, Pool } from "@neondatabase/serverless";
+import ws from "ws";
+
+neonConfig.webSocketConstructor = ws;
+
+const connectionString =
+  process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
+if (!connectionString)
+  throw new Error(
+    "Set DATABASE_URL_UNPOOLED or DATABASE_URL before verification.",
+  );
+const required = [
+  "products",
+  "variants",
+  "categories",
+  "collections",
+  "product_collections",
+  "size_charts",
+  "navigation",
+  "homepage_sections",
+  "customers",
+  "orders",
+  "order_items",
+  "preorders",
+  "courier_providers",
+  "delivery_rates",
+  "site_settings",
+  "audit_logs",
+  "schema_migrations",
+];
+const pool = new Pool({ connectionString, max: 1 });
+try {
+  const tables = await pool.query(
+      "SELECT tablename FROM pg_tables WHERE schemaname='public'",
+    ),
+    present = new Set(tables.rows.map((row) => row.tablename)),
+    missing = required.filter((table) => !present.has(table));
+  if (missing.length) throw new Error(`Missing tables: ${missing.join(", ")}`);
+  const checks = {
+    orphanVariants:
+      "SELECT count(*)::int AS count FROM variants v LEFT JOIN products p ON p.id=v.product_id WHERE p.id IS NULL",
+    orphanItems:
+      "SELECT count(*)::int AS count FROM order_items i LEFT JOIN orders o ON o.order_id=i.order_id WHERE o.order_id IS NULL",
+    orphanProductCollections:
+      "SELECT count(*)::int AS count FROM product_collections pc LEFT JOIN products p ON p.id=pc.product_id LEFT JOIN collections c ON c.id=pc.collection_id WHERE p.id IS NULL OR c.id IS NULL",
+    negativeStock: "SELECT count(*)::int AS count FROM variants WHERE stock<0",
+    invalidTotals:
+      "SELECT count(*)::int AS count FROM orders WHERE subtotal+delivery_fee<>total",
+  };
+  for (const [name, sql] of Object.entries(checks)) {
+    const count = (await pool.query(sql)).rows[0].count;
+    console.log(`${name}: ${count}`);
+    if (count) throw new Error(`${name} verification failed`);
+  }
+  const migrations = await pool.query(
+    "SELECT version,applied_at FROM schema_migrations ORDER BY version",
+  );
+  console.log(
+    "migrations:",
+    migrations.rows.map((row) => row.version).join(", "),
+  );
+  console.log("database verification passed");
+} finally {
+  await pool.end();
+}

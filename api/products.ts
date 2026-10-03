@@ -1,3 +1,13 @@
-import type {VercelRequest,VercelResponse} from '@vercel/node';
-import{appsScriptEnv,callScript,json,methodNotAllowed}from'./_shared.js';
-export default async function handler(req:VercelRequest,res:VercelResponse){if(req.method!=='GET')return methodNotAllowed(res,['GET']);try{return json(res,await callScript(appsScriptEnv(),'listPublishedProducts',{}),200,{'Cache-Control':'public, max-age=60, stale-while-revalidate=300'})}catch{return json(res,{error:'Catalogue temporarily unavailable'},503)}}
+import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { listProducts } from "./_data/catalog.js";
+import { json, methodNotAllowed } from "./_shared.js";
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== "GET") return methodNotAllowed(res, ["GET"]);
+  try {
+    return json(res, await listProducts(true), 200, {
+      "Cache-Control": "public, max-age=60, stale-while-revalidate=300",
+    });
+  } catch {
+    return json(res, { error: "Catalogue temporarily unavailable" }, 503);
+  }
+}
