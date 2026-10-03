@@ -17,6 +17,14 @@ export function cloudinaryEnv():CloudinaryEnv{return{...authEnv(),CLOUDINARY_CLO
 
 export function json(res:VercelResponse,data:unknown,status=200,headers:Record<string,string>={}){res.status(status);res.setHeader('Content-Type','application/json; charset=utf-8');res.setHeader('Cache-Control','no-store');for(const [name,value] of Object.entries(headers))res.setHeader(name,value);return res.json(data)}
 export function methodNotAllowed(res:VercelResponse,allowed:string[]){res.setHeader('Allow',allowed.join(', '));return json(res,{error:'Method not allowed'},405)}
+const requestRateBuckets=new Map<string,{count:number;resetAt:number}>();
+export function rateLimit(request:VercelRequest,scope:string,limit:number,windowMs:number){
+ const forwarded=request.headers['x-forwarded-for'],ip=String(Array.isArray(forwarded)?forwarded[0]:forwarded||request.headers['x-real-ip']||'unknown').split(',')[0].trim(),key=scope+':'+ip,now=Date.now(),current=requestRateBuckets.get(key);
+ if(!current||current.resetAt<=now){requestRateBuckets.set(key,{count:1,resetAt:now+windowMs});return{limited:false,retryAfter:0}}
+ current.count+=1;
+ if(current.count>limit)return{limited:true,retryAfter:Math.max(1,Math.ceil((current.resetAt-now)/1000))};
+ return{limited:false,retryAfter:0}
+}
 export function body(request:VercelRequest):unknown{if(typeof request.body==='string')return JSON.parse(request.body);if(Buffer.isBuffer(request.body))return JSON.parse(request.body.toString('utf8'));return request.body}
 
 const b64=(value:Buffer|string)=>Buffer.from(value).toString('base64url');
