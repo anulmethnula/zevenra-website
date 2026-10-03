@@ -11,6 +11,7 @@ import {
   hashCustomerPassword,
   json,
   makeCustomerSession,
+  rateLimit,
   readCustomerSession,
   validOrigin,
   verifyCustomerPassword,
@@ -31,6 +32,7 @@ const ROUTES: Record<string, RouteHandler> = {
     async run(req: VercelRequest, res: VercelResponse) {
       const config = appsScriptEnv();
       if (!validOrigin(req, config)) return json(res, {error: 'Invalid request origin'}, 403);
+      const throttle=rateLimit(req,'customer-register',5,60*60*1000);if(throttle.limited){res.setHeader('Retry-After',String(throttle.retryAfter));return json(res,{error:'Too many account creation attempts. Please try again later.'},429)}
       const input = customerRegisterSchema.parse(body(req));
       const {passwordHash, passwordSalt} = await hashCustomerPassword(input.password);
       const now = new Date().toISOString();
