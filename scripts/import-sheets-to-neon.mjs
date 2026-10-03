@@ -321,10 +321,23 @@ try {
       ],
     );
   }
+  const sourceOrderIds = new Set(rows("Orders").map((row) => String(row.orderId)));
+  const orphanOrderItems = rows("OrderItems").filter(
+    (row) => !sourceOrderIds.has(String(row.orderId)),
+  );
+  if (orphanOrderItems.length)
+    console.warn(
+      `Skipping ${orphanOrderItems.length} orphan order item(s) whose order no longer exists in the source Orders sheet: ${orphanOrderItems
+        .map((row) => String(row.orderId))
+        .join(", ")}`,
+    );
+
   await client.query("DELETE FROM order_items WHERE order_id=ANY($1::text[])", [
-    rows("Orders").map((row) => row.orderId),
+    [...sourceOrderIds],
   ]);
-  for (const row of rows("OrderItems"))
+  for (const row of rows("OrderItems").filter((row) =>
+    sourceOrderIds.has(String(row.orderId)),
+  ))
     await client.query(
       `INSERT INTO order_items(order_id,product_id,variant_id,sku,product_name,color,size,quantity,unit_price,line_total,is_preorder) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
       [
