@@ -145,7 +145,7 @@ try {
       [
         row.id,
         row.productId,
-        row.sku,
+        String(row.sku || "").trim() || `LEGACY-${String(row.id)}`,
         row.color,
         row.size,
         num(row.stock),
