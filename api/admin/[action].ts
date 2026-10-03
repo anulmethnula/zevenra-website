@@ -142,10 +142,13 @@ async function execute(action: string, payload: Record<string, unknown>) {
     case "convertPreorderToOrder":
       return convertPreorderToOrder(payload);
     case "createManualOrder":
-      return createOrder({
-        ...manualOrderSchema.parse(payload),
-        source: String(payload.source || "manual"),
-      });
+      return createOrder(
+        {
+          ...manualOrderSchema.parse(payload),
+          source: String(payload.source || "manual"),
+        },
+        { requireReceipt: false },
+      );
     case "saveSettings":
       return saveSettings(payload);
     case "saveCourierConfig":

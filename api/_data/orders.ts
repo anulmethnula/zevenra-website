@@ -16,6 +16,7 @@ type OrderInput = {
   postalCode?: string;
   deliveryNotes?: string;
   paymentMethod: "cod" | "bank";
+  paymentStatus?: string;
   paymentReference?: string;
   paymentReceiptUrl?: string;
   source?: string;
@@ -225,6 +226,7 @@ export async function createOrder(
   options: {
     trustProvidedPrice?: boolean;
     preorderReservedArrival?: boolean;
+    requireReceipt?: boolean;
   } = {},
 ) {
   return withTransaction(async (client) => {
@@ -233,7 +235,11 @@ export async function createOrder(
       delivery = await deliverySnapshot(client, input, subtotal),
       asset = receiptAsset(input.paymentReceiptUrl),
       orderId = newOrderId();
-    if (input.paymentMethod === "bank" && !asset.publicId)
+    if (
+      input.paymentMethod === "bank" &&
+      options.requireReceipt !== false &&
+      !asset.publicId
+    )
       throw new Error("Bank transfer receipt is required.");
     const phoneKey = input.phone.replace(/\D/g, ""),
       duplicate = await client.query(
@@ -273,7 +279,8 @@ export async function createOrder(
         delivery.ratePlan,
         delivery.zoneName,
         input.paymentMethod,
-        input.paymentMethod === "cod" ? "COD" : "receipt submitted",
+        input.paymentStatus ||
+          (input.paymentMethod === "cod" ? "COD" : "receipt submitted"),
         input.paymentReference || "",
         asset.publicId,
         asset.resourceType,

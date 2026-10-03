@@ -31,9 +31,13 @@ export const api = {
     demo
       ? products.find((p) => p.slug === slug)
       : request<Product>(`/products/${encodeURIComponent(slug)}`),
-  customerOrders: () => request<CustomerOrder[]>("/account/orders"),
-  customerPreorders: () => request<CustomerPreorder[]>("/account/preorders"),
-  createPreorder: (data: {
+  customerOrders: () =>
+    demo ? Promise.resolve([]) : request<CustomerOrder[]>("/account/orders"),
+  customerPreorders: () =>
+    demo
+      ? Promise.resolve([])
+      : request<CustomerPreorder[]>("/account/preorders"),
+  createPreorder: async (data: {
     customerName: string;
     phone?: string;
     whatsapp: string;
@@ -46,11 +50,40 @@ export const api = {
     productId: string;
     variantId: string;
     quantity: number;
-  }): Promise<PreorderRequest> =>
-    request<PreorderRequest>("/preorders", {
-      method: "POST",
-      body: JSON.stringify(data),
-    }),
+  }): Promise<PreorderRequest> => {
+    if (!demo)
+      return request<PreorderRequest>("/preorders", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    const product = products.find((item) => item.id === data.productId),
+      variant = product?.variants.find((item) => item.id === data.variantId),
+      now = new Date().toISOString();
+    if (!product || !variant) throw new Error("Demo product is unavailable.");
+    return {
+      requestId: `DEMO-PRE-${Date.now()}`,
+      createdAt: now,
+      updatedAt: now,
+      customerName: data.customerName,
+      phone: data.phone || data.whatsapp,
+      whatsapp: data.whatsapp,
+      email: data.email,
+      address1: data.address1,
+      address2: data.address2,
+      city: data.city,
+      district: data.district,
+      postalCode: data.postalCode,
+      productId: product.id,
+      variantId: variant.id,
+      productName: product.name,
+      sku: variant.sku,
+      color: variant.color,
+      size: variant.size,
+      quantity: data.quantity,
+      requestedPrice: product.price,
+      status: "new",
+    };
+  },
   createOrder: async (data: CheckoutData): Promise<Order> => {
     if (!demo)
       return request<Order>("/orders", {

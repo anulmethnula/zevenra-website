@@ -47,6 +47,7 @@ type CustomerAuth = {
   refresh: () => Promise<void>;
 };
 const Context = createContext<CustomerAuth | null>(null);
+const demo = import.meta.env.VITE_DEMO_MODE === "true";
 
 async function accountRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`/api/account/${path}`, {
@@ -68,6 +69,11 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<CustomerUser | null>(null),
     [loading, setLoading] = useState(true);
   const refresh = useCallback(async () => {
+    if (demo) {
+      setUser(null);
+      setLoading(false);
+      return;
+    }
     try {
       const result = await accountRequest<{ user: CustomerUser | null }>(
         "session",
@@ -83,6 +89,8 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
     void refresh();
   }, [refresh]);
   const signIn = useCallback(async (email: string, password: string) => {
+    if (demo)
+      throw new Error("Customer accounts are unavailable in demo mode.");
     const result = await accountRequest<{ user: CustomerUser }>("login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
@@ -90,6 +98,8 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
     setUser(result.user);
   }, []);
   const register = useCallback(async (data: Registration) => {
+    if (demo)
+      throw new Error("Customer accounts are unavailable in demo mode.");
     const result = await accountRequest<{ user: CustomerUser }>("register", {
       method: "POST",
       body: JSON.stringify(data),
@@ -97,6 +107,8 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
     setUser(result.user);
   }, []);
   const updateProfile = useCallback(async (data: CustomerProfileUpdate) => {
+    if (demo)
+      throw new Error("Customer accounts are unavailable in demo mode.");
     const result = await accountRequest<{ user: CustomerUser }>("profile", {
       method: "POST",
       body: JSON.stringify(data),
@@ -104,6 +116,10 @@ export function CustomerAuthProvider({ children }: { children: ReactNode }) {
     setUser(result.user);
   }, []);
   const signOut = useCallback(async () => {
+    if (demo) {
+      setUser(null);
+      return;
+    }
     await accountRequest<{ ok: boolean }>("logout", { method: "POST" });
     setUser(null);
   }, []);
