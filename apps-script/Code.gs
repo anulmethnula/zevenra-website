@@ -125,6 +125,7 @@ function listOrders_(p){const items=read_('OrderItems');let rows=read_('Orders')
 function getOrder_(p){const items=read_('OrderItems').filter(i=>i.orderId===p.orderId),o=read_('Orders').find(x=>x.orderId===p.orderId);return o?Object.assign({},o,{hasPreorder:items.some(i=>bool_(i.isPreorder)),items:items}):null}
 function saveSettings_(p){const next=Object.assign({},settings_(),p),email=String(next.email||'').trim(),phone=String(next.phone||'').trim(),whatsapp=String(next.whatsapp||'').trim();if(!String(next.brandName||'').trim())throw new Error('Brand name is required.');if(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw new Error('Invalid contact email.');if(phone&&!/^[+\d][\d\s-]{8,14}$/.test(phone))throw new Error('Invalid phone number.');if(whatsapp&&!/^[+\d][\d\s-]{8,14}$/.test(whatsapp))throw new Error('Invalid WhatsApp number.');if(Number(next.deliveryFlatFee)<0||Number(next.freeDeliveryThreshold)<0)throw new Error('Delivery amounts cannot be negative.');if(bool_(next.ordersEnabled)!==false&&!bool_(next.codEnabled)&&!bool_(next.bankTransferEnabled))throw new Error('Enable at least one payment method before online orders.');if(bool_(next.bankTransferEnabled)&&(!String(next.bankName||'').trim()||!String(next.bankAccountName||'').trim()||!String(next.bankAccountNumber||'').trim()))throw new Error('Complete bank details before enabling bank transfer.');Object.keys(p).forEach(k=>upsert_('SiteSettings','key',{key:k,value:p[k]}));audit_('owner','save','settings','site',Object.keys(p));return settings_()}
 function saveCourierConfig_(p){
+ const lock=LockService.getScriptLock();lock.waitLock(30000);try{
  const allowedDistricts=['Ampara','Anuradhapura','Badulla','Batticaloa','Colombo','Galle','Gampaha','Hambantota','Jaffna','Kalutara','Kandy','Kegalle','Kilinochchi','Kurunegala','Mannar','Matale','Matara','Monaragala','Mullaitivu','Nuwara Eliya','Polonnaruwa','Puttalam','Ratnapura','Trincomalee','Vavuniya'],now=new Date().toISOString(),seenCourierIds={},seenCourierNames={};
  const couriers=(p.couriers||[]).map(c=>{
   const id=String(c.id||Utilities.getUuid()),name=String(c.name||'').trim(),flatRate=Number(c.flatRate),pricingMode=String(c.pricingMode)==='flat'?'flat':'zone',nameKey=name.toLowerCase();
@@ -158,6 +159,7 @@ function saveCourierConfig_(p){
  couriers.forEach(c=>append_('CourierProviders',c));rates.forEach(r=>append_('DeliveryRates',r));upsert_('SiteSettings','key',{key:'defaultCourierProviderId',value:defaultId});
  audit_('owner','save','courierConfig','all',{couriers:couriers.length,zones:rates.length,defaultCourierProviderId:defaultId});
  return{couriers:read_('CourierProviders'),deliveryRates:read_('DeliveryRates'),defaultCourierProviderId:defaultId}
+ }finally{lock.releaseLock()}
 }
 function saveDeliveryRates_(p){return saveCourierConfig_(p)}
 function settings_(){return read_('SiteSettings').reduce((o,r)=>(o[r.key]=r.value,o),{})}
