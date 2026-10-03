@@ -1,8 +1,9 @@
 import type {VercelRequest,VercelResponse} from '@vercel/node';
-import{appsScriptEnv,body,callScript,json,methodNotAllowed,preorderSchema,readCustomerSession,validOrigin}from'./_shared.js';
+import{appsScriptEnv,body,callScript,json,methodNotAllowed,preorderSchema,rateLimit,readCustomerSession,validOrigin}from'./_shared.js';
 
 export default async function handler(req:VercelRequest,res:VercelResponse){
  if(req.method!=='POST')return methodNotAllowed(res,['POST']);
+ const throttle=rateLimit(req,'preorders',6,10*60*1000);if(throttle.limited){res.setHeader('Retry-After',String(throttle.retryAfter));return json(res,{error:'Too many pre-order requests. Please wait a few minutes and try again.'},429)}
  try{
   const config=appsScriptEnv();
   if(!validOrigin(req,config))return json(res,{error:'Invalid request origin'},403);
