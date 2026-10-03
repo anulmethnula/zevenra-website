@@ -10,7 +10,8 @@
     "typecheck": "tsc -b --pretty false",
     "preview": "vite preview",
     "dev:demo": "vite --mode demo",
-    "qa": "npm run typecheck && npm run lint && npm run build"
+    "qa": "npm run typecheck && npm run lint && npm run build",
+    "dev:full": "vercel dev --local-config vercel.local.json"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
