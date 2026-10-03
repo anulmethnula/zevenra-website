@@ -51,6 +51,10 @@
   ],
   "rewrites": [
     {
+      "source": "/sitemap.xml",
+      "destination": "/api/sitemap"
+    },
+    {
       "source": "/api/admin/:action",
       "destination": "/api/admin/[action]"
     },
