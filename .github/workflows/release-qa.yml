@@ -2,7 +2,7 @@ name: Release QA
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev-rebuild]
   workflow_dispatch:
 
 permissions:
