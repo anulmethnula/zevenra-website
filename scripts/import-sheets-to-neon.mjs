@@ -23,13 +23,23 @@ const bool = (value) =>
   value === true || String(value).toLowerCase() === "true";
 const num = (value, fallback = 0) =>
   Number.isFinite(Number(value)) ? Number(value) : fallback;
-const array = (value) =>
-  Array.isArray(value)
-    ? value
-    : String(value || "")
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean);
+const array = (value) => {
+  if (Array.isArray(value))
+    return value.map((item) => String(item).trim()).filter(Boolean);
+  const raw = String(value || "").trim();
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed))
+      return parsed.map((item) => String(item).trim()).filter(Boolean);
+  } catch {
+    // Fall back to legacy comma-separated values.
+  }
+  return raw
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+};
 const json = (value) => {
   if (typeof value === "object" && value !== null) return value;
   try {
@@ -252,9 +262,9 @@ try {
         row.name,
         num(row.fee),
         bool(row.active),
-        array(row.districts),
-        array(row.cities),
-        array(row.postalCodes),
+        array(row.districtsJson || row.districts || row.district),
+        array(row.citiesJson || row.cities),
+        array(row.postalCodesJson || row.postalCodes),
         bool(row.fallback),
         num(row.sortOrder),
         timestamp(row.createdAt),
@@ -366,8 +376,8 @@ try {
     await client.query(
       "INSERT INTO audit_logs(created_at,actor,action,entity_type,entity_id,details) SELECT $1,$2,$3,$4,$5,$6::jsonb WHERE NOT EXISTS(SELECT 1 FROM audit_logs WHERE created_at=$1 AND actor=$2 AND action=$3 AND entity_type=$4 AND entity_id=$5)",
       [
-        timestamp(row.createdAt),
-        row.actor || "migration",
+        timestamp(row.timestamp || row.createdAt),
+        row.admin || row.actor || "migration",
         row.action || "",
         row.entityType || row.entity || "",
         row.entityId || "",
