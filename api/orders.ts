@@ -33,7 +33,7 @@ export default async function handler(req:VercelRequest,res:VercelResponse){
    deliveryZoneName:String(raw.deliveryZoneName||''),
    paymentMethod:raw.paymentMethod==='bank'?'bank':'cod',
    paymentReference:String(raw.paymentReference||payload.paymentReference||''),
-   paymentReceiptUrl:String(raw.paymentReceiptUrl||payload.paymentReceiptUrl||''),
+   paymentReceiptUrl:'',
    subtotal:Number(raw.subtotal)||0,
    deliveryFee:Number(raw.deliveryFee)||0,
    total:Number(raw.total)||0,
