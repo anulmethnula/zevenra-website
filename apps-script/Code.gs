@@ -55,7 +55,47 @@ function updateCustomerProfile_(p){const customer=getCustomerById_({id:p.id});if
 function listCustomerOrders_(p){const email=String(p.email||'').trim().toLowerCase(),customer=getCustomerById_({id:p.customerId});if(!customer||String(customer.email||'').trim().toLowerCase()!==email)throw new Error('Customer mismatch');const items=read_('OrderItems');return read_('Orders').filter(o=>String(o.customerId||'')===String(customer.id)).reverse().map(o=>Object.assign({},o,{items:items.filter(i=>i.orderId===o.orderId)}))}
 function listCustomerPreorders_(p){const email=String(p.email||'').trim().toLowerCase(),customer=getCustomerById_({id:p.customerId});if(!customer||String(customer.email||'').trim().toLowerCase()!==email)throw new Error('Customer mismatch');return read_('Preorders').filter(x=>String(x.customerId||'')===String(customer.id)).reverse()}
 function nextOrderId_(){const tz=Session.getScriptTimeZone()||'Asia/Colombo',date=Utilities.formatDate(new Date(),tz,'yyMMdd'),prefix='ZEV-'+date+'-';const ids=read_('Orders').map(o=>String(o.orderId)).filter(x=>x.indexOf(prefix)===0);const max=ids.reduce((n,x)=>Math.max(n,Number(x.slice(-4))||0),0);return prefix+String(max+1).padStart(4,'0')}
-function updateOrder_(p){const lock=LockService.getScriptLock();lock.waitLock(30000);try{const order=read_('Orders').find(o=>o.orderId===p.orderId);if(!order)throw new Error('Order not found');const was=bool_(order.stockDeducted),items=read_('OrderItems').filter(i=>i.orderId===p.orderId),cancelling=p.orderStatus==='cancelled'&&was,reserving=!was&&['confirmed','sourcing','packed','shipped','delivered'].indexOf(String(p.orderStatus||'').toLowerCase())>=0;if(cancelling){items.forEach(i=>{const v=read_('Variants').find(x=>x.id===i.variantId);if(v)patch_('Variants','id',v.id,{stock:Number(v.stock)+Number(i.quantity)})});p.stockDeducted=false}else if(reserving){const variants=read_('Variants');items.forEach(i=>{const v=variants.find(x=>x.id===i.variantId);if(!v||Number(v.stock)<Number(i.quantity))throw new Error('Insufficient stock to reopen this order.');});items.forEach(i=>{const v=variants.find(x=>x.id===i.variantId);patch_('Variants','id',v.id,{stock:Number(v.stock)-Number(i.quantity)})});p.stockDeducted=true}p.updatedAt=new Date().toISOString();patch_('Orders','orderId',p.orderId,p);audit_('owner','update','order',p.orderId,p);return getOrder_(p)}finally{lock.releaseLock()}}
+function updateOrder_(p){
+ const lock=LockService.getScriptLock();lock.waitLock(30000);
+ try{
+  const order=read_('Orders').find(o=>String(o.orderId)===String(p.orderId));if(!order)throw new Error('Order not found');
+  const allowedStatuses=['pending','confirmed','sourcing','packed','shipped','delivered','cancelled'],nextStatus=p.orderStatus===undefined?String(order.orderStatus||'pending').toLowerCase():String(p.orderStatus||'').toLowerCase();
+  if(allowedStatuses.indexOf(nextStatus)<0)throw new Error('Invalid order status.');
+  const paymentStatus=p.paymentStatus===undefined?String(order.paymentStatus||''):String(p.paymentStatus||'').trim();
+  const trackingUrl=p.trackingUrl===undefined?String(order.trackingUrl||''):String(p.trackingUrl||'').trim();
+  if(trackingUrl&&!/^https:\/\//i.test(trackingUrl))throw new Error('Tracking URL must start with https://');
+  const courierId=p.fulfilmentCourierProviderId===undefined?String(order.fulfilmentCourierProviderId||''):String(p.fulfilmentCourierProviderId||'').trim();
+  let courierName=p.fulfilmentCourierName===undefined?String(order.fulfilmentCourierName||''):String(p.fulfilmentCourierName||'').trim();
+  if(courierId){
+   const courier=read_('CourierProviders').find(item=>String(item.id)===courierId);
+   if(!courier)throw new Error('Choose a valid fulfilment courier.');
+   courierName=String(courier.name||'');
+  }else courierName='';
+  const was=bool_(order.stockDeducted),items=read_('OrderItems').filter(i=>String(i.orderId)===String(p.orderId)),cancelling=nextStatus==='cancelled'&&was,reserving=!was&&['confirmed','sourcing','packed','shipped','delivered'].indexOf(nextStatus)>=0;
+  let stockDeducted=was;
+  if(cancelling){
+   items.forEach(i=>{const v=read_('Variants').find(x=>String(x.id)===String(i.variantId));if(v)patch_('Variants','id',v.id,{stock:Number(v.stock)+Number(i.quantity)})});
+   stockDeducted=false;
+  }else if(reserving){
+   const variants=read_('Variants');
+   items.forEach(i=>{const v=variants.find(x=>String(x.id)===String(i.variantId));if(!v||Number(v.stock)<Number(i.quantity))throw new Error('Insufficient stock to reopen this order.')});
+   items.forEach(i=>{const v=variants.find(x=>String(x.id)===String(i.variantId));patch_('Variants','id',v.id,{stock:Number(v.stock)-Number(i.quantity)})});
+   stockDeducted=true;
+  }
+  const patch={
+   orderStatus:nextStatus,
+   paymentStatus:paymentStatus,
+   fulfilmentCourierProviderId:courierId,
+   fulfilmentCourierName:courierName,
+   trackingNumber:p.trackingNumber===undefined?String(order.trackingNumber||''):String(p.trackingNumber||'').trim().slice(0,120),
+   trackingUrl:trackingUrl,
+   courierSentDate:p.courierSentDate===undefined?String(order.courierSentDate||''):String(p.courierSentDate||'').trim(),
+   stockDeducted:stockDeducted,
+   updatedAt:new Date().toISOString()
+  };
+  patch_('Orders','orderId',p.orderId,patch);audit_('owner','update','order',p.orderId,patch);return getOrder_({orderId:p.orderId});
+ }finally{lock.releaseLock()}
+}
 function saveProduct_(input){const lock=LockService.getScriptLock();lock.waitLock(30000);try{const p=Object.assign({},input),variants=p.variants||[],collections=p.collectionIds||[],media=p.media||[];if(!p.name||!p.slug||Number(p.price)<=0)throw new Error('Product name, slug and price are required.');if(!read_('Categories').some(category=>String(category.id)===String(p.categoryId)))throw new Error('Choose a valid category.');if(p.sizeChartId&&!read_('SizeCharts').some(chart=>String(chart.id)===String(p.sizeChartId)))throw new Error('Choose a valid size chart.');if(read_('Products').some(existing=>String(existing.slug)===String(p.slug)&&String(existing.id)!==String(p.id)))throw new Error('Product slug already exists.');const activeVariants=variants.filter(v=>bool_(v.active));if(!activeVariants.length)throw new Error('Add at least one active size / stock variant.');const seen={};activeVariants.forEach(v=>{const key=String(v.color||'').trim().toLowerCase()+'|'+String(v.size||'').trim().toLowerCase();if(!String(v.color||'').trim()||!String(v.size||'').trim()||Number(v.stock)<0)throw new Error('Every active variant needs colour, size and valid stock.');if(seen[key])throw new Error('Duplicate colour and size variant.');seen[key]=true});delete p.variants;delete p.collectionIds;delete p.media;p.mediaJson=JSON.stringify(media);p.tags=Array.isArray(p.tags)?p.tags.join(','):p.tags;p.updatedAt=new Date().toISOString();if(!p.id){p.id=Utilities.getUuid();p.createdAt=p.updatedAt}upsert_('Products','id',p);const kept={};variants.forEach(v=>{v=Object.assign({},v,{productId:p.id});if(!v.id)v.id=Utilities.getUuid();kept[v.id]=true;upsert_('Variants','id',v)});read_('Variants').filter(v=>v.productId===p.id&&!kept[v.id]).forEach(v=>remove_('Variants','id',v.id));remove_('ProductCollections','productId',p.id);collections.forEach(collectionId=>append_('ProductCollections',{productId:p.id,collectionId}));audit_('owner','save','product',p.id,{name:p.name});return listProducts_().find(x=>x.id===p.id)}finally{lock.releaseLock()}}
 function saveCategory_(input){const p=Object.assign({},input),categories=read_('Categories');p.name=String(p.name||'').trim();p.slug=String(p.slug||'').trim().toLowerCase();if(!p.name||!p.slug)throw new Error('Category name and slug are required.');if(categories.some(c=>String(c.slug).toLowerCase()===p.slug&&String(c.id)!==String(p.id)))throw new Error('Category slug already exists.');if(p.parentId){const parent=categories.find(c=>String(c.id)===String(p.parentId));if(!parent||parent.parentId)throw new Error('Choose a valid main category.');if(categories.some(c=>String(c.parentId)===String(p.id)))throw new Error('Move this category children before making it a subcategory.');p.showInNavigation=false}return upsert_('Categories','id',p)}
 function saveCollection_(input){const p=Object.assign({},input),collections=read_('Collections');p.name=String(p.name||'').trim();p.slug=String(p.slug||'').trim().toLowerCase();if(!p.name||!p.slug)throw new Error('Collection name and slug are required.');if(collections.some(c=>String(c.slug||'').toLowerCase()===p.slug&&String(c.id)!==String(p.id)))throw new Error('Collection slug already exists.');return upsert_('Collections','id',p)}
