@@ -49,7 +49,7 @@ export default function ProductPage(){
  const onTouchEnd=(x:number)=>{if(touchStart.current==null)return;const delta=x-touchStart.current;touchStart.current=null;if(Math.abs(delta)<45)return;if(delta<0)next();else previous()};
 
  return <>
-  <Seo title={product.name} description={product.shortDescription}/>
+  <Seo title={product.name} description={product.shortDescription} image={primaryImage}/>
   <div className="product-page pb-28 pt-[102px] lg:container lg:pt-36">
    <div className="product-detail-grid">
     <ProductGallery media={media} current={current} active={activeMedia} setActive={setActiveMedia} previous={previous} next={next} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} name={product.name}/>
