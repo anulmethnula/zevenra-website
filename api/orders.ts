@@ -1,11 +1,12 @@
 import type {VercelRequest,VercelResponse} from '@vercel/node';
-import{appsScriptEnv,body,callScript,json,methodNotAllowed,orderSchema,readCustomerSession,validOrigin}from'./_shared.js';
+import{appsScriptEnv,body,callScript,json,methodNotAllowed,orderSchema,rateLimit,readCustomerSession,validOrigin}from'./_shared.js';
 
 type ScriptOrderItem={productId?:unknown;variantId?:unknown;sku?:unknown;productName?:unknown;name?:unknown;color?:unknown;size?:unknown;quantity?:unknown;unitPrice?:unknown;isPreorder?:unknown};
 type ScriptOrder={orderId?:unknown;createdAt?:unknown;customerName?:unknown;phone?:unknown;whatsapp?:unknown;email?:unknown;address1?:unknown;address2?:unknown;city?:unknown;district?:unknown;postalCode?:unknown;deliveryNotes?:unknown;courierProviderId?:unknown;courierName?:unknown;deliveryPricingMode?:unknown;deliveryRatePlan?:unknown;deliveryZoneName?:unknown;paymentMethod?:unknown;paymentReference?:unknown;paymentReceiptUrl?:unknown;subtotal?:unknown;deliveryFee?:unknown;total?:unknown;orderStatus?:unknown;paymentStatus?:unknown;items?:ScriptOrderItem[]};
 
 export default async function handler(req:VercelRequest,res:VercelResponse){
  if(req.method!=='POST')return methodNotAllowed(res,['POST']);
+ const throttle=rateLimit(req,'orders',10,10*60*1000);if(throttle.limited){res.setHeader('Retry-After',String(throttle.retryAfter));return json(res,{error:'Too many order attempts. Please wait a few minutes and try again.'},429)}
  try{
   const config=appsScriptEnv();
   if(!validOrigin(req,config))return json(res,{error:'Invalid request origin'},403);
