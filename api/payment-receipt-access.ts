@@ -1,6 +1,6 @@
 import type {VercelRequest,VercelResponse} from '@vercel/node';
 import {createHash} from 'node:crypto';
-import {authEnv,cloudinaryEnv,json,methodNotAllowed,validSession} from './_shared.js';
+import {body,cloudinaryEnv,json,methodNotAllowed,validOrigin,validSession} from './_shared.js';
 
 function parseReceiptUrl(value:string,cloudName:string){
  const url=new URL(value);
@@ -14,10 +14,10 @@ function parseReceiptUrl(value:string,cloudName:string){
 }
 
 export default function handler(req:VercelRequest,res:VercelResponse){
- if(req.method!=='GET')return methodNotAllowed(res,['GET']);
+ if(req.method!=='POST')return methodNotAllowed(res,['POST']);
  try{
-  const auth=authEnv();if(!validSession(req,auth.SESSION_SECRET))return json(res,{error:'Session expired'},401);
-  const config=cloudinaryEnv(),raw=Array.isArray(req.query.url)?req.query.url[0]:req.query.url,url=String(raw||'');
+  const config=cloudinaryEnv();if(!validSession(req,config.SESSION_SECRET))return json(res,{error:'Session expired'},401);if(!validOrigin(req,config))return json(res,{error:'Invalid request origin'},403);
+  const input=body(req) as{url?:unknown},url=String(input?.url||'');
   if(!url)return json(res,{error:'Receipt URL is required.'},400);
   const asset=parseReceiptUrl(url,config.CLOUDINARY_CLOUD_NAME);
   if(asset.deliveryType==='upload')return json(res,{url:asset.original,legacy:true});
