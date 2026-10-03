@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "dev:demo": "vite --mode demo",
     "qa": "npm run typecheck && npm run lint && npm run build",
-    "dev:full": "vercel dev --local-config vercel.local.json"
+    "dev:full": "vercel dev --local-config vercel.local.json",
+    "admin:hash-password": "node scripts/hash-admin-password.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
