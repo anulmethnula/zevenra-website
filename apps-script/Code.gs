@@ -108,7 +108,41 @@ function dashboard_(){const orders=read_('Orders'),items=read_('OrderItems'),tz=
 function listOrders_(p){const items=read_('OrderItems');let rows=read_('Orders').reverse().map(o=>Object.assign({},o,{hasPreorder:items.some(i=>String(i.orderId)===String(o.orderId)&&bool_(i.isPreorder))}));if(p.status)rows=rows.filter(o=>o.orderStatus===p.status);if(p.q){const q=String(p.q).toLowerCase();rows=rows.filter(o=>[o.orderId,o.customerName,o.phone,o.email,o.district].some(v=>String(v).toLowerCase().indexOf(q)>=0))}return rows}
 function getOrder_(p){const items=read_('OrderItems').filter(i=>i.orderId===p.orderId),o=read_('Orders').find(x=>x.orderId===p.orderId);return o?Object.assign({},o,{hasPreorder:items.some(i=>bool_(i.isPreorder)),items:items}):null}
 function saveSettings_(p){const next=Object.assign({},settings_(),p),email=String(next.email||'').trim(),phone=String(next.phone||'').trim(),whatsapp=String(next.whatsapp||'').trim();if(!String(next.brandName||'').trim())throw new Error('Brand name is required.');if(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw new Error('Invalid contact email.');if(phone&&!/^[+\d][\d\s-]{8,14}$/.test(phone))throw new Error('Invalid phone number.');if(whatsapp&&!/^[+\d][\d\s-]{8,14}$/.test(whatsapp))throw new Error('Invalid WhatsApp number.');if(Number(next.deliveryFlatFee)<0||Number(next.freeDeliveryThreshold)<0)throw new Error('Delivery amounts cannot be negative.');if(bool_(next.ordersEnabled)!==false&&!bool_(next.codEnabled)&&!bool_(next.bankTransferEnabled))throw new Error('Enable at least one payment method before online orders.');if(bool_(next.bankTransferEnabled)&&(!String(next.bankName||'').trim()||!String(next.bankAccountName||'').trim()||!String(next.bankAccountNumber||'').trim()))throw new Error('Complete bank details before enabling bank transfer.');Object.keys(p).forEach(k=>upsert_('SiteSettings','key',{key:k,value:p[k]}));audit_('owner','save','settings','site',Object.keys(p));return settings_()}
-function saveCourierConfig_(p){const now=new Date().toISOString(),couriers=(p.couriers||[]).map(c=>({id:String(c.id||Utilities.getUuid()),name:String(c.name||'').trim(),phone:String(c.phone||'').trim(),notes:String(c.notes||'').trim(),pricingMode:String(c.pricingMode)==='flat'?'flat':'zone',flatRate:Number(c.flatRate)||0,active:bool_(c.active),createdAt:String(c.createdAt||now),updatedAt:now}));if(!couriers.length||couriers.some(c=>!c.name))throw new Error('Every courier needs a name.');if(!couriers.some(c=>c.id===String(p.defaultCourierProviderId)&&c.active))throw new Error('The default checkout courier must be active.');const ids={};couriers.forEach(c=>ids[c.id]=true);const rates=(p.rates||[]).map((r,index)=>({id:String(r.id||Utilities.getUuid()),district:'',fee:Number(r.fee)||0,active:bool_(r.active),name:String(r.name||'').trim(),districtsJson:JSON.stringify(r.districts||[]),citiesJson:JSON.stringify(r.cities||[]),postalCodesJson:JSON.stringify(r.postalCodes||[]),fallback:bool_(r.fallback),sortOrder:index+1,courierProviderId:String(r.courierProviderId||'')}));if(rates.some(r=>!ids[r.courierProviderId]||!r.name||r.fee<0))throw new Error('Every delivery zone must belong to a courier and have a valid name and fee.');couriers.filter(c=>c.pricingMode==='zone').forEach(c=>{if(rates.filter(r=>r.courierProviderId===c.id&&r.active&&r.fallback).length!==1)throw new Error(c.name+' needs exactly one active fallback zone.')});['CourierProviders','DeliveryRates'].forEach(name=>{const sh=sheet_(name);if(sh.getLastRow()>1)sh.getRange(2,1,sh.getLastRow()-1,sh.getLastColumn()).clearContent()});couriers.forEach(c=>append_('CourierProviders',c));rates.forEach(r=>append_('DeliveryRates',r));upsert_('SiteSettings','key',{key:'defaultCourierProviderId',value:String(p.defaultCourierProviderId)});audit_('owner','save','courierConfig','all',{couriers:couriers.length,zones:rates.length,defaultCourierProviderId:p.defaultCourierProviderId});return{couriers:read_('CourierProviders'),deliveryRates:read_('DeliveryRates'),defaultCourierProviderId:String(p.defaultCourierProviderId)}}
+function saveCourierConfig_(p){
+ const allowedDistricts=['Ampara','Anuradhapura','Badulla','Batticaloa','Colombo','Galle','Gampaha','Hambantota','Jaffna','Kalutara','Kandy','Kegalle','Kilinochchi','Kurunegala','Mannar','Matale','Matara','Monaragala','Mullaitivu','Nuwara Eliya','Polonnaruwa','Puttalam','Ratnapura','Trincomalee','Vavuniya'],now=new Date().toISOString(),seenCourierIds={},seenCourierNames={};
+ const couriers=(p.couriers||[]).map(c=>{
+  const id=String(c.id||Utilities.getUuid()),name=String(c.name||'').trim(),flatRate=Number(c.flatRate),pricingMode=String(c.pricingMode)==='flat'?'flat':'zone',nameKey=name.toLowerCase();
+  if(!name)throw new Error('Every courier needs a name.');
+  if(seenCourierIds[id])throw new Error('Duplicate courier ID.');
+  if(seenCourierNames[nameKey])throw new Error('Courier names must be unique.');
+  if(!isFinite(flatRate)||flatRate<0)throw new Error(name+': flat rate cannot be negative.');
+  seenCourierIds[id]=true;seenCourierNames[nameKey]=true;
+  return{id,name,phone:String(c.phone||'').trim(),notes:String(c.notes||'').trim(),pricingMode,flatRate,active:bool_(c.active),createdAt:String(c.createdAt||now),updatedAt:now};
+ });
+ if(!couriers.length)throw new Error('Add at least one courier.');
+ const defaultId=String(p.defaultCourierProviderId||'');
+ if(!couriers.some(c=>c.id===defaultId&&c.active))throw new Error('The default checkout courier must be active.');
+ const ids={};couriers.forEach(c=>ids[c.id]=true);const seenRateIds={};
+ const rates=(p.rates||[]).map((r,index)=>{
+  const id=String(r.id||Utilities.getUuid()),courierProviderId=String(r.courierProviderId||''),name=String(r.name||'').trim(),fee=Number(r.fee),districts=(r.districts||[]).map(value=>String(value).trim()).filter(Boolean),cities=(r.cities||[]).map(value=>String(value).trim()).filter(Boolean),postalCodes=(r.postalCodes||[]).map(value=>String(value).replace(/\s/g,'')).filter(Boolean);
+  if(seenRateIds[id])throw new Error('Duplicate delivery zone ID.');seenRateIds[id]=true;
+  if(!ids[courierProviderId])throw new Error('Every delivery zone must belong to a valid courier.');
+  if(!name)throw new Error('Every delivery zone needs a name.');
+  if(!isFinite(fee)||fee<0)throw new Error(name+': delivery fee cannot be negative.');
+  if(districts.some(district=>allowedDistricts.indexOf(district)<0))throw new Error(name+': invalid Sri Lankan district.');
+  if(postalCodes.some(code=>!/^\d{1,5}\*?$/.test(code)))throw new Error(name+': invalid postal rule. Use 5 digits or a prefix such as 103*.');
+  return{id,district:'',fee,active:bool_(r.active),name,districtsJson:JSON.stringify(districts),citiesJson:JSON.stringify(cities),postalCodesJson:JSON.stringify(postalCodes),fallback:bool_(r.fallback),sortOrder:Number(r.sortOrder)||index+1,courierProviderId};
+ });
+ couriers.filter(c=>c.pricingMode==='zone').forEach(c=>{
+  const own=rates.filter(r=>r.courierProviderId===c.id);
+  if(!own.length)throw new Error(c.name+' needs at least one delivery zone.');
+  if(own.filter(r=>r.active&&r.fallback).length!==1)throw new Error(c.name+' needs exactly one active fallback zone.');
+ });
+ ['CourierProviders','DeliveryRates'].forEach(name=>{const sh=sheet_(name);if(sh.getLastRow()>1)sh.getRange(2,1,sh.getLastRow()-1,sh.getLastColumn()).clearContent()});
+ couriers.forEach(c=>append_('CourierProviders',c));rates.forEach(r=>append_('DeliveryRates',r));upsert_('SiteSettings','key',{key:'defaultCourierProviderId',value:defaultId});
+ audit_('owner','save','courierConfig','all',{couriers:couriers.length,zones:rates.length,defaultCourierProviderId:defaultId});
+ return{couriers:read_('CourierProviders'),deliveryRates:read_('DeliveryRates'),defaultCourierProviderId:defaultId}
+}
 function saveDeliveryRates_(p){return saveCourierConfig_(p)}
 function settings_(){return read_('SiteSettings').reduce((o,r)=>(o[r.key]=r.value,o),{})}
 function sheet_(n){const s=SpreadsheetApp.getActive().getSheetByName(n);if(!s)throw new Error('Run setup() first: '+n);return s}
