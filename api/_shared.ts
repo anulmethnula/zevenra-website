@@ -54,3 +54,11 @@ export const preorderSchema=z.object({customerName:z.string().trim().min(2).max(
 export const manualOrderSchema=z.object({source:z.enum(['instagram','whatsapp','manual']),customerName:z.string().trim().min(2).max(100),phone:phoneSchema,whatsapp:optionalPhoneSchema,email:z.string().trim().email().or(z.literal('')).optional(),address1:z.string().trim().min(5).max(180),address2:z.string().trim().max(180).optional(),city:z.string().trim().min(2).max(80),district:z.enum(sriLankaDistricts),postalCode:optionalPostalSchema,deliveryNotes:z.string().trim().max(300).optional(),paymentMethod:z.enum(['cod','bank']),paymentStatus:z.string().trim().min(1).max(50),items:z.array(z.object({productId:z.string().min(1),variantId:z.string().min(1),quantity:z.number().int().min(1).max(50)})).min(1).max(30)}).strict();
 export const adminLoginSchema=z.object({username:z.string().min(1).max(100),password:z.string().min(8).max(200)}).strict();
 export async function sha256(value:string){return Buffer.from(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value))).toString('base64url')}
+export async function verifyAdminPassword(password:string,stored:string){
+ if(stored.startsWith('scrypt
+)){
+  try{const[,salt,encoded]=stored.split('
+),candidate=await scrypt(password,salt,64) as Buffer,expected=Buffer.from(encoded,'base64url');return candidate.length===expected.length&&timingSafeEqual(candidate,expected)}catch{return false}
+ }
+ return await sha256(password)===stored
+}
