@@ -1,7 +1,7 @@
 import type {VercelRequest,VercelResponse} from '@vercel/node';
 import{appsScriptEnv,body,callScript,json,manualOrderSchema,validOrigin,validSession}from'../_shared.js';
 
-const allowed=new Set(['bootstrap','dashboard','listProducts','saveProduct','archiveProduct','deleteProduct','listCategories','saveCategory','deleteCategory','listCollections','saveCollection','deleteCollection','listSizeCharts','saveSizeChart','deleteSizeChart','listNavigation','saveNavigation','deleteNavigation','listHomepageSections','saveHomepageSection','deleteHomepageSection','listOrders','getOrder','updateOrder','listPreorders','updatePreorder','createPreorderBatch','convertPreorderToOrder','createManualOrder','getSettings','saveSettings','listDeliveryRates','saveDeliveryRates']);
+const allowed=new Set(['bootstrap','dashboard','listProducts','saveProduct','archiveProduct','deleteProduct','listCategories','saveCategory','deleteCategory','listCollections','saveCollection','deleteCollection','listSizeCharts','saveSizeChart','deleteSizeChart','listNavigation','saveNavigation','deleteNavigation','listHomepageSections','saveHomepageSection','deleteHomepageSection','listOrders','getOrder','updateOrder','listPreorders','updatePreorder','createPreorderBatch','convertPreorderToOrder','createManualOrder','getSettings','saveSettings','listDeliveryRates','saveDeliveryRates','saveCourierConfig']);
 
 async function legacyBootstrap(config:ReturnType<typeof appsScriptEnv>){
  const specs=[
@@ -38,7 +38,7 @@ export default async function handler(req:VercelRequest,res:VercelResponse){
     return json(res,await legacyBootstrap(config));
    }
   }
-  return json(res,await callScript(config,action,validatedPayload));
+  return json(res,await callScript(config,action==='saveCourierConfig'?'saveDeliveryRates':action,validatedPayload));
  }catch(error){
   const message=error instanceof Error?error.message:'';
   if(message==='Upstream unavailable')return json(res,{error:'Google Sheets backend is temporarily unreachable. Please retry in a moment.'},503);

@@ -162,7 +162,7 @@ const ROUTES: Record<string, RouteHandler> = {
       const config = appsScriptEnv();
       const identity = readCustomerSession(req, true);
       if (!identity) throw new Error('CUSTOMER_AUTH_REQUIRED');
-      const rows = await callScript(config, 'listCustomerOrders', {customerId: identity.id, email: identity.email}) as Array<{orderId?: unknown; createdAt?: unknown; customerName?:unknown; phone?:unknown; whatsapp?:unknown; email?:unknown; address1?:unknown; address2?:unknown; city?:unknown; district?:unknown; postalCode?:unknown; deliveryNotes?:unknown; paymentMethod?: unknown; paymentReference?:unknown; paymentReceiptUrl?:unknown; paymentStatus?: unknown; subtotal?: unknown; deliveryFee?: unknown; total?: unknown; orderStatus?: unknown; items?: Array<{variantId?: unknown; productName?: unknown; color?: unknown; size?: unknown; quantity?: unknown; unitPrice?: unknown; lineTotal?: unknown; isPreorder?: unknown}>}>;
+      const rows = await callScript(config, 'listCustomerOrders', {customerId: identity.id, email: identity.email}) as Array<{orderId?: unknown; createdAt?: unknown; customerName?:unknown; phone?:unknown; whatsapp?:unknown; email?:unknown; address1?:unknown; address2?:unknown; city?:unknown; district?:unknown; postalCode?:unknown; deliveryNotes?:unknown; deliveryZoneName?:unknown; paymentMethod?: unknown; paymentReference?:unknown; paymentReceiptUrl?:unknown; paymentStatus?: unknown; subtotal?: unknown; deliveryFee?: unknown; total?: unknown; orderStatus?: unknown; items?: Array<{variantId?: unknown; productName?: unknown; color?: unknown; size?: unknown; quantity?: unknown; unitPrice?: unknown; lineTotal?: unknown; isPreorder?: unknown}>}>;
       const safeOrders = (Array.isArray(rows) ? rows : []).map((order) => ({
         orderId: String(order.orderId || ''),
         createdAt: String(order.createdAt || ''),
@@ -176,6 +176,14 @@ const ROUTES: Record<string, RouteHandler> = {
         district:String(order.district||''),
         postalCode:String(order.postalCode||''),
         deliveryNotes:String(order.deliveryNotes||''),
+        courierName:String((order as Record<string,unknown>).courierName||''),
+        deliveryPricingMode:String((order as Record<string,unknown>).deliveryPricingMode||''),
+        deliveryRatePlan:String((order as Record<string,unknown>).deliveryRatePlan||''),
+        deliveryZoneName:String(order.deliveryZoneName||''),
+        fulfilmentCourierName:String((order as Record<string,unknown>).fulfilmentCourierName||''),
+        trackingNumber:String((order as Record<string,unknown>).trackingNumber||''),
+        trackingUrl:String((order as Record<string,unknown>).trackingUrl||''),
+        courierSentDate:String((order as Record<string,unknown>).courierSentDate||''),
         paymentMethod: order.paymentMethod === 'bank' ? 'bank' : 'cod',
         paymentReference:String(order.paymentReference||''),
         paymentReceiptUrl:String(order.paymentReceiptUrl||''),
