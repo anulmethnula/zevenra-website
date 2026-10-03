@@ -55,10 +55,9 @@ export const manualOrderSchema=z.object({source:z.enum(['instagram','whatsapp','
 export const adminLoginSchema=z.object({username:z.string().min(1).max(100),password:z.string().min(8).max(200)}).strict();
 export async function sha256(value:string){return Buffer.from(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value))).toString('base64url')}
 export async function verifyAdminPassword(password:string,stored:string){
- if(stored.startsWith('scrypt
-)){
-  try{const[,salt,encoded]=stored.split('
-),candidate=await scrypt(password,salt,64) as Buffer,expected=Buffer.from(encoded,'base64url');return candidate.length===expected.length&&timingSafeEqual(candidate,expected)}catch{return false}
+ const separator=String.fromCharCode(36),prefix='scrypt'+separator;
+ if(stored.startsWith(prefix)){
+  try{const parts=stored.split(separator),salt=parts[1],encoded=parts[2];if(!salt||!encoded)return false;const candidate=await scrypt(password,salt,64) as Buffer,expected=Buffer.from(encoded,'base64url');return candidate.length===expected.length&&timingSafeEqual(candidate,expected)}catch{return false}
  }
  return await sha256(password)===stored
 }
