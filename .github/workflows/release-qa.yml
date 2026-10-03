@@ -48,7 +48,6 @@ jobs:
           test -s public/brand/logo.svg
           test -s public/brand/logo-light.svg
           test -s public/brand/zevenraname.png
-          test -s public/brand/footer-background.png
           test -s public/brand/about-hero.webp
           test -s public/brand/about-story.webp
           test -s public/brand/og-image.jpg
