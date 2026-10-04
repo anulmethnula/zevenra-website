@@ -13,3 +13,5 @@ vercel.dev.json
 *.database-export.json
 *.sql.gz
 *.dump
+.vercel
+.env*
