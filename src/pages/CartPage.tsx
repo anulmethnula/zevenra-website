@@ -12,6 +12,10 @@ export default function CartPage() {
     data.products.find(
       (p) => p.id === item.productId && p.status === "published",
     )?.price ?? item.unitPrice;
+  const currentStock = (item: (typeof c.items)[number]) =>
+    data.products
+      .find((p) => p.id === item.productId && p.status === "published")
+      ?.variants.find((v) => v.id === item.variantId && v.active)?.stock ?? 0;
   const valid = (item: (typeof c.items)[number]) => {
     if (item.isPreorder) return false;
     const product = data.products.find(
@@ -43,7 +47,8 @@ export default function CartPage() {
         <div className="mt-10 grid gap-12 lg:grid-cols-[1fr_380px]">
           <div>
             {c.items.map((i) => {
-              const available = valid(i);
+              const available = valid(i),
+                stock = currentStock(i);
               return (
                 <div
                   key={i.variantId}
@@ -85,17 +90,19 @@ export default function CartPage() {
                     <div className="mt-auto flex items-center gap-4">
                       <button
                         aria-label={"Decrease " + i.name}
-                        onClick={() => c.quantity(i.variantId, i.quantity - 1)}
+                        onClick={() =>
+                          c.quantity(i.variantId, i.quantity - 1, stock)
+                        }
                       >
                         <Minus size={16} />
                       </button>
                       <span>{i.quantity}</span>
                       <button
                         aria-label={"Increase " + i.name}
-                        disabled={
-                          i.maxStock !== undefined && i.quantity >= i.maxStock
+                        disabled={!available || i.quantity >= stock}
+                        onClick={() =>
+                          c.quantity(i.variantId, i.quantity + 1, stock)
                         }
-                        onClick={() => c.quantity(i.variantId, i.quantity + 1)}
                       >
                         <Plus size={16} />
                       </button>

@@ -16,13 +16,13 @@ type CartState = {
   setOpen: (v: boolean) => void;
   add: (i: CartItem) => void;
   remove: (id: string) => void;
-  quantity: (id: string, n: number) => void;
+  quantity: (id: string, n: number, maxStock?: number) => void;
   clear: () => void;
 };
 const Context = createContext<CartState | null>(null),
   key = "zevenra-cart-v1";
-const clamp = (item: CartItem, n: number) =>
-  Math.max(1, Math.min(item.maxStock ?? 99, n));
+const clamp = (item: CartItem, n: number, liveMaxStock?: number) =>
+  Math.max(1, Math.min(liveMaxStock ?? item.maxStock ?? 99, n));
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>(() => {
@@ -59,10 +59,20 @@ export function CartProvider({ children }: { children: ReactNode }) {
         setOpen(true);
       },
       remove: (id) => setItems((old) => old.filter((i) => i.variantId !== id)),
-      quantity: (id, n) =>
+      quantity: (id, n, maxStock) =>
         setItems((old) =>
           old.map((i) =>
-            i.variantId === id ? { ...i, quantity: clamp(i, n) } : i,
+            i.variantId === id
+              ? {
+                  ...i,
+                  maxStock: maxStock ?? i.maxStock,
+                  quantity: clamp(
+                    i,
+                    n,
+                    maxStock ?? Math.max(i.maxStock ?? 0, n),
+                  ),
+                }
+              : i,
           ),
         ),
       clear: () => setItems([]),

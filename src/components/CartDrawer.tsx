@@ -22,6 +22,10 @@ export function CartDrawer() {
     data.products.find(
       (p) => p.id === item.productId && p.status === "published",
     )?.price ?? item.unitPrice;
+  const currentStock = (item: (typeof c.items)[number]) =>
+    data.products
+      .find((p) => p.id === item.productId && p.status === "published")
+      ?.variants.find((v) => v.id === item.variantId && v.active)?.stock ?? 0;
   const valid = (item: (typeof c.items)[number]) => {
     if (item.isPreorder) return false;
     const product = data.products.find(
@@ -117,7 +121,8 @@ export function CartDrawer() {
                 <>
                   <div className="px-5 sm:px-7">
                     {c.items.map((i) => {
-                      const available = valid(i);
+                      const available = valid(i),
+                        stock = currentStock(i);
                       return (
                         <article
                           key={i.variantId}
@@ -178,7 +183,7 @@ export function CartDrawer() {
                               className="grid h-full w-9 place-items-center disabled:opacity-30"
                               aria-label={"Decrease " + i.name + " quantity"}
                               onClick={() =>
-                                c.quantity(i.variantId, i.quantity - 1)
+                                c.quantity(i.variantId, i.quantity - 1, stock)
                               }
                             >
                               <Minus size={13} />
@@ -191,12 +196,10 @@ export function CartDrawer() {
                               className="grid h-full w-9 place-items-center disabled:opacity-30"
                               aria-label={"Increase " + i.name + " quantity"}
                               disabled={
-                                !available ||
-                                (i.maxStock !== undefined &&
-                                  i.quantity >= i.maxStock)
+                                !available || i.quantity >= stock
                               }
                               onClick={() =>
-                                c.quantity(i.variantId, i.quantity + 1)
+                                c.quantity(i.variantId, i.quantity + 1, stock)
                               }
                             >
                               <Plus size={13} />
