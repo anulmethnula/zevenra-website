@@ -126,13 +126,13 @@ export function CartDrawer() {
                           <Link
                             to={"/product/" + i.slug}
                             onClick={() => c.setOpen(false)}
-                            className="row-span-3 block h-[106px] overflow-hidden bg-black/5"
+                            className="row-span-3 grid h-[106px] place-items-center overflow-hidden bg-[#eeeae3]"
                           >
                             {i.image ? (
                               <img
                                 src={i.image}
                                 alt={i.name}
-                                className="h-full w-full object-cover transition duration-500 hover:scale-[1.025]"
+                                className="h-full w-full object-contain transition duration-500 hover:scale-[1.025]"
                               />
                             ) : (
                               <div className="h-full w-full bg-black/5" />
@@ -191,8 +191,9 @@ export function CartDrawer() {
                               className="grid h-full w-9 place-items-center disabled:opacity-30"
                               aria-label={"Increase " + i.name + " quantity"}
                               disabled={
-                                i.maxStock !== undefined &&
-                                i.quantity >= i.maxStock
+                                !available ||
+                                (i.maxStock !== undefined &&
+                                  i.quantity >= i.maxStock)
                               }
                               onClick={() =>
                                 c.quantity(i.variantId, i.quantity + 1)
@@ -210,7 +211,7 @@ export function CartDrawer() {
                   </div>
 
                   {recommendations.length > 0 && (
-                    <section className="mt-20 border-t border-black/10 px-5 pb-7 pt-6 sm:px-7">
+                    <section className="mt-6 border-t border-black/10 px-5 pb-7 pt-6 sm:px-7">
                       <div className="mb-4 flex items-center justify-between gap-4">
                         <p className="text-xs font-semibold uppercase tracking-[.08em]">
                           You may also like
@@ -284,9 +285,9 @@ export function CartDrawer() {
               <footer className="shrink-0 border-t border-black/10 bg-[#fbfaf7] px-5 py-5 sm:px-7">
                 <div className="mb-4 flex items-end justify-between gap-4">
                   <div>
-                    <p className="text-base font-medium">Total</p>
+                    <p className="text-base font-medium">Subtotal</p>
                     <p className="mt-1 text-[10px] text-black/45">
-                      Delivery calculated at checkout.
+                      Delivery calculated at checkout
                     </p>
                   </div>
                   <p className="text-lg font-semibold">{money(subtotal)}</p>

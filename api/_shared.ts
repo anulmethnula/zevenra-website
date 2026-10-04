@@ -302,11 +302,6 @@ const optionalPostalSchema = z
   .regex(/^$|^\d{5}$/)
   .max(5)
   .optional();
-const requiredPostalSchema = z
-  .string()
-  .trim()
-  .regex(/^\d{5}$/)
-  .max(5);
 const receiptUrlSchema = z
   .string()
   .url()
@@ -378,7 +373,7 @@ export const orderSchema = z
     address2: z.string().trim().max(180).optional(),
     city: z.string().trim().min(2).max(80),
     district: z.enum(sriLankaDistricts),
-    postalCode: requiredPostalSchema,
+    postalCode: optionalPostalSchema,
     deliveryNotes: z.string().trim().max(300).optional(),
     paymentMethod: z.enum(["cod", "bank"]),
     paymentReference: z.string().trim().max(100).optional(),
