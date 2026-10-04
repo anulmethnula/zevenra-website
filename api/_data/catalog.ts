@@ -128,6 +128,39 @@ export async function listHomepageSections() {
 }
 export async function saveHomepageSection(input: Record<string, unknown>) {
   const value = homepageSectionSchema.parse(input);
+  if (value.enabled && value.type === "collection-feature") {
+    const collection = (
+      await query<{ has_media: boolean }>(
+        "SELECT (COALESCE(hero_image,'')<>'' OR COALESCE(video_url,'')<>'') has_media FROM collections WHERE id=$1 AND active=true LIMIT 1",
+        [value.referenceId],
+      )
+    ).rows[0];
+    if (!collection)
+      throw new Error("Choose an active collection before publishing.");
+    if (!value.desktopMedia && !value.mobileMedia && !collection.has_media)
+      throw new Error(
+        "The selected collection needs media, or add a section media override.",
+      );
+  }
+  if (value.enabled && value.type === "category-grid" && value.referenceId) {
+    const exists = await query(
+      "SELECT 1 FROM categories WHERE id=$1 AND active=true LIMIT 1",
+      [value.referenceId],
+    );
+    if (!exists.rowCount)
+      throw new Error("Choose an active category before publishing.");
+  }
+  if (value.enabled && value.type === "product-grid") {
+    const exists = await query(
+      `SELECT 1 FROM products WHERE id=$1 AND status='published'
+       UNION ALL SELECT 1 FROM categories WHERE id=$1 AND active=true
+       UNION ALL SELECT 1 FROM collections WHERE id=$1 AND active=true
+       LIMIT 1`,
+      [value.referenceId],
+    );
+    if (!exists.rowCount)
+      throw new Error("Choose a published product, active category, or active collection before publishing.");
+  }
   return withTransaction(async (client) => {
     const previous = (await client.query<Record<string, unknown>>("SELECT * FROM homepage_sections WHERE id=$1 FOR UPDATE", [value.id])).rows[0];
     await client.query(`INSERT INTO homepage_sections(id,type,enabled,title,subtitle,desktop_media,mobile_media,cta_label,cta_link,reference_id,text_position,overlay,spacing,sort_order,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,now()) ON CONFLICT(id) DO UPDATE SET type=EXCLUDED.type,enabled=EXCLUDED.enabled,title=EXCLUDED.title,subtitle=EXCLUDED.subtitle,desktop_media=EXCLUDED.desktop_media,mobile_media=EXCLUDED.mobile_media,cta_label=EXCLUDED.cta_label,cta_link=EXCLUDED.cta_link,reference_id=EXCLUDED.reference_id,text_position=EXCLUDED.text_position,overlay=EXCLUDED.overlay,spacing=EXCLUDED.spacing,sort_order=EXCLUDED.sort_order,updated_at=now()`, [value.id,value.type,value.enabled,value.title,value.subtitle||"",value.desktopMedia||"",value.mobileMedia||"",value.ctaLabel||"",value.ctaLink||"",value.referenceId||"",value.textPosition,value.overlay,value.spacing,value.sortOrder]);

@@ -11,3 +11,13 @@ export function whatsappUrl(value: unknown) {
   const digits = normalizeWhatsappDigits(value);
   return digits ? `https://wa.me/${digits}` : "";
 }
+export function validExternalUrl(value: unknown) {
+  try {
+    const url = new URL(String(value ?? "").trim());
+    return url.protocol === "https:" || url.protocol === "http:"
+      ? url.toString()
+      : "";
+  } catch {
+    return "";
+  }
+}

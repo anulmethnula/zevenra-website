@@ -1,47 +1,971 @@
 /* eslint-disable react-hooks/exhaustive-deps -- Escape handling must observe the current dirty editor state. */
 import { useEffect, useState, type FormEvent } from "react";
 import { motion } from "framer-motion";
-import { ArrowDown, ArrowUp, Copy, ExternalLink, MoreHorizontal, Plus, Upload, X } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  Copy,
+  ExternalLink,
+  MoreHorizontal,
+  Plus,
+  Upload,
+  X,
+} from "lucide-react";
 import { adminApi } from "../../../services/adminApi";
 import { uploadAdminMedia } from "../../../services/cloudinaryUpload";
 import { useStore } from "../../../features/store/StoreContext";
 import type { HomepageSection } from "../../../types";
 import { adminToast } from "../AdminToasts";
 
-const supported = ["product-grid","collection-feature","category-grid","editorial-image","full-width-campaign","split-story","text-statement","new-arrivals","featured-products","social","service-strip"] as const;
-const labels:Record<string,string>={"editorial-image":"Editorial Image","full-width-campaign":"Campaign Banner","product-grid":"Product Grid","collection-feature":"Collection Feature","category-grid":"Category Grid","text-statement":"Text Statement","new-arrivals":"New Arrivals","featured-products":"Featured Products",social:"Social Section","service-strip":"Service Strip","split-story":"Split Story"};
-const descriptions:Record<(typeof supported)[number],string>={"product-grid":"Products selected by a product, category, or collection ID.","collection-feature":"A linked collection story using its reference ID.","category-grid":"Active categories, optionally scoped by a category ID.","editorial-image":"Editorial image story with optional copy and call to action.","full-width-campaign":"Full-width campaign image or video with an optional CTA.","split-story":"Editorial media story with responsive artwork.","text-statement":"A restrained editorial text statement.","new-arrivals":"The latest published products marked as new arrivals.","featured-products":"Published products marked as featured.",social:"Configured social channels.","service-strip":"Delivery, checkout, and support benefits."};
-const blank=(type:(typeof supported)[number],sortOrder:number):HomepageSection=>({id:crypto.randomUUID(),type,enabled:false,title:"New section",subtitle:"",desktopMedia:"",mobileMedia:"",ctaLabel:"",ctaLink:"",referenceId:"",textPosition:"left",overlay:25,spacing:"normal",sortOrder});
+const supported = [
+  "product-grid",
+  "collection-feature",
+  "category-grid",
+  "editorial-image",
+  "full-width-campaign",
+  "split-story",
+  "text-statement",
+  "new-arrivals",
+  "featured-products",
+  "social",
+  "service-strip",
+] as const;
+const labels: Record<string, string> = {
+  "editorial-image": "Editorial Image",
+  "full-width-campaign": "Campaign Banner",
+  "product-grid": "Product Grid",
+  "collection-feature": "Collection Feature",
+  "category-grid": "Category Grid",
+  "text-statement": "Text Statement",
+  "new-arrivals": "New Arrivals",
+  "featured-products": "Featured Products",
+  social: "Social Section",
+  "service-strip": "Service Strip",
+  "split-story": "Split Story",
+};
+const descriptions: Record<(typeof supported)[number], string> = {
+  "product-grid": "Products selected by a product, category, or collection ID.",
+  "collection-feature": "A linked collection story using its reference ID.",
+  "category-grid": "Active categories, optionally scoped by a category ID.",
+  "editorial-image":
+    "Editorial image story with optional copy and call to action.",
+  "full-width-campaign":
+    "Full-width campaign image or video with an optional CTA.",
+  "split-story": "Editorial media story with responsive artwork.",
+  "text-statement": "A restrained editorial text statement.",
+  "new-arrivals": "The latest published products marked as new arrivals.",
+  "featured-products": "Published products marked as featured.",
+  social: "Configured social channels.",
+  "service-strip": "Delivery, checkout, and support benefits.",
+};
+const blank = (
+  type: (typeof supported)[number],
+  sortOrder: number,
+): HomepageSection => ({
+  id: crypto.randomUUID(),
+  type,
+  enabled: false,
+  title: "New section",
+  subtitle: "",
+  desktopMedia: "",
+  mobileMedia: "",
+  ctaLabel: "",
+  ctaLink: "",
+  referenceId: "",
+  textPosition: "left",
+  overlay: 25,
+  spacing: "normal",
+  sortOrder,
+});
 
-export default function HomepageBuilder(){
-  const store=useStore(),[items,setItems]=useState<HomepageSection[]>(()=>[...store.data.homepageSections].sort((a,b)=>a.sortOrder-b.sortOrder)),[loading,setLoading]=useState(false),[loadError,setLoadError]=useState(""),[picker,setPicker]=useState(false),[editing,setEditing]=useState<HomepageSection|null>(null),[menu,setMenu]=useState(""),[deleting,setDeleting]=useState<HomepageSection|null>(null);
-  const live=items.filter(item=>item.enabled).length;
-  useEffect(()=>setItems([...store.data.homepageSections].sort((a,b)=>a.sortOrder-b.sortOrder)),[store.data.homepageSections]);
-  const reload=async()=>{setLoading(true);setLoadError("");try{setItems((await adminApi.get<HomepageSection[]>("listHomepageSections")).sort((a,b)=>a.sortOrder-b.sortOrder));}catch(reason){setLoadError(reason instanceof Error?reason.message:"Could not load homepage sections.");}finally{setLoading(false);}};
-  async function save(value:HomepageSection){try{const saved=await adminApi.post<HomepageSection>("saveHomepageSection",value);setItems(current=>[...current.filter(item=>item.id!==saved.id),saved].sort((a,b)=>a.sortOrder-b.sortOrder));setEditing(null);adminToast(value.enabled?"Section saved and live":"Section saved");}catch(reason){const message=reason instanceof Error?reason.message:"Could not save section.";adminToast(message,"error");throw reason;}}
-  async function visibility(item:HomepageSection){try{const saved=await adminApi.post<HomepageSection>("saveHomepageSection",{...item,enabled:!item.enabled});setItems(current=>current.map(value=>value.id===saved.id?saved:value));adminToast(saved.enabled?"Section published":"Section hidden");}catch(reason){adminToast(reason instanceof Error?reason.message:"Could not update section.","error");}}
-  async function reorder(index:number,direction:-1|1){const target=index+direction;if(target<0||target>=items.length)return;const next=[...items];[next[index],next[target]]=[next[target],next[index]];const normalized=next.map((item,position)=>({...item,sortOrder:position+1}));setItems(normalized);try{const saved=await adminApi.post<HomepageSection[]>("reorderHomepageSections",{ids:normalized.map(item=>item.id)});setItems(saved);adminToast("Homepage order updated");}catch(reason){setItems(items);adminToast(reason instanceof Error?reason.message:"Could not reorder sections.","error");}}
-  async function duplicate(item:HomepageSection){setMenu("");try{const copy=await adminApi.post<HomepageSection>("duplicateHomepageSection",{id:item.id});setItems(current=>[...current,copy].sort((a,b)=>a.sortOrder-b.sortOrder));adminToast("Section duplicated");}catch(reason){adminToast(reason instanceof Error?reason.message:"Could not duplicate section.","error");}}
-  async function remove(){if(!deleting)return;try{await adminApi.post("deleteHomepageSection",{id:deleting.id});setItems(current=>current.filter(item=>item.id!==deleting.id));setDeleting(null);adminToast("Section deleted");}catch(reason){adminToast(reason instanceof Error?reason.message:"Could not delete section.","error");}}
-  return <><div className="flex flex-wrap items-end justify-between gap-5"><div><p className="admin-kicker">Controlled page builder</p><h1 className="admin-title mt-2">Homepage</h1><p className="mt-3 text-xs text-black/45">{live} live section{live===1?"":"s"} · {items.length-live} hidden</p></div><div className="flex gap-2"><a href="/" target="_blank" rel="noreferrer" className="btn"><ExternalLink size={15}/> Preview storefront</a><button onClick={()=>setPicker(true)} className="btn btn-dark"><Plus size={15}/> Add section</button></div></div>
-    <HeroSummary/>
-    <div className="mt-9 flex items-end justify-between"><div><p className="eyebrow text-black/45">Homepage sections</p><h2 className="display mt-2 text-3xl">Editorial flow</h2></div></div>
-    {loadError&&<div className="mt-5 flex items-center justify-between border border-red-900/15 bg-red-950/[.05] p-4 text-xs text-red-900"><span>Could not load homepage sections: {loadError}</span><button className="btn" onClick={()=>void reload()}>Retry</button></div>}
-    {loading?<Skeleton/>:items.length?<div className="mt-5 grid gap-3">{items.map((item,index)=><SectionCard key={item.id} item={item} index={index} total={items.length} menu={menu===item.id} setMenu={()=>setMenu(menu===item.id?"":item.id)} edit={()=>setEditing(item)} visibility={()=>void visibility(item)} up={()=>void reorder(index,-1)} down={()=>void reorder(index,1)} duplicate={()=>void duplicate(item)} remove={()=>{setDeleting(item);setMenu("");}}/>)}</div>:<div className="mt-5 border border-dashed border-black/20 px-6 py-16 text-center"><h2 className="display text-4xl">Build your homepage</h2><p className="mx-auto mt-3 max-w-lg text-sm leading-7 text-black/50">Add editorial sections, collections and product stories to shape the ZEVENRA homepage.</p><button onClick={()=>setPicker(true)} className="btn btn-dark mt-6"><Plus size={15}/> Add first section</button></div>}
-    {picker&&<TypePicker close={()=>setPicker(false)} choose={type=>{setPicker(false);setEditing(blank(type,items.length+1));}}/>}
-    {editing&&<SectionEditor item={editing} close={()=>setEditing(null)} save={save}/>} 
-    {deleting&&<Confirm title={`Delete “${deleting.title||labels[deleting.type]}”?`} body="This removes the section from the homepage builder." cancel={()=>setDeleting(null)} confirm={()=>void remove()}/>}</>;
+export default function HomepageBuilder() {
+  const store = useStore(),
+    [items, setItems] = useState<HomepageSection[]>(() =>
+      [...store.data.homepageSections].sort(
+        (a, b) => a.sortOrder - b.sortOrder,
+      ),
+    ),
+    [loading, setLoading] = useState(false),
+    [loadError, setLoadError] = useState(""),
+    [picker, setPicker] = useState(false),
+    [editing, setEditing] = useState<HomepageSection | null>(null),
+    [menu, setMenu] = useState(""),
+    [deleting, setDeleting] = useState<HomepageSection | null>(null);
+  const live = items.filter((item) => item.enabled).length;
+  useEffect(
+    () =>
+      setItems(
+        [...store.data.homepageSections].sort(
+          (a, b) => a.sortOrder - b.sortOrder,
+        ),
+      ),
+    [store.data.homepageSections],
+  );
+  const reload = async () => {
+    setLoading(true);
+    setLoadError("");
+    try {
+      setItems(
+        (await adminApi.get<HomepageSection[]>("listHomepageSections")).sort(
+          (a, b) => a.sortOrder - b.sortOrder,
+        ),
+      );
+    } catch (reason) {
+      setLoadError(
+        reason instanceof Error
+          ? reason.message
+          : "Could not load homepage sections.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+  async function save(value: HomepageSection) {
+    try {
+      const saved = await adminApi.post<HomepageSection>(
+        "saveHomepageSection",
+        value,
+      );
+      setItems((current) =>
+        [...current.filter((item) => item.id !== saved.id), saved].sort(
+          (a, b) => a.sortOrder - b.sortOrder,
+        ),
+      );
+      setEditing(null);
+      adminToast(value.enabled ? "Section saved and live" : "Section saved");
+    } catch (reason) {
+      const message =
+        reason instanceof Error ? reason.message : "Could not save section.";
+      adminToast(message, "error");
+      throw reason;
+    }
+  }
+  async function visibility(item: HomepageSection) {
+    try {
+      const saved = await adminApi.post<HomepageSection>(
+        "saveHomepageSection",
+        { ...item, enabled: !item.enabled },
+      );
+      setItems((current) =>
+        current.map((value) => (value.id === saved.id ? saved : value)),
+      );
+      adminToast(saved.enabled ? "Section published" : "Section hidden");
+    } catch (reason) {
+      adminToast(
+        reason instanceof Error ? reason.message : "Could not update section.",
+        "error",
+      );
+    }
+  }
+  async function reorder(index: number, direction: -1 | 1) {
+    const target = index + direction;
+    if (target < 0 || target >= items.length) return;
+    const next = [...items];
+    [next[index], next[target]] = [next[target], next[index]];
+    const normalized = next.map((item, position) => ({
+      ...item,
+      sortOrder: position + 1,
+    }));
+    setItems(normalized);
+    try {
+      const saved = await adminApi.post<HomepageSection[]>(
+        "reorderHomepageSections",
+        { ids: normalized.map((item) => item.id) },
+      );
+      setItems(saved);
+      adminToast("Homepage order updated");
+    } catch (reason) {
+      setItems(items);
+      adminToast(
+        reason instanceof Error
+          ? reason.message
+          : "Could not reorder sections.",
+        "error",
+      );
+    }
+  }
+  async function duplicate(item: HomepageSection) {
+    setMenu("");
+    try {
+      const copy = await adminApi.post<HomepageSection>(
+        "duplicateHomepageSection",
+        { id: item.id },
+      );
+      setItems((current) =>
+        [...current, copy].sort((a, b) => a.sortOrder - b.sortOrder),
+      );
+      adminToast("Section duplicated");
+    } catch (reason) {
+      adminToast(
+        reason instanceof Error
+          ? reason.message
+          : "Could not duplicate section.",
+        "error",
+      );
+    }
+  }
+  async function remove() {
+    if (!deleting) return;
+    try {
+      await adminApi.post("deleteHomepageSection", { id: deleting.id });
+      setItems((current) => current.filter((item) => item.id !== deleting.id));
+      setDeleting(null);
+      adminToast("Section deleted");
+    } catch (reason) {
+      adminToast(
+        reason instanceof Error ? reason.message : "Could not delete section.",
+        "error",
+      );
+    }
+  }
+  return (
+    <>
+      <div className="flex flex-wrap items-end justify-between gap-5">
+        <div>
+          <p className="admin-kicker">Controlled page builder</p>
+          <h1 className="admin-title mt-2">Homepage</h1>
+          <p className="mt-3 text-xs text-black/45">
+            {live} live section{live === 1 ? "" : "s"} · {items.length - live}{" "}
+            hidden
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <a href="/" target="_blank" rel="noreferrer" className="btn">
+            <ExternalLink size={15} /> Preview storefront
+          </a>
+          <button onClick={() => setPicker(true)} className="btn btn-dark">
+            <Plus size={15} /> Add section
+          </button>
+        </div>
+      </div>
+      <HeroSummary />
+      <div className="mt-9 flex items-end justify-between">
+        <div>
+          <p className="eyebrow text-black/45">Homepage sections</p>
+          <h2 className="display mt-2 text-3xl">Editorial flow</h2>
+        </div>
+      </div>
+      {loadError && (
+        <div className="mt-5 flex items-center justify-between border border-red-900/15 bg-red-950/[.05] p-4 text-xs text-red-900">
+          <span>Could not load homepage sections: {loadError}</span>
+          <button className="btn" onClick={() => void reload()}>
+            Retry
+          </button>
+        </div>
+      )}
+      {loading ? (
+        <Skeleton />
+      ) : items.length ? (
+        <div className="mt-5 grid gap-3">
+          {items.map((item, index) => (
+            <SectionCard
+              key={item.id}
+              item={item}
+              index={index}
+              total={items.length}
+              menu={menu === item.id}
+              setMenu={() => setMenu(menu === item.id ? "" : item.id)}
+              edit={() => setEditing(item)}
+              visibility={() => void visibility(item)}
+              up={() => void reorder(index, -1)}
+              down={() => void reorder(index, 1)}
+              duplicate={() => void duplicate(item)}
+              remove={() => {
+                setDeleting(item);
+                setMenu("");
+              }}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="mt-5 border border-dashed border-black/20 px-6 py-16 text-center">
+          <h2 className="display text-4xl">Build your homepage</h2>
+          <p className="mx-auto mt-3 max-w-lg text-sm leading-7 text-black/50">
+            Add editorial sections, collections and product stories to shape the
+            ZEVENRA homepage.
+          </p>
+          <button onClick={() => setPicker(true)} className="btn btn-dark mt-6">
+            <Plus size={15} /> Add first section
+          </button>
+        </div>
+      )}
+      {picker && (
+        <TypePicker
+          close={() => setPicker(false)}
+          choose={(type) => {
+            setPicker(false);
+            setEditing(blank(type, items.length + 1));
+          }}
+        />
+      )}
+      {editing && (
+        <SectionEditor
+          item={editing}
+          close={() => setEditing(null)}
+          save={save}
+        />
+      )}
+      {deleting && (
+        <Confirm
+          title={`Delete “${deleting.title || labels[deleting.type]}”?`}
+          body="This removes the section from the homepage builder."
+          cancel={() => setDeleting(null)}
+          confirm={() => void remove()}
+        />
+      )}
+    </>
+  );
 }
 
-function HeroSummary(){return <section className="mt-8 overflow-hidden border border-black/10 bg-[#f6f3ed] shadow-[0_14px_40px_rgba(17,17,15,.04)]"><div className="grid md:grid-cols-[240px_1fr]"><video className="aspect-video h-full w-full bg-black object-cover" muted playsInline preload="metadata" src="/media/hero-final-v2.mp4"/><div className="flex flex-col justify-center p-6"><div className="flex flex-wrap items-center gap-2"><p className="eyebrow">Hero</p><span className="rounded-full bg-black px-2.5 py-1 text-[8px] uppercase tracking-wider text-white">Managed in code</span><span className="rounded-full bg-emerald-900/[.08] px-2.5 py-1 text-[8px] uppercase tracking-wider text-emerald-900">Active</span></div><h2 className="mt-4 text-lg font-medium">hero-final-v2.mp4</h2><code className="mt-2 text-[11px] text-black/45">/media/hero-final-v2.mp4</code><p className="mt-4 text-xs text-black/50">Hero media is version-controlled with the website.</p></div></div></section>;}
-function SectionCard({item,index,total,menu,setMenu,edit,visibility,up,down,duplicate,remove}:{item:HomepageSection;index:number;total:number;menu:boolean;setMenu:()=>void;edit:()=>void;visibility:()=>void;up:()=>void;down:()=>void;duplicate:()=>void;remove:()=>void}){const media=item.desktopMedia||item.mobileMedia,isSupported=(supported as readonly string[]).includes(item.type);return <article className="relative grid gap-4 border border-black/10 bg-[#f6f3ed] p-4 transition hover:bg-white/60 sm:grid-cols-[48px_150px_minmax(0,1fr)_auto] sm:items-center"><span className="display text-2xl text-black/30">{String(index+1).padStart(2,"0")}</span><div className="aspect-[16/10] overflow-hidden bg-black/[.05]">{media?(/\.(mp4|webm|mov)(\?|$)/i.test(media)?<video src={media} muted preload="metadata" className="h-full w-full object-cover"/>:<img src={media} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover"/>):<div className="grid h-full place-items-center text-[9px] uppercase tracking-wider text-black/30">No media</div>}</div><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="text-[10px] font-medium uppercase tracking-[.16em]">{labels[item.type]||item.type}</p><span className={`rounded-full px-2 py-1 text-[8px] uppercase tracking-wider ${item.enabled?"bg-emerald-900/[.08] text-emerald-900":"bg-black/[.06] text-black/45"}`}>{item.enabled?"Live":"Hidden"}</span>{!isSupported&&<span className="text-[8px] uppercase text-amber-800">Legacy / not rendered</span>}</div><h3 className="mt-2 truncate text-lg">{item.title||"Untitled section"}</h3>{item.subtitle&&<p className="mt-1 line-clamp-2 text-xs leading-5 text-black/45">{item.subtitle}</p>}</div><div className="flex items-center justify-end gap-1"><button disabled={!isSupported} onClick={edit} className="btn min-h-10 px-3 disabled:opacity-30">Edit</button><button aria-label={`Actions for ${item.title}`} onClick={setMenu} className="grid h-10 w-10 place-items-center"><MoreHorizontal size={17}/></button>{menu&&<div className="absolute right-3 top-[78%] z-20 grid min-w-44 border border-black/10 bg-white p-1 shadow-xl"><button onClick={visibility} disabled={!isSupported} className="px-3 py-2 text-left text-xs hover:bg-black/[.04]">{item.enabled?"Hide section":"Publish section"}</button><button onClick={up} disabled={index===0} className="flex items-center gap-2 px-3 py-2 text-left text-xs disabled:opacity-30"><ArrowUp size={13}/> Move up</button><button onClick={down} disabled={index===total-1} className="flex items-center gap-2 px-3 py-2 text-left text-xs disabled:opacity-30"><ArrowDown size={13}/> Move down</button><button onClick={duplicate} disabled={!isSupported} className="flex items-center gap-2 px-3 py-2 text-left text-xs disabled:opacity-30"><Copy size={13}/> Duplicate</button><button onClick={remove} className="px-3 py-2 text-left text-xs text-red-800">Delete</button></div>}</div></article>;}
-function TypePicker({close,choose}:{close:()=>void;choose:(type:(typeof supported)[number])=>void}){return <Modal close={close} title="Choose section type"><div className="grid gap-3">{supported.map(type=><button key={type} onClick={()=>choose(type)} className="border border-black/10 p-5 text-left transition hover:border-bronze hover:bg-bronze/[.04]"><b className="text-sm">{labels[type]}</b><p className="mt-2 text-xs leading-5 text-black/50">{descriptions[type]}</p></button>)}</div><p className="mt-5 text-[10px] leading-5 text-black/40">Only section types currently rendered by the storefront are available.</p></Modal>;}
-function SectionEditor({item,close,save}:{item:HomepageSection;close:()=>void;save:(value:HomepageSection)=>Promise<void>}){const [draft,setDraft]=useState(item),[dirty,setDirty]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(""),[discard,setDiscard]=useState(false),[uploading,setUploading]=useState("");const set=<K extends keyof HomepageSection>(key:K,value:HomepageSection[K])=>{setDirty(true);setDraft(current=>({...current,[key]:value}));};const attemptClose=()=>dirty?setDiscard(true):close();useEffect(()=>{const key=(event:KeyboardEvent)=>{if(event.key==="Escape")attemptClose();};addEventListener("keydown",key);return()=>removeEventListener("keydown",key);},[dirty]);async function upload(file:File|undefined,key:"desktopMedia"|"mobileMedia"){if(!file)return;setUploading(key);try{set(key,await uploadAdminMedia(file));}catch(reason){adminToast(reason instanceof Error?reason.message:"Could not upload media.","error");}finally{setUploading("");}}async function submit(event:FormEvent){event.preventDefault();setBusy(true);setError("");try{await save({...draft,overlay:Math.min(90,Math.max(0,Number(draft.overlay)||0))});}catch(reason){setError(reason instanceof Error?reason.message:"Could not save section.");}finally{setBusy(false);}}
-  return <><motion.div role="dialog" aria-modal="true" aria-label="Edit homepage section" initial={{x:"100%"}} animate={{x:0}} className="fixed inset-y-0 right-0 z-[210] flex w-full flex-col bg-[#f6f3ed] shadow-[-20px_0_60px_rgba(0,0,0,.2)] sm:w-[600px]"><header className="flex items-start justify-between border-b border-black/10 p-5"><div><p className="eyebrow text-black/45">Edit section</p><h2 className="display mt-2 text-3xl">{labels[draft.type]}</h2></div><button onClick={attemptClose} aria-label="Close editor" className="grid h-11 w-11 place-items-center"><X/></button></header><form onSubmit={submit} className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-7"><div className="grid gap-5"><Field label="Section title" value={draft.title} set={value=>set("title",value)}/><label className="text-xs">Subtitle<textarea className="field mt-2" rows={3} value={draft.subtitle||""} onChange={event=>set("subtitle",event.target.value)}/></label><MediaField label="Desktop media" value={draft.desktopMedia||""} busy={uploading==="desktopMedia"} landscape set={value=>set("desktopMedia",value)} upload={file=>void upload(file,"desktopMedia")}/><MediaField label="Mobile media" value={draft.mobileMedia||""} busy={uploading==="mobileMedia"} set={value=>set("mobileMedia",value)} upload={file=>void upload(file,"mobileMedia")}/><div className="grid gap-4 sm:grid-cols-2"><Field label="CTA label" value={draft.ctaLabel||""} set={value=>set("ctaLabel",value)}/><Field label="CTA link" value={draft.ctaLink||""} set={value=>set("ctaLink",value)} placeholder="/shop or https://…"/></div><div className="grid gap-4 sm:grid-cols-3"><Select label="Text position" value={draft.textPosition} values={["left","center","right"]} set={value=>set("textPosition",value as HomepageSection["textPosition"])}/><Select label="Spacing" value={draft.spacing} values={["compact","normal","generous"]} set={value=>set("spacing",value as HomepageSection["spacing"])}/><label className="text-xs">Overlay %<input className="field mt-2" type="number" min="0" max="90" value={draft.overlay} onChange={event=>set("overlay",Number(event.target.value))}/></label></div><label className="flex min-h-12 items-center justify-between border border-black/10 p-4 text-xs"><span><b className="block">Homepage visibility</b><small className="mt-1 block text-black/45">{draft.enabled?"This section will be live.":"This section will remain hidden."}</small></span><input aria-label="Section live" type="checkbox" role="switch" checked={draft.enabled} onChange={event=>set("enabled",event.target.checked)} className="h-5 w-5 accent-black"/></label>{error&&<p role="alert" className="text-xs text-red-800">{error}</p>}</div><footer className="sticky bottom-0 -mx-5 mt-8 flex justify-end gap-2 border-t border-black/10 bg-[#f6f3ed]/95 px-5 py-4 backdrop-blur sm:-mx-7 sm:px-7"><button type="button" className="btn" onClick={attemptClose}>Cancel</button><button disabled={busy||Boolean(uploading)} className="btn btn-dark">{busy?"Saving…":"Save changes"}</button></footer></form></motion.div>{discard&&<Confirm title="Discard unsaved changes?" body="Your edits to this section will be lost." cancel={()=>setDiscard(false)} confirm={close} confirmLabel="Discard"/>}</>;
+function HeroSummary() {
+  return (
+    <section className="mt-8 overflow-hidden border border-black/10 bg-[#f6f3ed] shadow-[0_14px_40px_rgba(17,17,15,.04)]">
+      <div className="grid md:grid-cols-[240px_1fr]">
+        <video
+          className="aspect-video h-full w-full bg-black object-cover"
+          muted
+          playsInline
+          preload="metadata"
+          src="/media/hero-final-v2.mp4"
+        />
+        <div className="flex flex-col justify-center p-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="eyebrow">Hero</p>
+            <span className="rounded-full bg-black px-2.5 py-1 text-[8px] uppercase tracking-wider text-white">
+              Managed in code
+            </span>
+            <span className="rounded-full bg-emerald-900/[.08] px-2.5 py-1 text-[8px] uppercase tracking-wider text-emerald-900">
+              Active
+            </span>
+          </div>
+          <h2 className="mt-4 text-lg font-medium">hero-final-v2.mp4</h2>
+          <code className="mt-2 text-[11px] text-black/45">
+            /media/hero-final-v2.mp4
+          </code>
+          <p className="mt-4 text-xs text-black/50">
+            Hero media is version-controlled with the website.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
 }
-function MediaField({label,value,busy,landscape,set,upload}:{label:string;value:string;busy:boolean;landscape?:boolean;set:(value:string)=>void;upload:(file?:File)=>void}){const video=/\.(mp4|webm|mov)(\?|$)/i.test(value);return <div><label className="text-xs">{label}<input className="field mt-2" value={value} placeholder="Paste media URL" onChange={event=>set(event.target.value)}/></label><label className="btn mt-2 cursor-pointer"><Upload size={14}/>{busy?"Uploading…":"Upload media"}<input className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,image/avif,video/mp4,video/webm" disabled={busy} onChange={event=>{upload(event.target.files?.[0]);event.currentTarget.value="";}}/></label>{value&&<div className={`mt-3 overflow-hidden bg-black/[.06] ${landscape?"aspect-video":"aspect-[4/5] max-w-[220px]"}`}>{video?<video src={value} muted controls className="h-full w-full object-cover"/>:<img src={value} alt={`${label} preview`} className="h-full w-full object-cover" onError={event=>{event.currentTarget.style.opacity=".2";}}/>}</div>}</div>;}
-function Field({label,value,set,placeholder}:{label:string;value:string;set:(value:string)=>void;placeholder?:string}){return <label className="text-xs">{label}<input className="field mt-2" value={value} placeholder={placeholder} onChange={event=>set(event.target.value)}/></label>;}
-function Select({label,value,values,set}:{label:string;value:string;values:string[];set:(value:string)=>void}){return <label className="text-xs">{label}<select className="field mt-2" value={value} onChange={event=>set(event.target.value)}>{values.map(item=><option key={item}>{item}</option>)}</select></label>;}
-function Modal({close,title,children}:{close:()=>void;title:string;children:React.ReactNode}){return <div className="fixed inset-0 z-[205] grid place-items-center bg-black/50 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-xl bg-[#f6f3ed] p-6 shadow-2xl"><div className="mb-5 flex items-center justify-between"><h2 className="display text-3xl">{title}</h2><button onClick={close} aria-label="Close"><X/></button></div>{children}</div></div>;}
-function Confirm({title,body,cancel,confirm,confirmLabel="Delete section"}:{title:string;body:string;cancel:()=>void;confirm:()=>void;confirmLabel?:string}){return <Modal close={cancel} title={title}><p className="text-sm leading-6 text-black/55">{body}</p><div className="mt-6 flex justify-end gap-2"><button className="btn" onClick={cancel}>Keep editing</button><button className="btn border-red-800 text-red-800" onClick={confirm}>{confirmLabel}</button></div></Modal>;}
-function Skeleton(){return <div className="mt-5 grid gap-3">{[1,2,3].map(item=><div key={item} className="h-32 animate-pulse border border-black/5 bg-black/[.05]"/>)}</div>;}
+function SectionCard({
+  item,
+  index,
+  total,
+  menu,
+  setMenu,
+  edit,
+  visibility,
+  up,
+  down,
+  duplicate,
+  remove,
+}: {
+  item: HomepageSection;
+  index: number;
+  total: number;
+  menu: boolean;
+  setMenu: () => void;
+  edit: () => void;
+  visibility: () => void;
+  up: () => void;
+  down: () => void;
+  duplicate: () => void;
+  remove: () => void;
+}) {
+  const media = item.desktopMedia || item.mobileMedia,
+    isSupported = (supported as readonly string[]).includes(item.type);
+  return (
+    <article className="relative grid gap-4 border border-black/10 bg-[#f6f3ed] p-4 transition hover:bg-white/60 sm:grid-cols-[48px_150px_minmax(0,1fr)_auto] sm:items-center">
+      <span className="display text-2xl text-black/30">
+        {String(index + 1).padStart(2, "0")}
+      </span>
+      <div className="aspect-[16/10] overflow-hidden bg-black/[.05]">
+        {media ? (
+          /\.(mp4|webm|mov)(\?|$)/i.test(media) ? (
+            <video
+              src={media}
+              muted
+              preload="metadata"
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <img
+              src={media}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              className="h-full w-full object-cover"
+            />
+          )
+        ) : (
+          <div className="grid h-full place-items-center text-[9px] uppercase tracking-wider text-black/30">
+            No media
+          </div>
+        )}
+      </div>
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-[10px] font-medium uppercase tracking-[.16em]">
+            {labels[item.type] || item.type}
+          </p>
+          <span
+            className={`rounded-full px-2 py-1 text-[8px] uppercase tracking-wider ${item.enabled ? "bg-emerald-900/[.08] text-emerald-900" : "bg-black/[.06] text-black/45"}`}
+          >
+            {item.enabled ? "Live" : "Hidden"}
+          </span>
+          {!isSupported && (
+            <span className="text-[8px] uppercase text-amber-800">
+              Legacy / not rendered
+            </span>
+          )}
+        </div>
+        <h3 className="mt-2 truncate text-lg">
+          {item.title || "Untitled section"}
+        </h3>
+        {item.subtitle && (
+          <p className="mt-1 line-clamp-2 text-xs leading-5 text-black/45">
+            {item.subtitle}
+          </p>
+        )}
+      </div>
+      <div className="flex items-center justify-end gap-1">
+        <button
+          disabled={!isSupported}
+          onClick={edit}
+          className="btn min-h-10 px-3 disabled:opacity-30"
+        >
+          Edit
+        </button>
+        <button
+          aria-label={`Actions for ${item.title}`}
+          onClick={setMenu}
+          className="grid h-10 w-10 place-items-center"
+        >
+          <MoreHorizontal size={17} />
+        </button>
+        {menu && (
+          <div className="absolute right-3 top-[78%] z-20 grid min-w-44 border border-black/10 bg-white p-1 shadow-xl">
+            <button
+              onClick={visibility}
+              disabled={!isSupported}
+              className="px-3 py-2 text-left text-xs hover:bg-black/[.04]"
+            >
+              {item.enabled ? "Hide section" : "Publish section"}
+            </button>
+            <button
+              onClick={up}
+              disabled={index === 0}
+              className="flex items-center gap-2 px-3 py-2 text-left text-xs disabled:opacity-30"
+            >
+              <ArrowUp size={13} /> Move up
+            </button>
+            <button
+              onClick={down}
+              disabled={index === total - 1}
+              className="flex items-center gap-2 px-3 py-2 text-left text-xs disabled:opacity-30"
+            >
+              <ArrowDown size={13} /> Move down
+            </button>
+            <button
+              onClick={duplicate}
+              disabled={!isSupported}
+              className="flex items-center gap-2 px-3 py-2 text-left text-xs disabled:opacity-30"
+            >
+              <Copy size={13} /> Duplicate
+            </button>
+            <button
+              onClick={remove}
+              className="px-3 py-2 text-left text-xs text-red-800"
+            >
+              Delete
+            </button>
+          </div>
+        )}
+      </div>
+    </article>
+  );
+}
+function TypePicker({
+  close,
+  choose,
+}: {
+  close: () => void;
+  choose: (type: (typeof supported)[number]) => void;
+}) {
+  return (
+    <Modal close={close} title="Choose section type">
+      <div className="grid gap-3">
+        {supported.map((type) => (
+          <button
+            key={type}
+            onClick={() => choose(type)}
+            className="border border-black/10 p-5 text-left transition hover:border-bronze hover:bg-bronze/[.04]"
+          >
+            <b className="text-sm">{labels[type]}</b>
+            <p className="mt-2 text-xs leading-5 text-black/50">
+              {descriptions[type]}
+            </p>
+          </button>
+        ))}
+      </div>
+      <p className="mt-5 text-[10px] leading-5 text-black/40">
+        Only section types currently rendered by the storefront are available.
+      </p>
+    </Modal>
+  );
+}
+function SectionEditor({
+  item,
+  close,
+  save,
+}: {
+  item: HomepageSection;
+  close: () => void;
+  save: (value: HomepageSection) => Promise<void>;
+}) {
+  const store = useStore(),
+    inferSource = () =>
+      store.data.products.some((entry) => entry.id === item.referenceId)
+        ? "product"
+        : store.data.categories.some((entry) => entry.id === item.referenceId)
+          ? "category"
+          : "collection",
+    [draft, setDraft] = useState(item),
+    [source, setSource] = useState<"product" | "category" | "collection">(
+      inferSource,
+    ),
+    [dirty, setDirty] = useState(false),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState(""),
+    [discard, setDiscard] = useState(false),
+    [uploading, setUploading] = useState("");
+  const mediaType = [
+      "editorial-image",
+      "full-width-campaign",
+      "split-story",
+      "collection-feature",
+    ].includes(draft.type),
+    copyType = !["service-strip"].includes(draft.type),
+    subtitleType = !["product-grid", "category-grid", "service-strip"].includes(
+      draft.type,
+    ),
+    alignmentType = [
+      "editorial-image",
+      "full-width-campaign",
+      "split-story",
+      "collection-feature",
+      "text-statement",
+    ].includes(draft.type),
+    overlayType = [
+      "editorial-image",
+      "full-width-campaign",
+      "split-story",
+      "collection-feature",
+    ].includes(draft.type);
+  const set = <K extends keyof HomepageSection>(
+    key: K,
+    value: HomepageSection[K],
+  ) => {
+    setDirty(true);
+    setDraft((current) => ({ ...current, [key]: value }));
+  };
+  const attemptClose = () => (dirty ? setDiscard(true) : close());
+  useEffect(() => {
+    const key = (event: KeyboardEvent) => {
+      if (event.key === "Escape") attemptClose();
+    };
+    addEventListener("keydown", key);
+    return () => removeEventListener("keydown", key);
+  }, [dirty]);
+  async function upload(
+    file: File | undefined,
+    key: "desktopMedia" | "mobileMedia",
+  ) {
+    if (!file) return;
+    setUploading(key);
+    try {
+      set(key, await uploadAdminMedia(file));
+    } catch (reason) {
+      adminToast(
+        reason instanceof Error ? reason.message : "Could not upload media.",
+        "error",
+      );
+    } finally {
+      setUploading("");
+    }
+  }
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      await save({
+        ...draft,
+        overlay: Math.min(90, Math.max(0, Number(draft.overlay) || 0)),
+      });
+    } catch (reason) {
+      setError(
+        reason instanceof Error ? reason.message : "Could not save section.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <>
+      <motion.div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Edit homepage section"
+        initial={{ x: "100%" }}
+        animate={{ x: 0 }}
+        className="fixed inset-y-0 right-0 z-[210] flex w-full flex-col bg-[#f6f3ed] shadow-[-20px_0_60px_rgba(0,0,0,.2)] sm:w-[600px]"
+      >
+        <header className="flex items-start justify-between border-b border-black/10 p-5">
+          <div>
+            <p className="eyebrow text-black/45">Edit section</p>
+            <h2 className="display mt-2 text-3xl">{labels[draft.type]}</h2>
+          </div>
+          <button
+            onClick={attemptClose}
+            aria-label="Close editor"
+            className="grid h-11 w-11 place-items-center"
+          >
+            <X />
+          </button>
+        </header>
+        <form
+          onSubmit={submit}
+          className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-7"
+        >
+          <div className="grid gap-5">
+            {copyType && <Field label="Section title" value={draft.title} set={(value) => set("title", value)} />}
+            {subtitleType && <label className="text-xs">Subtitle<textarea className="field mt-2" rows={3} value={draft.subtitle || ""} onChange={(event) => set("subtitle", event.target.value)} /></label>}
+            {draft.type === "collection-feature" && <EntityPicker label="Choose collection" value={draft.referenceId || ""} options={store.data.collections.filter(entry => entry.active).map(entry => ({ id: entry.id, name: entry.name }))} set={(value) => set("referenceId", value)} />}
+            {draft.type === "category-grid" && <EntityPicker label="Choose category scope" emptyLabel="All configured homepage categories" value={draft.referenceId || ""} options={store.data.categories.filter(entry => entry.active && !entry.parentId).map(entry => ({ id: entry.id, name: entry.name }))} set={(value) => set("referenceId", value)} />}
+            {draft.type === "product-grid" && <><Select label="Source" value={source} values={["product", "category", "collection"]} set={(value) => { setSource(value as typeof source); set("referenceId", ""); }} /><EntityPicker label={`Choose ${source}`} value={draft.referenceId || ""} options={(source === "product" ? store.data.products.filter(entry => entry.status === "published") : source === "category" ? store.data.categories.filter(entry => entry.active) : store.data.collections.filter(entry => entry.active)).map(entry => ({ id: entry.id, name: entry.name }))} set={(value) => set("referenceId", value)} /></>}
+            {mediaType && <><MediaField label="Desktop media" value={draft.desktopMedia || ""} busy={uploading === "desktopMedia"} landscape set={(value) => set("desktopMedia", value)} upload={(file) => void upload(file, "desktopMedia")} /><MediaField label="Mobile media" value={draft.mobileMedia || ""} busy={uploading === "mobileMedia"} set={(value) => set("mobileMedia", value)} upload={(file) => void upload(file, "mobileMedia")} /></>}
+            {draft.type !== "service-strip" && <div className="grid gap-4 sm:grid-cols-2">
+              <Field
+                label="CTA label"
+                value={draft.ctaLabel || ""}
+                set={(value) => set("ctaLabel", value)}
+              />
+              <Field
+                label="CTA link"
+                value={draft.ctaLink || ""}
+                set={(value) => set("ctaLink", value)}
+                placeholder="/shop or https://…"
+              />
+            </div>}
+            <div className="grid gap-4 sm:grid-cols-3">
+              {alignmentType && <Select
+                label="Text position"
+                value={draft.textPosition}
+                values={["left", "center", "right"]}
+                set={(value) =>
+                  set("textPosition", value as HomepageSection["textPosition"])
+                }
+              />}
+              <Select
+                label="Spacing"
+                value={draft.spacing}
+                values={["compact", "normal", "generous"]}
+                set={(value) =>
+                  set("spacing", value as HomepageSection["spacing"])
+                }
+              />
+              {overlayType && <label className="text-xs">
+                Overlay %
+                <input
+                  className="field mt-2"
+                  type="number"
+                  min="0"
+                  max="90"
+                  value={draft.overlay}
+                  onChange={(event) =>
+                    set("overlay", Number(event.target.value))
+                  }
+                />
+              </label>}
+            </div>
+            <label className="flex min-h-12 items-center justify-between border border-black/10 p-4 text-xs">
+              <span>
+                <b className="block">Homepage visibility</b>
+                <small className="mt-1 block text-black/45">
+                  {draft.enabled
+                    ? "This section will be live."
+                    : "This section will remain hidden."}
+                </small>
+              </span>
+              <input
+                aria-label="Section live"
+                type="checkbox"
+                role="switch"
+                checked={draft.enabled}
+                onChange={(event) => set("enabled", event.target.checked)}
+                className="h-5 w-5 accent-black"
+              />
+            </label>
+            {error && (
+              <p role="alert" className="text-xs text-red-800">
+                {error}
+              </p>
+            )}
+          </div>
+          <footer className="sticky bottom-0 -mx-5 mt-8 flex justify-end gap-2 border-t border-black/10 bg-[#f6f3ed]/95 px-5 py-4 backdrop-blur sm:-mx-7 sm:px-7">
+            <button type="button" className="btn" onClick={attemptClose}>
+              Cancel
+            </button>
+            <button
+              disabled={busy || Boolean(uploading)}
+              className="btn btn-dark"
+            >
+              {busy ? "Saving…" : "Save changes"}
+            </button>
+          </footer>
+        </form>
+      </motion.div>
+      {discard && (
+        <Confirm
+          title="Discard unsaved changes?"
+          body="Your edits to this section will be lost."
+          cancel={() => setDiscard(false)}
+          confirm={close}
+          confirmLabel="Discard"
+        />
+      )}
+    </>
+  );
+}
+function MediaField({
+  label,
+  value,
+  busy,
+  landscape,
+  set,
+  upload,
+}: {
+  label: string;
+  value: string;
+  busy: boolean;
+  landscape?: boolean;
+  set: (value: string) => void;
+  upload: (file?: File) => void;
+}) {
+  const video = /\.(mp4|webm|mov)(\?|$)/i.test(value);
+  return (
+    <div>
+      <label className="text-xs">
+        {label}
+        <input
+          className="field mt-2"
+          value={value}
+          placeholder="Paste media URL"
+          onChange={(event) => set(event.target.value)}
+        />
+      </label>
+      <label className="btn mt-2 cursor-pointer">
+        <Upload size={14} />
+        {busy ? "Uploading…" : "Upload media"}
+        <input
+          className="sr-only"
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/avif,video/mp4,video/webm"
+          disabled={busy}
+          onChange={(event) => {
+            upload(event.target.files?.[0]);
+            event.currentTarget.value = "";
+          }}
+        />
+      </label>
+      {value && (
+        <div
+          className={`mt-3 overflow-hidden bg-black/[.06] ${landscape ? "aspect-video" : "aspect-[4/5] max-w-[220px]"}`}
+        >
+          {video ? (
+            <video
+              src={value}
+              muted
+              controls
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <img
+              src={value}
+              alt={`${label} preview`}
+              className="h-full w-full object-cover"
+              onError={(event) => {
+                event.currentTarget.style.opacity = ".2";
+              }}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+function EntityPicker({
+  label,
+  value,
+  options,
+  emptyLabel,
+  set,
+}: {
+  label: string;
+  value: string;
+  options: { id: string; name: string }[];
+  emptyLabel?: string;
+  set: (value: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const visible = options.filter((option) =>
+    option.name.toLowerCase().includes(query.trim().toLowerCase()),
+  );
+  return (
+    <label className="text-xs">
+      {label}
+      {options.length > 8 && (
+        <input
+          className="field mt-2"
+          type="search"
+          value={query}
+          placeholder={`Search ${label.toLowerCase()}`}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+      )}
+      <select
+        className="field mt-2"
+        value={value}
+        onChange={(event) => set(event.target.value)}
+      >
+        <option value="">{emptyLabel || "Select one"}</option>
+        {visible
+          .sort((a, b) => a.name.localeCompare(b.name))
+          .map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.name}
+            </option>
+          ))}
+      </select>
+    </label>
+  );
+}
+function Field({
+  label,
+  value,
+  set,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  set: (value: string) => void;
+  placeholder?: string;
+}) {
+  return (
+    <label className="text-xs">
+      {label}
+      <input
+        className="field mt-2"
+        value={value}
+        placeholder={placeholder}
+        onChange={(event) => set(event.target.value)}
+      />
+    </label>
+  );
+}
+function Select({
+  label,
+  value,
+  values,
+  set,
+}: {
+  label: string;
+  value: string;
+  values: string[];
+  set: (value: string) => void;
+}) {
+  return (
+    <label className="text-xs">
+      {label}
+      <select
+        className="field mt-2"
+        value={value}
+        onChange={(event) => set(event.target.value)}
+      >
+        {values.map((item) => (
+          <option key={item}>{item}</option>
+        ))}
+      </select>
+    </label>
+  );
+}
+function Modal({
+  close,
+  title,
+  children,
+}: {
+  close: () => void;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-[205] grid place-items-center bg-black/50 p-4"
+      role="dialog"
+      aria-modal="true"
+    >
+      <div className="w-full max-w-xl bg-[#f6f3ed] p-6 shadow-2xl">
+        <div className="mb-5 flex items-center justify-between">
+          <h2 className="display text-3xl">{title}</h2>
+          <button onClick={close} aria-label="Close">
+            <X />
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+function Confirm({
+  title,
+  body,
+  cancel,
+  confirm,
+  confirmLabel = "Delete section",
+}: {
+  title: string;
+  body: string;
+  cancel: () => void;
+  confirm: () => void;
+  confirmLabel?: string;
+}) {
+  return (
+    <Modal close={cancel} title={title}>
+      <p className="text-sm leading-6 text-black/55">{body}</p>
+      <div className="mt-6 flex justify-end gap-2">
+        <button className="btn" onClick={cancel}>
+          Keep editing
+        </button>
+        <button className="btn border-red-800 text-red-800" onClick={confirm}>
+          {confirmLabel}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+function Skeleton() {
+  return (
+    <div className="mt-5 grid gap-3">
+      {[1, 2, 3].map((item) => (
+        <div
+          key={item}
+          className="h-32 animate-pulse border border-black/5 bg-black/[.05]"
+        />
+      ))}
+    </div>
+  );
+}

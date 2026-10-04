@@ -21,7 +21,7 @@ import { navigationHref, useStore } from "../features/store/StoreContext";
 import { getNavigationCategories } from "../services/navigation";
 import { useCustomerAuth } from "../features/account/CustomerAuthContext";
 import type { Category } from "../types";
-import { whatsappUrl } from "../utils/contact";
+import { validExternalUrl, whatsappUrl } from "../utils/contact";
 
 function TikTokIcon({ size = 16 }: { size?: number }) {
   return (
@@ -324,16 +324,6 @@ function MobileMenu({
   );
 }
 
-function validExternalUrl(value: unknown) {
-  try {
-    const url = new URL(String(value ?? "").trim());
-    return url.protocol === "https:" || url.protocol === "http:"
-      ? url.toString()
-      : "";
-  } catch {
-    return "";
-  }
-}
 function Footer() {
   const { data } = useStore(),
     settings = data.settings;

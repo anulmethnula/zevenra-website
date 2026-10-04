@@ -233,7 +233,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (error instanceof Error && error.name === "ZodError")
       return json(
         res,
-        { error: "Please check the customer, delivery and item details." },
+        { error: (error as Error & { issues?: { message?: string }[] }).issues?.[0]?.message || "Please check the submitted details." },
         400,
       );
     return json(

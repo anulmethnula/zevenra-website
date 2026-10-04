@@ -402,7 +402,19 @@ export const orderSchema = z
 export const homepageSectionSchema = z
   .object({
     id: z.string().trim().min(1).max(100),
-    type: z.enum(["editorial-image", "full-width-campaign"]),
+    type: z.enum([
+      "product-grid",
+      "collection-feature",
+      "category-grid",
+      "editorial-image",
+      "full-width-campaign",
+      "split-story",
+      "text-statement",
+      "new-arrivals",
+      "featured-products",
+      "social",
+      "service-strip",
+    ]),
     enabled: z.boolean(),
     title: z.string().trim().max(140),
     subtitle: z.string().trim().max(500).optional(),
@@ -418,11 +430,46 @@ export const homepageSectionSchema = z
   })
   .strict()
   .superRefine((value, ctx) => {
-    if (value.enabled && !value.desktopMedia && !value.mobileMedia)
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["desktopMedia"], message: "Add media before publishing this section." });
+    const mediaTypes = new Set([
+      "editorial-image",
+      "full-width-campaign",
+      "split-story",
+    ]);
+    if (
+      value.enabled &&
+      mediaTypes.has(value.type) &&
+      !value.desktopMedia &&
+      !value.mobileMedia
+    )
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["desktopMedia"],
+        message: "Add media before publishing this section.",
+      });
+    if (
+      value.enabled &&
+      value.type === "text-statement" &&
+      !value.title &&
+      !value.subtitle
+    )
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["title"],
+        message: "Add a title or statement before publishing.",
+      });
+    if (
+      value.enabled &&
+      ["collection-feature", "product-grid"].includes(value.type) &&
+      !value.referenceId
+    )
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["referenceId"],
+        message: "Choose a valid content source before publishing.",
+      });
     if (value.ctaLabel && !value.ctaLink)
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["ctaLink"], message: "Add a CTA link when a CTA label is provided." });
-    if (value.ctaLink && !/^(\/|https:\/\/)/i.test(value.ctaLink))
+    if (value.ctaLink && !/^(\/(?!\/)|https:\/\/)/i.test(value.ctaLink))
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["ctaLink"], message: "CTA link must be a site path or HTTPS URL." });
   });
 export const preorderSchema = z
