@@ -15,6 +15,7 @@
     "admin:hash-password": "node scripts/hash-admin-password.mjs",
     "db:migrate": "node scripts/db-migrate.mjs",
     "db:verify": "node scripts/db-verify.mjs"
+    ,"perf:reads": "node scripts/load-test-reads.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

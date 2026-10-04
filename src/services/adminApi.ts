@@ -16,9 +16,9 @@ async function request<T>(action: string, init?: RequestInit): Promise<T> {
 }
 
 export const adminApi = {
-  get: <T>(action: string, query: Record<string, string> = {}) => {
+  get: <T>(action: string, query: Record<string, string> = {}, signal?: AbortSignal) => {
     const search = new URLSearchParams(query).toString();
-    return request<T>(`${action}${search ? `?${search}` : ""}`);
+    return request<T>(`${action}${search ? `?${search}` : ""}`, { signal, cache: "no-store" });
   },
   post: <T>(action: string, payload: unknown) =>
     request<T>(action, { method: "POST", body: JSON.stringify(payload) }),

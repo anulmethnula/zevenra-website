@@ -5,11 +5,12 @@ import {
   listCouriers,
   listDeliveryRates,
   listHomepageSections,
+  getProductById,
   listProducts,
   listSettings,
   listSizeCharts,
 } from "./catalog.js";
-import { listOrders } from "./orders.js";
+import { recentOrders } from "./orders.js";
 import { listPreorders } from "./preorders.js";
 
 export async function dashboard() {
@@ -25,7 +26,7 @@ export async function dashboard() {
     preorders = await query<Record<string, unknown>>(
       `SELECT count(*) FILTER(WHERE status='new')::int AS new_count,COALESCE(sum(quantity) FILTER(WHERE status='confirmed' AND batch_id=''),0)::int AS confirmed_count FROM preorders`,
     ),
-    recent = (await listOrders()).slice(0, 10),
+    recent = await recentOrders(10),
     row = counts.rows[0] || {},
     pre = preorders.rows[0] || {};
   return {
@@ -53,7 +54,16 @@ export async function dashboard() {
   };
 }
 
-export async function adminBootstrap() {
+export async function adminBootstrap(section = "/admin") {
+  const productEditorId = section.match(/^\/admin\/products\/([^/]+)$/)?.[1],
+    isProducts = section === "/admin/products" || section === "/admin/products/new" || Boolean(productEditorId),
+    isOrders = section.startsWith("/admin/orders"),
+    isPreorders = section.startsWith("/admin/preorders"),
+    isDelivery = section.startsWith("/admin/delivery"),
+    isSettings = section.startsWith("/admin/settings"),
+    isHomepage = section.startsWith("/admin/homepage"),
+    isCategories = section.startsWith("/admin/categories"),
+    isCollections = section.startsWith("/admin/collections");
   const [
     dashboardData,
     products,
@@ -67,17 +77,17 @@ export async function adminBootstrap() {
     couriers,
     deliveryRates,
   ] = await Promise.all([
-    dashboard(),
-    listProducts(),
-    listCategories(),
-    listCollections(),
-    listSizeCharts(),
-    listHomepageSections(),
-    listOrders(),
-    listPreorders(),
-    listSettings(),
-    listCouriers(),
-    listDeliveryRates(),
+    section === "/admin" ? dashboard() : Promise.resolve(null),
+    productEditorId ? getProductById(productEditorId).then(value => value ? [value] : []) : (isOrders || isPreorders || isHomepage ? listProducts() : Promise.resolve([])),
+    isProducts || isCategories || isHomepage ? listCategories() : Promise.resolve([]),
+    isProducts || isCollections || isHomepage ? listCollections() : Promise.resolve([]),
+    isProducts ? listSizeCharts() : Promise.resolve([]),
+    isHomepage ? listHomepageSections() : Promise.resolve([]),
+    isOrders ? recentOrders(50) : Promise.resolve([]),
+    isPreorders ? listPreorders() : Promise.resolve([]),
+    isSettings || isDelivery || isOrders ? listSettings() : Promise.resolve([]),
+    isDelivery || isOrders ? listCouriers() : Promise.resolve([]),
+    isDelivery ? listDeliveryRates() : Promise.resolve([]),
   ]);
   return {
     dashboard: dashboardData,

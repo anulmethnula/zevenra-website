@@ -11,11 +11,14 @@ import {
   listHomepageSections,
   listNavigation,
   listProducts,
+  listAdminProducts,
+  getProductById,
   listSettings,
   listSizeCharts,
   saveCourierConfig,
   saveEntity,
   saveProduct,
+  setProductStatus,
   saveSettings,
 } from "../_data/catalog.js";
 import {
@@ -47,7 +50,10 @@ const allowed = new Set([
   "bootstrap",
   "dashboard",
   "listProducts",
+  "listAdminProducts",
+  "getProduct",
   "saveProduct",
+  "setProductStatus",
   "archiveProduct",
   "deleteProduct",
   "listCategories",
@@ -88,11 +94,15 @@ const allowed = new Set([
 async function execute(action: string, payload: Record<string, unknown>) {
   switch (action) {
     case "bootstrap":
-      return adminBootstrap();
+      return adminBootstrap(String(payload.section || "/admin"));
     case "dashboard":
       return dashboard();
     case "listProducts":
       return listProducts();
+    case "listAdminProducts":
+      return listAdminProducts(payload);
+    case "getProduct":
+      return getProductById(String(payload.id || ""));
     case "listCategories":
       return listCategories();
     case "listCollections":
@@ -117,6 +127,8 @@ async function execute(action: string, payload: Record<string, unknown>) {
       return listDeliveryRates();
     case "saveProduct":
       return saveProduct(payload);
+    case "setProductStatus":
+      return setProductStatus(String(payload.id || ""), String(payload.status || ""));
     case "archiveProduct":
       return archiveProduct(String(payload.id || ""));
     case "deleteProduct":
@@ -178,6 +190,7 @@ async function execute(action: string, payload: Record<string, unknown>) {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
+    res.setHeader("Cache-Control", "private, no-store");
     const config = authEnv();
     if (!validSession(req, config.SESSION_SECRET))
       return json(res, { error: "Session expired" }, 401);

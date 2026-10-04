@@ -339,6 +339,13 @@ export async function listOrders() {
     )
   ).rows.map(mapOrder);
 }
+export async function recentOrders(limit = 10) {
+  const safeLimit = Math.min(50, Math.max(1, Math.floor(limit)));
+  return (await query<Record<string, unknown>>(
+    "SELECT * FROM orders ORDER BY created_at DESC LIMIT $1",
+    [safeLimit],
+  )).rows.map(mapOrder);
+}
 export async function getOrder(orderId: string) {
   const row = (
     await query<Record<string, unknown>>(

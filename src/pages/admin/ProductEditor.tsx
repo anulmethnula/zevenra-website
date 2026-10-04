@@ -12,6 +12,7 @@ import {
 import { useStore } from "../../features/store/StoreContext";
 import { uploadAdminMedia } from "../../services/cloudinaryUpload";
 import type { Media, Product, SizeChart, Variant } from "../../types";
+import { adminToast } from "../../components/admin/AdminToasts";
 
 const blank: Product = {
   id: "",
@@ -249,6 +250,7 @@ export default function ProductEditor() {
         slug: product.slug || slugify(product.name),
       });
       setDirty(false);
+      adminToast("Product saved");
       nav("/admin/products");
     } catch (reason) {
       setError(
@@ -256,6 +258,7 @@ export default function ProductEditor() {
           ? reason.message
           : "Could not save product. Your changes are still here—try again.",
       );
+      adminToast(reason instanceof Error ? reason.message : "Could not save product.", "error");
     } finally {
       setBusy(false);
     }

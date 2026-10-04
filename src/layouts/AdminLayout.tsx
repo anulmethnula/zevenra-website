@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { useStore } from "../features/store/StoreContext";
+import { AdminToasts } from "../components/admin/AdminToasts";
 
 const links = [
   ["/admin", Gauge, "Dashboard"],
@@ -41,7 +42,7 @@ export function AdminLayout() {
       setChecking(true);
       setSessionError("");
       if (!store.live) {
-        await store.loadAdmin();
+        await store.loadAdmin(location.pathname);
         if (active) setChecking(false);
         return;
       }
@@ -59,7 +60,7 @@ export function AdminLayout() {
         }
         if (!response.ok)
           throw new Error("Admin session service is temporarily unavailable.");
-        await store.loadAdmin();
+        await store.loadAdmin(location.pathname);
       } catch (reason) {
         if (active)
           setSessionError(
@@ -75,7 +76,7 @@ export function AdminLayout() {
     return () => {
       active = false;
     };
-  }, [store.loadAdmin]);
+  }, [store.loadAdmin, location.pathname]);
   async function logout() {
     if (store.live)
       await fetch("/api/admin/logout", { method: "POST" }).catch(
@@ -143,6 +144,7 @@ export function AdminLayout() {
   );
   return (
     <div className="admin-shell min-h-dvh">
+      <AdminToasts />
       <aside className="admin-sidebar fixed inset-y-0 left-0 z-40 hidden w-64 flex-col p-6 md:flex">
         {sidebar}
       </aside>

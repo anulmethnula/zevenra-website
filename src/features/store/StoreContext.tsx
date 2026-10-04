@@ -58,7 +58,7 @@ type Value = {
   adminError: string;
   admin: AdminState;
   live: boolean;
-  loadAdmin: () => Promise<void>;
+  loadAdmin: (section?: string) => Promise<void>;
   retry: () => void;
   save: <T extends EntityValue>(entity: Entity, value: T) => void;
   commit: <T extends EntityValue>(entity: Entity, value: T) => Promise<void>;
@@ -555,12 +555,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setData((x) => ({ ...x, homepageSections: rows.map(normalizeHomepage) }));
     }
   }, []);
-  const loadAdmin = useCallback(async () => {
+  const loadAdmin = useCallback(async (section = location.pathname) => {
     if (demo) return;
     setAdminLoading(true);
     setAdminError("");
     try {
-      const payload = await adminApi.get<AdminBootstrap>("bootstrap");
+      const payload = await adminApi.get<AdminBootstrap>("bootstrap", { section });
       const clean = cleanCatalogue({
         products: (payload.products || []).map(normalizeProduct),
         categories: (payload.categories || []).map(normalizeCategory),
@@ -637,8 +637,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
       setAdminError("");
       queue(`${entity}:${item.id}`, async () => {
-        await adminApi.post(action, item);
-        await refreshEntity(entity);
+        const saved = await adminApi.post<unknown>(action, item);
+        if (entity === "products") {
+          const product = normalizeProduct(saved);
+          setData((current) => ({
+            ...current,
+            products: current.products.some((value) => value.id === product.id)
+              ? current.products.map((value) => value.id === product.id ? product : value)
+              : [...current.products, product],
+          }));
+        } else await refreshEntity(entity);
       });
     },
     [data, queue, refreshEntity],
@@ -668,8 +676,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         throw new Error(`${entity} is not available in the live backend.`);
       setAdminError("");
       try {
-        await adminApi.post(action, item);
-        await refreshEntity(entity);
+        const saved = await adminApi.post<unknown>(action, item);
+        if (entity === "products") {
+          const product = normalizeProduct(saved);
+          setData((current) => ({
+            ...current,
+            products: current.products.some((value) => value.id === product.id)
+              ? current.products.map((value) => value.id === product.id ? product : value)
+              : [...current.products, product],
+          }));
+        } else await refreshEntity(entity);
       } catch (reason) {
         setAdminError(message(reason));
         throw reason;

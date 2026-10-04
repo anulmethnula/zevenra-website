@@ -7,16 +7,19 @@ import {
   Copy,
   Download,
   ExternalLink,
+  MoreHorizontal,
   MessageCircle,
   PackagePlus,
   Plus,
   Search,
   Trash2,
+  X,
 } from "lucide-react";
 import { money } from "../../config/site";
 import { adminApi } from "../../services/adminApi";
 import { uploadAdminMedia } from "../../services/cloudinaryUpload";
 import { useStore } from "../../features/store/StoreContext";
+import { adminToast } from "../../components/admin/AdminToasts";
 import type {
   Category,
   Collection,
@@ -61,7 +64,7 @@ const adminPhone = /^[+\d][\d\s-]{8,14}$/;
 export default function AdminPage() {
   const section = useLocation().pathname.split("/")[2] || "overview";
   if (section === "overview") return <Dashboard />;
-  if (section === "products") return <Products />;
+  if (section === "products") return <ProductsWorkspace />;
   if (section === "categories") return <Categories />;
   if (section === "collections") return <Collections />;
   if (section === "navigation") return <Navigation />;
@@ -300,7 +303,7 @@ function Dashboard() {
     </>
   );
 }
-function Products() {
+export function Products() {
   const { data, duplicate, remove, commit } = useStore(),
     [query, setQuery] = useState(""),
     [status, setStatus] = useState("all"),
@@ -502,6 +505,27 @@ function Products() {
       </div>
     </>
   );
+}
+type ProductListRow = { id:string;name:string;slug:string;price:number;status:string;preorderEnabled:boolean;updatedAt:string;categoryId:string;categoryName:string;parentCategoryId:string;parentCategoryName:string;thumbnail:string;variantCount:number;totalStock:number;lowStockCount:number };
+type ProductListResponse = { items:ProductListRow[];page:number;pageSize:number;total:number;pageCount:number;categoryCounts:Record<string,number> };
+function ProductsWorkspace() {
+  const { data }=useStore(), [query,setQuery]=useState(""),[debounced,setDebounced]=useState(""),[category,setCategory]=useState("all"),[status,setStatus]=useState("all"),[sort,setSort]=useState("updated_desc"),[page,setPage]=useState(1),[result,setResult]=useState<ProductListResponse>({items:[],page:1,pageSize:25,total:0,pageCount:1,categoryCounts:{}}),[loading,setLoading]=useState(true),[error,setError]=useState(""),[menu,setMenu]=useState(""),[danger,setDanger]=useState<ProductListRow|null>(null);
+  const main=data.categories.filter(item=>item.active&&!item.parentId).sort((a,b)=>a.sortOrder-b.sortOrder), selectedMain=main.find(item=>item.id===category)||data.categories.find(item=>item.id===category&&item.parentId), mainId=selectedMain?.parentId||selectedMain?.id||"", subs=data.categories.filter(item=>item.active&&item.parentId===mainId).sort((a,b)=>a.sortOrder-b.sortOrder);
+  useEffect(()=>{const timer=setTimeout(()=>setDebounced(query.trim()),300);return()=>clearTimeout(timer);},[query]);
+  const load=useCallback(async(signal?:AbortSignal)=>{setLoading(true);setError("");try{const next=await adminApi.get<ProductListResponse>("listAdminProducts",{q:debounced,category,status,sort,page:String(page),pageSize:"25"},signal);setResult(next);}catch(reason){if(reason instanceof DOMException&&reason.name==="AbortError")return;setError(reason instanceof Error?reason.message:"Could not load products.");}finally{if(!signal?.aborted)setLoading(false);}},[category,debounced,page,sort,status]);
+  useEffect(()=>{const controller=new AbortController();void load(controller.signal);return()=>controller.abort();},[load]);
+  useEffect(()=>setPage(1),[debounced,category,status,sort]);
+  async function changeStatus(item:ProductListRow,next:string){setMenu("");try{await adminApi.post("setProductStatus",{id:item.id,status:next});setResult(current=>({...current,items:current.items.map(row=>row.id===item.id?{...row,status:next}:row)}));adminToast(next==="archived"?"Product archived":next==="published"?"Product published":"Product unpublished");}catch(reason){const message=reason instanceof Error?reason.message:"Could not update product.";setError(message);adminToast(message,"error");}}
+  async function removeProduct(){if(!danger)return;try{await adminApi.post("deleteProduct",{id:danger.id});setDanger(null);adminToast("Product deleted");void load();}catch(reason){const message=reason instanceof Error?reason.message:"This product cannot be deleted. Archive it instead.";setError(message);adminToast(message,"error");}}
+  const active=Boolean(query||category!=="all"||status!=="all"||sort!=="updated_desc");
+  return <><Head eyebrow="Catalogue" title="Products" action={<Link to="/admin/products/new" className="btn btn-dark"><PackagePlus size={16}/> Add product</Link>}/>
+    <div className="mt-7 hidden flex-wrap gap-2 sm:flex"><button onClick={()=>setCategory("all")} className={`rounded-full border px-4 py-2 text-xs ${category==="all"?"border-black bg-black text-white":"border-black/10 bg-white/35"}`}>All <span className="ml-1 opacity-60">{result.total}</span></button>{main.map(item=><button key={item.id} onClick={()=>setCategory(item.id)} className={`rounded-full border px-4 py-2 text-xs ${mainId===item.id?"border-black bg-black text-white":"border-black/10 bg-white/35"}`}>{item.name} <span className="ml-1 opacity-60">{result.categoryCounts[item.id]||0}</span></button>)}</div>
+    {mainId&&subs.length>0&&<div className="mt-3 hidden flex-wrap gap-2 sm:flex"><button onClick={()=>setCategory(mainId)} className={`border-b px-2 py-1 text-xs ${category===mainId?"border-bronze text-bronze":"border-transparent text-black/50"}`}>All {main.find(item=>item.id===mainId)?.name}</button>{subs.map(item=><button key={item.id} onClick={()=>setCategory(item.id)} className={`border-b px-2 py-1 text-xs ${category===item.id?"border-bronze text-bronze":"border-transparent text-black/50"}`}>{item.name}</button>)}</div>}
+    <div className="mt-6 grid items-center gap-3 border-b border-black/10 pb-4 md:grid-cols-[minmax(240px,1fr)_170px_190px_auto]"><div className="relative flex min-h-12 items-center border-b border-black/20 focus-within:border-bronze"><Search className="pointer-events-none absolute left-1 text-black/40" size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} className="h-12 w-full bg-transparent pl-8 pr-10 text-sm outline-none" placeholder="Search products, SKU, category…"/>{query&&<button onClick={()=>setQuery("")} className="absolute right-1 grid h-9 w-9 place-items-center" aria-label="Clear search"><X size={15}/></button>}</div><select value={status} onChange={e=>setStatus(e.target.value)} className="field"><option value="all">All statuses</option><option value="published">Published</option><option value="draft">Draft</option><option value="archived">Archived</option></select><select value={sort} onChange={e=>setSort(e.target.value)} className="field"><option value="updated_desc">Recently updated</option><option value="name_asc">Name A–Z</option><option value="name_desc">Name Z–A</option><option value="stock_asc">Lowest stock</option><option value="stock_desc">Highest stock</option><option value="price_asc">Price low–high</option><option value="price_desc">Price high–low</option></select>{active&&<button className="btn" onClick={()=>{setQuery("");setCategory("all");setStatus("all");setSort("updated_desc");}}>Clear filters</button>}<select value={category} onChange={e=>setCategory(e.target.value)} className="field sm:hidden"><option value="all">All categories</option>{main.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></div>
+    {error&&<div role="alert" className="mt-4 flex items-center justify-between border border-red-900/15 bg-red-950/[.06] p-4 text-xs text-red-900"><span>{error}</span><button className="btn" onClick={()=>void load()}>Try again</button></div>}
+    <div className="mt-5 overflow-visible border border-black/10 bg-[#f6f3ed]"><div className="hidden grid-cols-[minmax(260px,1fr)_170px_130px_120px_110px_100px] gap-4 border-b border-black/10 px-4 py-3 text-[10px] uppercase tracking-[.14em] text-black/40 lg:grid"><span>Product</span><span>Category</span><span>Stock</span><span>Price</span><span>Status</span><span>Action</span></div>{loading?Array.from({length:6},(_,i)=><div key={i} className="grid animate-pulse grid-cols-[64px_1fr] gap-4 border-b border-black/10 p-4"><span className="h-20 bg-black/10"/><span className="my-auto h-4 max-w-sm bg-black/10"/></div>):result.items.length?result.items.map(item=><div key={item.id} className="relative grid grid-cols-[64px_minmax(0,1fr)_auto] items-center gap-3 border-b border-black/10 p-3 transition hover:bg-white/45 lg:grid-cols-[80px_minmax(180px,1fr)_170px_130px_120px_110px_100px] lg:gap-4"><div className="grid aspect-[4/5] place-items-center overflow-hidden bg-[#ece7df]">{item.thumbnail&&<img src={item.thumbnail} alt="" loading="lazy" decoding="async" width="80" height="100" className="h-full w-full object-contain"/>}</div><div className="min-w-0"><p className="truncate text-sm font-medium">{item.name}</p><p className="mt-1 text-[10px] text-black/45">{item.variantCount} variant{item.variantCount===1?"":"s"} · {item.slug}</p>{item.preorderEnabled&&<span className="mt-2 inline-block border border-bronze/30 bg-bronze/[.06] px-2 py-1 text-[8px] uppercase tracking-wider text-bronze">Pre-order</span>}</div><div className="hidden text-xs lg:block">{item.parentCategoryName?`${item.parentCategoryName} → `:""}{item.categoryName||"Uncategorised"}</div><div className="hidden lg:block"><p className={`text-xs ${item.totalStock===0?"text-red-800":""}`}>{item.totalStock===0?"Out of stock":`${item.totalStock} in stock`}</p>{item.lowStockCount>0&&<p className="mt-1 text-[9px] text-amber-800">{item.lowStockCount} low stock</p>}</div><span className="hidden text-sm lg:block">{money(item.price)}</span><span className={`hidden w-fit rounded-full px-2.5 py-1 text-[9px] uppercase tracking-wider lg:block ${item.status==="published"?"bg-emerald-900/[.08] text-emerald-900":"bg-black/[.06] text-black/55"}`}>{item.status}</span><div className="flex items-center justify-end gap-1"><Link to={`/admin/products/${item.id}`} className="btn min-h-10 px-3">Edit</Link><button onClick={()=>setMenu(menu===item.id?"":item.id)} className="grid h-10 w-10 place-items-center" aria-label={`More actions for ${item.name}`}><MoreHorizontal size={17}/></button>{menu===item.id&&<div className="absolute right-3 top-[70%] z-20 grid min-w-44 border border-black/10 bg-white p-1 shadow-xl"><button className="px-3 py-2 text-left text-xs hover:bg-black/[.04]" onClick={()=>void changeStatus(item,item.status==="published"?"draft":"published")}>{item.status==="published"?"Unpublish":"Publish"}</button><button className="px-3 py-2 text-left text-xs hover:bg-black/[.04]" onClick={()=>void changeStatus(item,"archived")}>Archive</button><button className="px-3 py-2 text-left text-xs text-red-800 hover:bg-red-950/[.04]" onClick={()=>{setDanger(item);setMenu("");}}>Delete</button></div>}</div></div>):<Empty text="No products match these filters."/>}</div>
+    <div className="mt-5 flex items-center justify-between gap-3"><p className="text-xs text-black/45">Showing {result.total?((result.page-1)*result.pageSize)+1:0}–{Math.min(result.page*result.pageSize,result.total)} of {result.total}</p><div className="flex items-center gap-2"><button className="btn" disabled={page<=1||loading} onClick={()=>setPage(value=>value-1)}><ChevronLeft size={15}/> Previous</button><span className="text-xs">{result.page} / {result.pageCount}</span><button className="btn" disabled={page>=result.pageCount||loading} onClick={()=>setPage(value=>value+1)}>Next <ChevronRight size={15}/></button></div></div>
+    {danger&&<div className="fixed inset-0 z-[200] grid place-items-center bg-black/50 p-4"><div role="dialog" aria-modal="true" className="w-full max-w-md bg-[#f6f3ed] p-6 shadow-2xl"><p className="eyebrow text-red-800">Dangerous action</p><h2 className="display mt-3 text-3xl">Delete “{danger.name}”?</h2><p className="mt-4 text-xs leading-6 text-black/55">Deletion is allowed only when no historical order references this product. Archive it when history must be preserved.</p><div className="mt-6 flex justify-end gap-2"><button className="btn" onClick={()=>setDanger(null)}>Cancel</button><button className="btn border-red-800 text-red-800" onClick={()=>void removeProduct()}>Delete product</button></div></div></div>}</>;
 }
 function Categories() {
   const store = useStore(),

@@ -24,6 +24,50 @@ export async function listProducts(publishedOnly = false) {
   return result.rows.map(mapProduct);
 }
 
+export async function getProductById(id: string) {
+  const result = await query<Record<string, unknown>>(
+    `${productSelect} WHERE p.id=$1 LIMIT 1`,
+    [id],
+  );
+  return result.rows[0] ? mapProduct(result.rows[0]) : null;
+}
+
+export async function listAdminProducts(input: Record<string, unknown>) {
+  const q = String(input.q || "").trim().slice(0, 100),
+    category = String(input.category || "all"),
+    status = String(input.status || "all"),
+    sort = String(input.sort || "updated_desc"),
+    page = Math.max(1, Math.floor(Number(input.page) || 1)),
+    pageSize = Math.min(100, Math.max(10, Math.floor(Number(input.pageSize) || 25)));
+  if (!["all", "published", "draft", "archived"].includes(status))
+    throw new Error("Invalid product status filter.");
+  const sorts: Record<string, string> = {
+      updated_desc: "p.updated_at DESC,p.name",
+      name_asc: "p.name ASC",
+      name_desc: "p.name DESC",
+      stock_asc: "total_stock ASC,p.name",
+      stock_desc: "total_stock DESC,p.name",
+      price_asc: "p.price ASC,p.name",
+      price_desc: "p.price DESC,p.name",
+    },
+    orderBy = sorts[sort];
+  if (!orderBy) throw new Error("Invalid product sort.");
+  const values: unknown[] = [], conditions: string[] = [];
+  if (q) {
+    values.push(`%${q.toLowerCase()}%`);
+    conditions.push(`(lower(p.name) LIKE $${values.length} OR lower(p.slug) LIKE $${values.length} OR EXISTS(SELECT 1 FROM unnest(p.tags) tag WHERE lower(tag) LIKE $${values.length}) OR EXISTS(SELECT 1 FROM variants sv WHERE sv.product_id=p.id AND lower(sv.sku) LIKE $${values.length}) OR lower(COALESCE(c.name,'')) LIKE $${values.length} OR lower(COALESCE(parent.name,'')) LIKE $${values.length})`);
+  }
+  if (category !== "all") { values.push(category); conditions.push(`(p.category_id=$${values.length} OR c.parent_id=$${values.length})`); }
+  if (status !== "all") { values.push(status); conditions.push(`p.status=$${values.length}`); }
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "",
+    countValues = [...values],
+    total = Number((await query<{ count: number }>(`SELECT count(*)::int count FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN categories parent ON parent.id=c.parent_id ${where}`, countValues)).rows[0]?.count || 0);
+  values.push(pageSize, (page - 1) * pageSize);
+  const rows = (await query<Record<string, unknown>>(`SELECT p.id,p.name,p.slug,p.price,p.status,p.preorder_enabled,p.updated_at,p.category_id,c.name category_name,parent.id parent_category_id,parent.name parent_category_name,COALESCE(p.media->0->>'url','') thumbnail,COUNT(v.id) FILTER(WHERE v.active)::int variant_count,COALESCE(SUM(v.stock) FILTER(WHERE v.active),0)::int total_stock,COUNT(v.id) FILTER(WHERE v.active AND v.stock<=v.low_stock_threshold)::int low_stock_count FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN categories parent ON parent.id=c.parent_id LEFT JOIN variants v ON v.product_id=p.id ${where} GROUP BY p.id,c.id,parent.id ORDER BY ${orderBy} LIMIT $${values.length - 1} OFFSET $${values.length}`, values)).rows;
+  const counts = (await query<Record<string, unknown>>(`SELECT COALESCE(parent.id,c.id) id,COUNT(DISTINCT p.id)::int count FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN categories parent ON parent.id=c.parent_id GROUP BY COALESCE(parent.id,c.id)`)).rows;
+  return { items: rows.map(row => ({ id:String(row.id),name:String(row.name),slug:String(row.slug),price:Number(row.price),status:String(row.status),preorderEnabled:Boolean(row.preorder_enabled),updatedAt:String(row.updated_at),categoryId:String(row.category_id||""),categoryName:String(row.category_name||""),parentCategoryId:String(row.parent_category_id||""),parentCategoryName:String(row.parent_category_name||""),thumbnail:String(row.thumbnail||""),variantCount:Number(row.variant_count)||0,totalStock:Number(row.total_stock)||0,lowStockCount:Number(row.low_stock_count)||0 })), page, pageSize, total, pageCount: Math.max(1, Math.ceil(total/pageSize)), categoryCounts: Object.fromEntries(counts.map(row => [String(row.id||""),Number(row.count)||0])) };
+}
+
 export async function getProductBySlug(slug: string) {
   const result = await query<Record<string, unknown>>(
     `${productSelect} WHERE p.slug=$1 AND p.status='published' LIMIT 1`,
@@ -357,6 +401,17 @@ export async function archiveProduct(id: string) {
     [id],
   );
   return { archived: true };
+}
+export async function setProductStatus(id: string, status: string) {
+  if (!["published", "draft", "archived"].includes(status))
+    throw new Error("Invalid product status.");
+  const row = (await query<Record<string, unknown>>(
+    "UPDATE products SET status=$2,updated_at=now() WHERE id=$1 RETURNING id,name,status",
+    [id, status],
+  )).rows[0];
+  if (!row) throw new Error("Product not found.");
+  await query("INSERT INTO audit_logs(actor,action,entity_type,entity_id,details) VALUES('owner','status_changed','product',$1,$2::jsonb)",[id,JSON.stringify({status})]);
+  return { id: String(row.id), name: String(row.name), status: String(row.status) };
 }
 export async function deleteProduct(id: string) {
   const used = await query(
