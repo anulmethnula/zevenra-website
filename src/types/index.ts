@@ -238,6 +238,8 @@ export type Order = {
   total: number;
   orderStatus: string;
   paymentStatus: string;
+  stockState?: string;
+  returnCount?: number;
   items: CartItem[];
 };
 export type CustomerOrderItem = {

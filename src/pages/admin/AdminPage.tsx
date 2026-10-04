@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { motion } from "framer-motion";
 import { Link, useLocation } from "react-router-dom";
 import {
   ChevronLeft,
@@ -2931,7 +2932,10 @@ function Orders() {
       (paymentFilter === "paid" && ["paid", "verified"].includes(payment));
     const matchesOrder =
       orderFilter === "all" ||
-      String(order.orderStatus).toLowerCase() === orderFilter;
+      String(order.orderStatus).toLowerCase() === orderFilter ||
+      (orderFilter === "needs_payment" && order.paymentMethod === "bank" && !["paid", "verified"].includes(payment)) ||
+      (orderFilter === "ready_to_pack" && ["confirmed", "sourcing"].includes(String(order.orderStatus).toLowerCase())) ||
+      (orderFilter === "returns" && Number(order.returnCount) > 0);
     const matchesQuery =
       !needle ||
       [
@@ -3097,11 +3101,9 @@ function Orders() {
           String(order.paymentStatus || "").toLowerCase(),
         ),
     ).length,
-    paid = orders.filter((order) =>
-      ["paid", "verified"].includes(
-        String(order.paymentStatus || "").toLowerCase(),
-      ),
-    ).length;
+    readyToPack = orders.filter((order) => ["confirmed", "sourcing"].includes(String(order.orderStatus).toLowerCase())).length,
+    shipped = orders.filter((order) => String(order.orderStatus).toLowerCase() === "shipped").length,
+    returns = orders.filter((order) => Number(order.returnCount) > 0).length;
   return (
     <>
       <Head
@@ -3130,7 +3132,7 @@ function Orders() {
       {creatingManual && (
         <form
           onSubmit={createManual}
-          className="mt-7 border border-black/10 bg-[#f6f3ed] p-4 sm:p-6"
+          className="fixed inset-y-0 right-0 z-[100] w-full overflow-y-auto border-l border-black/10 bg-[#f6f3ed] p-5 shadow-[-20px_0_60px_rgba(0,0,0,.18)] sm:w-[680px] sm:p-7"
         >
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -3355,20 +3357,21 @@ function Orders() {
           </div>
         </form>
       )}
-      <div className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mt-7 flex flex-wrap gap-2">
         {[
-          ["All orders", orders.length],
-          ["Pending", pending],
-          ["Bank to verify", bankVerify],
-          ["Paid / verified", paid],
-        ].map(([label, value]) => (
-          <div key={label} className="border border-black/10 bg-[#f6f3ed] p-4">
-            <p className="text-xs text-black/45">{label}</p>
-            <p className="display mt-2 text-3xl">{value}</p>
-          </div>
+          ["All", orders.length, "all"],
+          ["Pending", pending, "pending"],
+          ["Needs payment", bankVerify, "needs_payment"],
+          ["Ready to pack", readyToPack, "ready_to_pack"],
+          ["Shipped", shipped, "shipped"],
+          ["Returns", returns, "returns"],
+        ].map(([label, value, filter]) => (
+          <button type="button" onClick={() => setOrderFilter(String(filter))} key={label} className={`flex min-h-11 items-center gap-3 border px-4 text-xs transition ${orderFilter===filter?"border-black bg-black text-white":"border-black/10 bg-[#f6f3ed] hover:border-black/30"}`}>
+            <span>{label}</span><b>{value}</b>
+          </button>
         ))}
       </div>
-      <div className="admin-toolbar mt-5 md:grid-cols-[minmax(220px,1fr)_180px_180px_160px]">
+      <div className="admin-toolbar mt-5 md:grid-cols-[minmax(220px,1fr)_180px_180px_160px_auto]">
         <div className="admin-search">
           <Search size={17} />
           <input
@@ -3383,6 +3386,9 @@ function Orders() {
           className="field bg-white/50"
         >
           <option value="all">All order statuses</option>
+          <option value="needs_payment">Needs payment</option>
+          <option value="ready_to_pack">Ready to pack</option>
+          <option value="returns">Returns</option>
           {[
             "pending",
             "confirmed",
@@ -3418,6 +3424,7 @@ function Orders() {
           <option value="7">Last 7 days</option>
           <option value="30">Last 30 days</option>
         </select>
+        <button type="button" className="btn" onClick={() => { setQuery(""); setOrderFilter("all"); setPaymentFilter("all"); setDateFilter("all"); }}>Clear filters</button>
       </div>
       {status && (
         <p className="mt-4 border-l-2 border-[#96724f] bg-white/40 px-4 py-3 text-xs text-black/60">
@@ -3493,13 +3500,19 @@ function Orders() {
                   </button>
                 </div>
                 {isOpen && (
-                  <div className="border-t border-black/10 bg-white/45 p-5">
+                  <>
+                  <button type="button" aria-label="Close order details" onClick={() => setOpen("")} className="fixed inset-0 z-[90] bg-black/45 backdrop-blur-[1px]" />
+                  <motion.div initial={{ x: "100%" }} animate={{ x: 0 }} transition={{ type: "tween", duration: .28 }} className="fixed inset-y-0 right-0 z-[100] w-full overflow-y-auto bg-[#f6f3ed] p-5 shadow-[-20px_0_60px_rgba(0,0,0,.18)] sm:w-[600px] sm:p-7">
+                    <div className="mb-6 flex items-start justify-between gap-4 border-b border-black/10 pb-5">
+                      <div><p className="eyebrow text-black/45">Order details</p><h2 className="mt-2 text-xl font-medium">{order.orderId}</h2><p className="mt-1 text-xs text-black/45">{new Date(order.createdAt).toLocaleString("en-LK")}</p><button type="button" className="mt-2 inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-black/50" onClick={() => { void navigator.clipboard.writeText(order.orderId); setStatus("Order ID copied."); }}><Copy size={12}/> Copy order ID</button></div>
+                      <button type="button" onClick={() => setOpen("")} className="btn px-4">Close</button>
+                    </div>
                     {loadingId === order.orderId ? (
                       <p className="py-8 text-center text-sm text-black/45">
                         Loading order details…
                       </p>
                     ) : detail ? (
-                      <div className="grid gap-8 xl:grid-cols-[1.15fr_.85fr]">
+                      <div className="grid gap-8">
                         <div className="space-y-7">
                           <div>
                             <p className="eyebrow text-black/45">Items</p>
@@ -3589,6 +3602,19 @@ function Orders() {
                               )}
                             </div>
                           </div>
+                          <OrderDetailsEditor
+                            order={detail}
+                            onSaved={(updated) => {
+                              setDetails((current) => ({
+                                ...current,
+                                [order.orderId]: {
+                                  ...current[order.orderId],
+                                  ...updated,
+                                },
+                              }));
+                              setStatus("Customer and delivery details updated.");
+                            }}
+                          />
                         </div>
                         <div className="space-y-5">
                           <Panel title="Order control">
@@ -3600,20 +3626,39 @@ function Orders() {
                                 value={String(
                                   detail.orderStatus || "pending",
                                 ).toLowerCase()}
-                                onChange={(e) =>
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  if (
+                                    value === "cancelled" &&
+                                    !window.confirm(
+                                      "Cancel this order? Reserved stock will be returned to available inventory.",
+                                    )
+                                  )
+                                    return;
                                   void change(order.orderId, {
-                                    orderStatus: e.target.value,
-                                  })
-                                }
+                                    orderStatus: value,
+                                  });
+                                }}
                               >
                                 {[
-                                  "pending",
-                                  "confirmed",
-                                  "sourcing",
-                                  "packed",
-                                  "shipped",
-                                  "delivered",
-                                  "cancelled",
+                                  String(detail.orderStatus).toLowerCase(),
+                                  ...(
+                                    {
+                                      pending: ["confirmed", "cancelled"],
+                                      confirmed: [
+                                        "sourcing",
+                                        "packed",
+                                        "cancelled",
+                                      ],
+                                      sourcing: ["packed", "cancelled"],
+                                      packed: ["shipped", "cancelled"],
+                                      shipped: ["delivered"],
+                                      delivered: [],
+                                      cancelled: [],
+                                    } as Record<string, string[]>
+                                  )[
+                                    String(detail.orderStatus).toLowerCase()
+                                  ],
                                 ].map((value) => (
                                   <option key={value} value={value}>
                                     {value}
@@ -3640,9 +3685,15 @@ function Orders() {
                                       "paid",
                                       "verified",
                                       "rejected",
+                                      "refund pending",
                                       "refunded",
                                     ]
-                                  : ["COD", "paid", "refunded"]
+                                  : [
+                                      "COD",
+                                      "paid",
+                                      "refund pending",
+                                      "refunded",
+                                    ]
                                 ).map((value) => (
                                   <option key={value} value={value}>
                                     {value}
@@ -3704,6 +3755,7 @@ function Orders() {
                             busy={savingId === order.orderId}
                             save={(patch) => void change(order.orderId, patch)}
                           />
+                          <ReturnsPanel order={detail} onMessage={setStatus} />
                         </div>
                       </div>
                     ) : (
@@ -3711,7 +3763,8 @@ function Orders() {
                         Order details unavailable.
                       </p>
                     )}
-                  </div>
+                  </motion.div>
+                  </>
                 )}
               </article>
             );
@@ -3906,6 +3959,7 @@ function FulfilmentPanel({
   );
 }
 type AdminOrderLine = {
+  orderItemId?: number;
   variantId?: string;
   productName?: string;
   name?: string;
@@ -3918,6 +3972,41 @@ type AdminOrderLine = {
   isPreorder?: boolean | string;
 };
 type AdminOrderDetail = Omit<Order, "items"> & { items: AdminOrderLine[] };
+type AdminReturn = {
+  id: string;
+  type: "customer_return" | "courier_rto";
+  status: string;
+  reason: string;
+  createdAt: string;
+  items?: Array<{
+    id: number;
+    orderItemId: number;
+    quantity: number;
+    restockable?: boolean;
+    productName?: string;
+    color?: string;
+    size?: string;
+  }>;
+};
+
+function ReturnsPanel({ order, onMessage }: { order: AdminOrderDetail; onMessage: (value: string) => void }) {
+  const [returns, setReturns] = useState<AdminReturn[]>([]), [loading, setLoading] = useState(false), [creating, setCreating] = useState(false);
+  const eligible = order.orderStatus === "shipped" || order.orderStatus === "delivered";
+  const load = useCallback(async () => { setLoading(true); try { setReturns(await adminApi.get<AdminReturn[]>("listReturns", { orderId: order.orderId })); } catch (reason) { onMessage(reason instanceof Error ? reason.message : "Could not load returns."); } finally { setLoading(false); } }, [onMessage, order.orderId]);
+  useEffect(() => { void load(); }, [load]);
+  async function create(event: React.FormEvent<HTMLFormElement>) { event.preventDefault(); const raw = new FormData(event.currentTarget), items = order.items.map((item) => ({ orderItemId: item.orderItemId, quantity: Number(raw.get(`qty-${item.orderItemId}`) || 0) })).filter((item) => item.orderItemId && item.quantity > 0); try { await adminApi.post("createReturn", { orderId: order.orderId, type: raw.get("type"), reason: raw.get("reason"), notes: raw.get("notes"), refundRequired: raw.get("refundRequired") === "on", items }); setCreating(false); onMessage("Return created. Stock has not been changed."); await load(); } catch (reason) { onMessage(reason instanceof Error ? reason.message : "Could not create return."); } }
+  async function advance(item: AdminReturn, status: string) { try { const payload: Record<string, unknown> = { returnId: item.id, status }; if (status === "received") payload.items = item.items?.map((line) => ({ id: line.id, restockable: (document.querySelector<HTMLInputElement>(`#restock-${line.id}`)?.checked ?? false) })); const result = await adminApi.post<{ restoredUnits: number }>("updateReturn", payload); onMessage(status === "received" ? `Return received. ${result.restoredUnits} unit${result.restoredUnits === 1 ? "" : "s"} restored to stock.` : `Return marked ${status.replace("_", " ")}.`); await load(); } catch (reason) { onMessage(reason instanceof Error ? reason.message : "Could not update return."); } }
+  return <Panel title="Returns"><div className="space-y-4">{loading && <p className="text-xs text-black/45">Loading returns…</p>}{returns.map((item) => <div key={item.id} className="border border-black/10 bg-white/40 p-3 text-xs"><div className="flex justify-between gap-3"><b>{item.type === "courier_rto" ? "Courier RTO" : "Customer return"}</b><span className="uppercase text-black/45">{item.status}</span></div><p className="mt-2 text-black/60">{item.reason}</p>{item.status === "in_transit" && <div className="mt-3 space-y-2">{item.items?.map((line) => <label key={line.id} className="flex items-center justify-between gap-3"><span>{line.productName} · {line.color}/{line.size} · Qty {line.quantity}</span><span><input id={`restock-${line.id}`} type="checkbox" className="mr-2 accent-black"/>Restockable</span></label>)}</div>}<div className="mt-3 flex flex-wrap gap-2">{item.status === "requested" && <><button className="btn" onClick={() => void advance(item,"approved")}>Approve</button><button className="btn" onClick={() => void advance(item,"rejected")}>Reject</button></>}{item.status === "approved" && <button className="btn" onClick={() => void advance(item,"in_transit")}>Mark in transit</button>}{item.status === "in_transit" && <button className="btn btn-dark" onClick={() => void advance(item,"received")}>Mark received</button>}{item.status === "received" && <button className="btn" onClick={() => void advance(item,"completed")}>Complete</button>}</div></div>)}{eligible && !creating && <button className="btn w-full" onClick={() => setCreating(true)}>Create return</button>}{creating && <form onSubmit={create} className="space-y-3 border border-black/10 p-3"><select name="type" className="field" defaultValue={order.orderStatus === "shipped" ? "courier_rto" : "customer_return"}>{order.orderStatus === "shipped" && <option value="courier_rto">Courier return / RTO</option>}{order.orderStatus === "delivered" && <option value="customer_return">Customer return</option>}</select><input name="reason" required className="field" placeholder="Reason"/><textarea name="notes" className="field" placeholder="Notes"/><label className="flex items-center gap-2 text-xs"><input name="refundRequired" type="checkbox" className="accent-black"/>Money refund will be required</label>{order.items.map((item) => <label key={item.orderItemId} className="flex items-center justify-between gap-3 text-xs"><span>{item.productName || item.name} · purchased {item.quantity}</span><input name={`qty-${item.orderItemId}`} type="number" min="0" max={item.quantity} defaultValue="0" className="field w-20"/></label>)}<div className="flex gap-2"><button className="btn btn-dark">Create return</button><button type="button" className="btn" onClick={() => setCreating(false)}>Close</button></div></form>}{!eligible && !returns.length && <p className="text-xs leading-5 text-black/45">Returns become available after an order is shipped.</p>}</div></Panel>;
+}
+function OrderDetailsEditor({ order, onSaved }: { order: AdminOrderDetail; onSaved: (order: AdminOrderDetail) => void }) {
+  const [editing,setEditing]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState("");
+  const locked=["shipped","delivered","cancelled"].includes(String(order.orderStatus).toLowerCase());
+  async function save(event:React.FormEvent<HTMLFormElement>){event.preventDefault();setBusy(true);setError("");try{const raw=Object.fromEntries(new FormData(event.currentTarget));const updated=await adminApi.post<AdminOrderDetail>("updateOrderDetails",{orderId:order.orderId,...raw});onSaved(updated);setEditing(false);}catch(reason){setError(reason instanceof Error?reason.message:"Could not update details.");}finally{setBusy(false);}}
+  if(locked)return <p className="border-l-2 border-black/15 pl-3 text-xs leading-5 text-black/45">Customer and delivery details are locked after shipment.</p>;
+  if(!editing)return <button type="button" className="btn w-full" onClick={()=>setEditing(true)}>Edit customer & delivery details</button>;
+  const fields:[string,string,string][]=[["customerName","Full name",order.customerName],["phone","Phone",order.phone],["whatsapp","WhatsApp",order.whatsapp||""],["email","Email",order.email||""],["address1","Address",order.address1||""],["address2","Address line 2",order.address2||""],["city","City / area",order.city||""],["postalCode","Postal code",order.postalCode||""]];
+  return <form onSubmit={save} className="grid gap-3 border border-black/10 bg-white/30 p-4 sm:grid-cols-2"><p className="eyebrow sm:col-span-2">Edit details</p>{fields.map(([name,label,value])=><label key={name} className={`text-xs ${name==="address1"||name==="address2"?"sm:col-span-2":""}`}>{label}<input name={name} defaultValue={value} className="field mt-2" required={["customerName","phone","address1","city"].includes(name)}/></label>)}<label className="text-xs">District<select name="district" defaultValue={order.district} className="field mt-2">{sriLankaDistricts.map(value=><option key={value}>{value}</option>)}</select></label><label className="text-xs sm:col-span-2">Delivery notes<textarea name="deliveryNotes" defaultValue={order.deliveryNotes||""} className="field mt-2" rows={2}/></label>{error&&<p className="text-xs text-red-800 sm:col-span-2">{error}</p>}<div className="flex gap-2 sm:col-span-2"><button disabled={busy} className="btn btn-dark">{busy?"Saving…":"Save details"}</button><button type="button" className="btn" onClick={()=>setEditing(false)}>Cancel</button></div></form>;
+}
 function Info({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>

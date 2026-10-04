@@ -197,6 +197,7 @@ export function mapOrder(row: Record<string, unknown>) {
     source: text(row.source),
     hasPreorder: bool(row.has_preorder),
     stockState: text(row.stock_state),
+    returnCount: number(row.return_count),
     items: Array.isArray(row.items)
       ? row.items.map((item) => mapOrderItem(item as Record<string, unknown>))
       : [],
@@ -205,6 +206,7 @@ export function mapOrder(row: Record<string, unknown>) {
 
 export function mapOrderItem(row: Record<string, unknown>) {
   return {
+    orderItemId: number(row.id),
     productId: text(row.product_id),
     variantId: text(row.variant_id),
     slug: text(row.slug),

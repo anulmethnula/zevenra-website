@@ -20,9 +20,13 @@ import {
 } from "../_data/catalog.js";
 import {
   createOrder,
+  createReturn,
   getOrder,
+  listReturns,
   listOrders,
+  updateOrderDetails,
   updateOrder,
+  updateReturn,
 } from "../_data/orders.js";
 import {
   convertPreorderToOrder,
@@ -64,6 +68,10 @@ const allowed = new Set([
   "listOrders",
   "getOrder",
   "updateOrder",
+  "updateOrderDetails",
+  "listReturns",
+  "createReturn",
+  "updateReturn",
   "listPreorders",
   "updatePreorder",
   "createPreorderBatch",
@@ -135,6 +143,14 @@ async function execute(action: string, payload: Record<string, unknown>) {
       return deleteEntity("homepage_sections", String(payload.id || ""));
     case "updateOrder":
       return updateOrder(payload);
+    case "updateOrderDetails":
+      return updateOrderDetails(payload);
+    case "listReturns":
+      return listReturns(String(payload.orderId || "") || undefined);
+    case "createReturn":
+      return createReturn(payload);
+    case "updateReturn":
+      return updateReturn(payload);
     case "updatePreorder":
       return updatePreorder(payload);
     case "createPreorderBatch":

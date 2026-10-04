@@ -22,6 +22,8 @@ const required = [
   "customers",
   "orders",
   "order_items",
+  "order_returns",
+  "order_return_items",
   "preorders",
   "courier_providers",
   "delivery_rates",
@@ -47,6 +49,12 @@ try {
     negativeStock: "SELECT count(*)::int AS count FROM variants WHERE stock<0",
     invalidTotals:
       "SELECT count(*)::int AS count FROM orders WHERE subtotal+delivery_fee<>total",
+    invalidStockStates:
+      "SELECT count(*)::int AS count FROM orders WHERE stock_state NOT IN ('reserved','fulfilled','restored','not_applicable')",
+    excessiveReturns:
+      "SELECT count(*)::int AS count FROM (SELECT ri.order_item_id,sum(ri.quantity) qty,oi.quantity purchased FROM order_return_items ri JOIN order_items oi ON oi.id=ri.order_item_id JOIN order_returns r ON r.id=ri.return_id WHERE r.status<>'rejected' GROUP BY ri.order_item_id,oi.quantity HAVING sum(ri.quantity)>oi.quantity) invalid",
+    orphanReturnItems:
+      "SELECT count(*)::int AS count FROM order_return_items ri LEFT JOIN order_returns r ON r.id=ri.return_id LEFT JOIN order_items oi ON oi.id=ri.order_item_id WHERE r.id IS NULL OR oi.id IS NULL",
   };
   for (const [name, sql] of Object.entries(checks)) {
     const count = (await pool.query(sql)).rows[0].count;
