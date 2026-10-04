@@ -3,12 +3,9 @@
 .vercel
 dist
 docs
-legacy
 database
 scripts
-migration-data
 *.database-export.json
-*.sheets-export.json
 *.sql.gz
 *.dump
 *.log

@@ -1,6 +1,6 @@
 # ZEVENRA
 
-ZEVENRA is a React/Vite ecommerce storefront with Vercel Serverless Functions, Neon PostgreSQL, and Cloudinary media.
+ZEVENRA is a React/Vite ecommerce storefront backed by Vercel Serverless Functions, Neon PostgreSQL, and Cloudinary media.
 
 ## Runtime architecture
 
@@ -10,38 +10,39 @@ React / Vite -> /api Vercel Functions -> Neon PostgreSQL
                      +-> Cloudinary (catalogue media and protected receipts)
 ```
 
-Google Sheets and Apps Script are not runtime dependencies. The old implementation is archived under `legacy/apps-script` solely for migration reference. The existing Sheet remains an external backup until migration is verified.
+Neon PostgreSQL is the single source of truth for products, stock, customers, orders, pre-orders, delivery settings, and site settings.
 
-## Local modes
+## Local development
 
 ```bash
 npm ci
-npm run dev:demo  # browser-only demo data; never writes to Neon
-npm run dev:full  # Vercel Functions + Neon + Cloudinary from .env.local
+npm run dev:demo
+npm run dev:full
 ```
 
-`npm run dev` starts Vite directly. Use `dev:demo` for safe UI work and `dev:full` for integration testing.
+- `npm run dev:demo` uses browser-only demo data and never writes to Neon.
+- `npm run dev:full` loads `.env.local`, starts Vercel Functions, and connects to Neon and Cloudinary.
+- `npm run dev` starts Vite only and is intended for frontend-only work.
 
 ## Database
 
 ```bash
-npm run db:migrate
-npm run db:verify
-npm run db:import-sheets -- path/to/export.sheets-export.json
+node --env-file=.env.local scripts/db-migrate.mjs
+node --env-file=.env.local scripts/db-verify.mjs
 ```
 
-Migration commands prefer `DATABASE_URL_UNPOOLED`. Runtime functions use `DATABASE_URL`. See [database/README.md](database/README.md) and [docs/DATA_MIGRATION.md](docs/DATA_MIGRATION.md).
+Runtime functions use `DATABASE_URL`. Migration and verification tools prefer `DATABASE_URL_UNPOOLED` and fall back to `DATABASE_URL`.
 
 ## Business invariants
 
 - Checkout reloads current products, prices, variants, stock, courier rules, and settings server-side.
-- Order creation, item inserts, stock reservation, and audit logging commit together in a PostgreSQL transaction.
+- Order creation, order items, stock reservation, and audit logging commit together in a PostgreSQL transaction.
 - Cancellation restores reserved stock once; cancelled orders cannot be silently reopened.
-- Orders store immutable checkout courier/rate/fee snapshots separately from fulfilment tracking.
-- Preorder-to-order conversion is transactional.
-- Receipt URLs are never returned to customers. Admin receipt access requires an authenticated session and produces a short-lived Cloudinary URL.
+- Orders keep immutable checkout delivery snapshots separately from fulfilment tracking.
+- Pre-order conversion is transactional.
+- Receipt URLs are not exposed publicly. Admin receipt access requires an authenticated session and a short-lived Cloudinary URL.
 
-## Required server environment
+## Required environment
 
 See `.env.example`. Never expose or `VITE_`-prefix database, session, admin, or Cloudinary secrets.
 
@@ -54,4 +55,4 @@ npm run build
 npm run qa
 ```
 
-No migration, commit, push, Vercel project creation, or deployment is performed automatically.
+Production deployment is intentionally separate from local development. Use the fresh-project checklist in `docs/NEW_VERCEL_PROJECT.md`.

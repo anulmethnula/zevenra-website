@@ -1,14 +1,19 @@
 # Fresh Vercel project preparation
 
-Create the replacement project only after a Neon branch has been migrated and fully verified. Do not reuse the old project as the migration mechanism.
+Use a fresh Vercel project for the Neon-based ZEVENRA deployment. Keep the current production project untouched until the new preview has passed all checks.
 
-Configure:
+## Build settings
 
 - Build command: `npm run build`
 - Output directory: `dist`
 - Node.js: 20 or newer
-- `DATABASE_URL` (pooled Neon connection)
-- `DATABASE_URL_UNPOOLED` (migration/administration only; runtime does not read it)
+
+## Environment variables
+
+Configure these in the new Vercel project:
+
+- `DATABASE_URL` — pooled Neon connection used by runtime functions
+- `DATABASE_URL_UNPOOLED` — direct Neon connection for administration only
 - `ADMIN_USERNAME`
 - `ADMIN_PASSWORD_HASH`
 - `SESSION_SECRET`
@@ -20,4 +25,13 @@ Configure:
 - `VITE_API_BASE=/api`
 - `VITE_DEMO_MODE=false`
 
-Deploy to a preview first. Validate all functional flows and compare migrated records before assigning production domains. Keep the previous Vercel project and Sheet available for rollback/reference until the new production deployment is accepted.
+## Release order
+
+1. Rotate any credentials that have previously been exposed.
+2. Create the fresh Vercel project from the repository.
+3. Add the environment variables above.
+4. Deploy a preview from `dev-rebuild`.
+5. Test storefront, admin, delivery saving, checkout, customer accounts, pre-orders, protected receipt access, and order updates.
+6. Run the database verifier against Neon.
+7. Only after preview approval, merge the release branch and move the production domain.
+8. Retire the previous Vercel project after the new production deployment is stable.

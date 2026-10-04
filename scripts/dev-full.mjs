@@ -1,9 +1,9 @@
 import { spawn } from "node:child_process";
 
-const command = process.platform === "win32" ? "vercel.cmd" : "vercel";
-const child = spawn(command, ["dev", "--local-config", "vercel.local.json"], {
+const child = spawn("vercel", ["dev", "--local-config", "vercel.local.json"], {
   stdio: "inherit",
   env: process.env,
+  shell: process.platform === "win32",
 });
 
 child.on("error", (error) => {
