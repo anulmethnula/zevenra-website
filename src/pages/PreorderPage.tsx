@@ -34,7 +34,10 @@ export default function PreorderPage() {
     variant = product?.variants.find(
       (v) => v.id === search.get("variant") && v.active,
     ),
-    [qty, setQty] = useState(1),
+    [qty, setQty] = useState(() => {
+      const requested = Number(search.get("quantity"));
+      return Number.isInteger(requested) ? Math.min(5, Math.max(1, requested)) : 1;
+    }),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [done, setDone] = useState("");

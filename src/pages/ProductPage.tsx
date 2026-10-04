@@ -74,6 +74,7 @@ export default function ProductPage() {
     ),
     maxAdd =
       variant && !selectedPreorder ? Math.max(0, variant.stock - inCart) : 0,
+    quantityLimit = selectedPreorder ? 5 : Math.max(1, maxAdd),
     galleryMedia = product.media.filter(
       (media) => !chart?.imageUrl || media.url !== chart.imageUrl,
     ),
@@ -219,15 +220,15 @@ export default function ProductPage() {
                 <span className="w-8 text-center text-sm">{qty}</span>
                 <button
                   className="px-3"
-                  disabled={!variant || qty >= Math.max(1, maxAdd)}
-                  onClick={() => setQty(Math.min(Math.max(1, maxAdd), qty + 1))}
+                  disabled={!variant || qty >= quantityLimit}
+                  onClick={() => setQty(Math.min(quantityLimit, qty + 1))}
                 >
                   <Plus size={15} />
                 </button>
               </div>
               {selectedPreorder && variant ? (
                 <Link
-                  to={`/preorder/${product.slug}?variant=${encodeURIComponent(variant.id)}`}
+                  to={`/preorder/${product.slug}?variant=${encodeURIComponent(variant.id)}&quantity=${qty}`}
                   className="btn btn-dark flex-1"
                 >
                   Request pre-order
@@ -291,7 +292,7 @@ export default function ProductPage() {
       <div className="fixed inset-x-0 bottom-0 z-30 border-t hairline bg-paper p-3 lg:hidden">
         {selectedPreorder && variant ? (
           <Link
-            to={`/preorder/${product.slug}?variant=${encodeURIComponent(variant.id)}`}
+            to={`/preorder/${product.slug}?variant=${encodeURIComponent(variant.id)}&quantity=${qty}`}
             className="btn btn-dark w-full"
           >
             Request pre-order · {money(product.price)}
