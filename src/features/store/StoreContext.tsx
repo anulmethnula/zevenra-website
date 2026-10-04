@@ -970,25 +970,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       refreshPreorders,
     ],
   );
-  if (!adminRoute && loading)
-    return (
-      <div className="grid min-h-dvh place-content-center bg-paper text-center">
-        <p className="eyebrow">Loading live store data…</p>
-      </div>
-    );
-  if (!adminRoute && error)
-    return (
-      <div className="grid min-h-dvh place-content-center bg-paper px-6 text-center">
-        <h1 className="display text-4xl">Store data unavailable.</h1>
-        <p className="mt-3 text-sm text-black/55">{error}</p>
-        <button
-          className="btn btn-dark mx-auto mt-6"
-          onClick={() => void loadPublic()}
-        >
-          Try again
-        </button>
-      </div>
-    );
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }
 

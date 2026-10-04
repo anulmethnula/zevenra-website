@@ -25,6 +25,20 @@ export async function listProducts(publishedOnly = false) {
   return result.rows.map(mapProduct);
 }
 
+export async function listPublicProducts(input: Record<string, unknown>) {
+  const page = Math.max(1, Math.floor(Number(input.page) || 1)), pageSize = Math.min(48, Math.max(1, Math.floor(Number(input.pageSize) || 24))), search = String(input.search || "").trim().slice(0, 100), category = String(input.category || ""), collection = String(input.collection || ""), sort = String(input.sort || "featured");
+  const values: unknown[] = [], conditions = ["p.status='published'"];
+  if (search) { values.push(`%${search.toLowerCase()}%`); conditions.push(`(lower(p.name) LIKE $${values.length} OR lower(p.description) LIKE $${values.length})`); }
+  if (category) { values.push(category); conditions.push(`(p.category_id=$${values.length} OR EXISTS(SELECT 1 FROM categories child WHERE child.id=p.category_id AND child.parent_id=$${values.length}))`); }
+  if (collection) { values.push(collection); conditions.push(`EXISTS(SELECT 1 FROM product_collections pc WHERE pc.product_id=p.id AND pc.collection_id=$${values.length})`); }
+  if (String(input.new) === "true") conditions.push("p.new_arrival=true");
+  const orders: Record<string,string> = { featured:"p.featured DESC,p.sort_order,p.name", newest:"p.new_arrival DESC,p.updated_at DESC", price_asc:"p.price ASC,p.name", price_desc:"p.price DESC,p.name" }, order = orders[sort] || orders.featured;
+  const where = ` WHERE ${conditions.join(" AND ")}`, total = Number((await query<{count:number}>(`SELECT count(*)::int count FROM products p${where}`, values)).rows[0]?.count || 0);
+  values.push(pageSize, (page - 1) * pageSize);
+  const rows = await query<Record<string,unknown>>(`${productSelect}${where} ORDER BY ${order} LIMIT $${values.length-1} OFFSET $${values.length}`, values);
+  return { items: rows.rows.map(mapProduct), page, pageSize, total, pageCount: Math.max(1, Math.ceil(total/pageSize)) };
+}
+
 export async function getProductById(id: string) {
   const result = await query<Record<string, unknown>>(
     `${productSelect} WHERE p.id=$1 LIMIT 1`,

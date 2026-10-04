@@ -45,7 +45,9 @@ export function CartDrawer() {
   const recommendations = data.products
     .filter(
       (product) =>
-        product.status === "published" && !cartProductIds.has(product.id),
+        product.status === "published" &&
+        !cartProductIds.has(product.id) &&
+        (product.preorderEnabled || product.variants.some((variant) => variant.active && variant.stock > 0)),
     )
     .slice(0, 8);
   const moveRecommendations = (direction: -1 | 1) =>

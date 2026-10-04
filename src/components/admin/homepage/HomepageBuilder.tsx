@@ -8,9 +8,9 @@ import { useStore } from "../../../features/store/StoreContext";
 import type { HomepageSection } from "../../../types";
 import { adminToast } from "../AdminToasts";
 
-const supported = ["editorial-image","full-width-campaign"] as const;
+const supported = ["product-grid","collection-feature","category-grid","editorial-image","full-width-campaign","split-story","text-statement","new-arrivals","featured-products","social","service-strip"] as const;
 const labels:Record<string,string>={"editorial-image":"Editorial Image","full-width-campaign":"Campaign Banner","product-grid":"Product Grid","collection-feature":"Collection Feature","category-grid":"Category Grid","text-statement":"Text Statement","new-arrivals":"New Arrivals","featured-products":"Featured Products",social:"Social Section","service-strip":"Service Strip","split-story":"Split Story"};
-const descriptions:Record<(typeof supported)[number],string>={"editorial-image":"Editorial image story with optional copy and call to action.","full-width-campaign":"Full-width campaign image or video with an optional CTA."};
+const descriptions:Record<(typeof supported)[number],string>={"product-grid":"Products selected by a product, category, or collection ID.","collection-feature":"A linked collection story using its reference ID.","category-grid":"Active categories, optionally scoped by a category ID.","editorial-image":"Editorial image story with optional copy and call to action.","full-width-campaign":"Full-width campaign image or video with an optional CTA.","split-story":"Editorial media story with responsive artwork.","text-statement":"A restrained editorial text statement.","new-arrivals":"The latest published products marked as new arrivals.","featured-products":"Published products marked as featured.",social:"Configured social channels.","service-strip":"Delivery, checkout, and support benefits."};
 const blank=(type:(typeof supported)[number],sortOrder:number):HomepageSection=>({id:crypto.randomUUID(),type,enabled:false,title:"New section",subtitle:"",desktopMedia:"",mobileMedia:"",ctaLabel:"",ctaLink:"",referenceId:"",textPosition:"left",overlay:25,spacing:"normal",sortOrder});
 
 export default function HomepageBuilder(){

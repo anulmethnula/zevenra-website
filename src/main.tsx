@@ -12,6 +12,7 @@ import { CheckoutLayout } from "./layouts/CheckoutLayout";
 import { AdminLayout } from "./layouts/AdminLayout";
 import "./styles/index.css";
 import { CustomerAuthProvider } from "./features/account/CustomerAuthContext";
+import { StoreErrorBoundary } from "./components/store/StoreErrorBoundary";
 const Home = lazy(() => import("./pages/HomePage")),
   Shop = lazy(() => import("./pages/ShopPage")),
   Product = lazy(() => import("./pages/ProductPage")),
@@ -105,9 +106,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <CustomerAuthProvider>
       <StoreProvider>
         <CartProvider>
-          <Suspense fallback={fallback}>
+          <StoreErrorBoundary><Suspense fallback={fallback}>
             <RouterProvider router={router} />
-          </Suspense>
+          </Suspense></StoreErrorBoundary>
         </CartProvider>
       </StoreProvider>
     </CustomerAuthProvider>

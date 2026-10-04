@@ -14,10 +14,11 @@ export function Seo({
       fullTitle = title.toLowerCase().includes("zevenra")
         ? title
         : title + " — ZEVENRA",
+      siteUrl = String(import.meta.env.VITE_PUBLIC_SITE_URL || location.origin).replace(/\/$/, ""),
       absoluteImage = image
         ? image.startsWith("http")
           ? image
-          : location.origin + (image.startsWith("/") ? image : "/" + image)
+          : siteUrl + (image.startsWith("/") ? image : "/" + image)
         : "";
     document.title = fullTitle;
     document
@@ -39,7 +40,7 @@ export function Seo({
     }
     document
       .querySelector('link[rel="canonical"]')
-      ?.setAttribute("href", location.origin + location.pathname);
+      ?.setAttribute("href", siteUrl + location.pathname);
   }, [title, description, image]);
   return null;
 }

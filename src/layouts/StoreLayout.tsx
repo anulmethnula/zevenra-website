@@ -106,11 +106,11 @@ export function StoreLayout() {
   return (
     <div>
       {data.settings.announcement && (
-        <div className="announcement">{data.settings.announcement}</div>
+        <div className={"announcement " + (solid ? "announcement--hidden" : "")}>{data.settings.announcement}</div>
       )}
       <header
         className={
-          "site-header " + (solid ? "site-header--solid" : "site-header--hero")
+          "site-header " + (solid ? "site-header--solid" : "site-header--hero") + (data.settings.announcement && !solid ? " site-header--announced" : "")
         }
       >
         <div className="site-header__inner">
