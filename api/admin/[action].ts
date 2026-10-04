@@ -9,6 +9,10 @@ import {
   listCouriers,
   listDeliveryRates,
   listHomepageSections,
+  duplicateHomepageSection,
+  reorderHomepageSections,
+  saveHomepageSection,
+  deleteHomepageSection,
   listNavigation,
   listProducts,
   listAdminProducts,
@@ -71,6 +75,8 @@ const allowed = new Set([
   "listHomepageSections",
   "saveHomepageSection",
   "deleteHomepageSection",
+  "duplicateHomepageSection",
+  "reorderHomepageSections",
   "listOrders",
   "getOrder",
   "updateOrder",
@@ -150,9 +156,13 @@ async function execute(action: string, payload: Record<string, unknown>) {
     case "deleteNavigation":
       return deleteEntity("navigation", String(payload.id || ""));
     case "saveHomepageSection":
-      return saveEntity("homepage_sections", payload);
+      return saveHomepageSection(payload);
     case "deleteHomepageSection":
-      return deleteEntity("homepage_sections", String(payload.id || ""));
+      return deleteHomepageSection(String(payload.id || ""));
+    case "duplicateHomepageSection":
+      return duplicateHomepageSection(String(payload.id || ""));
+    case "reorderHomepageSections":
+      return reorderHomepageSections(Array.isArray(payload.ids) ? payload.ids.map(String) : []);
     case "updateOrder":
       return updateOrder(payload);
     case "updateOrderDetails":

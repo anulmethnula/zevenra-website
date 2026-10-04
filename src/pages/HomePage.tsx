@@ -34,12 +34,15 @@ export default function HomePage() {
     categories = (
       homeCategories.length ? homeCategories : fallbackCategories
     ).slice(0, 10),
-    banner = data.homepageSections.find(
-      (section) =>
-        section.enabled &&
-        (section.type === "full-width-campaign" ||
-          section.type === "editorial-image"),
-    );
+    banners = data.homepageSections
+      .filter(
+        (section) =>
+          section.enabled &&
+          (section.type === "full-width-campaign" ||
+            section.type === "editorial-image") &&
+          (section.desktopMedia || section.mobileMedia),
+      )
+      .sort((a, b) => a.sortOrder - b.sortOrder);
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -115,20 +118,7 @@ export default function HomePage() {
         />
       )}
       {categories.length > 0 && <CategorySection categories={categories} />}{" "}
-      {banner && (banner.desktopMedia || banner.mobileMedia) && (
-        <section className="home-banner">
-          <img
-            src={banner.desktopMedia || banner.mobileMedia}
-            alt={banner.title}
-            loading="lazy"
-          />
-          {banner.ctaLink && (
-            <Link to={banner.ctaLink} className="home-banner__link">
-              {banner.ctaLabel || "SHOP NOW"}
-            </Link>
-          )}
-        </section>
-      )}
+      {banners.map((banner) => <HomeBanner key={banner.id} section={banner} />)}
       {featured.length > 0 && (
         <ProductSection title="Featured" products={featured} link="/shop" />
       )}
@@ -156,6 +146,16 @@ export default function HomePage() {
       </section>
     </>
   );
+}
+
+function HomeBanner({ section }: { section: ReturnType<typeof useStore>["data"]["homepageSections"][number] }) {
+  const desktop=section.desktopMedia||section.mobileMedia||"",mobile=section.mobileMedia||desktop,isVideo=/\.(mp4|webm|mov)(\?|$)/i.test(desktop);
+  return <section className={`home-banner relative ${section.spacing === "compact" ? "my-8" : section.spacing === "generous" ? "my-24" : "my-14"}`}>
+    {isVideo?<video src={desktop} muted autoPlay loop playsInline preload="metadata" className="h-full w-full object-cover"/>:<picture>{mobile!==desktop&&<source media="(max-width: 767px)" srcSet={mobile}/>}<img src={desktop} alt={section.title||"ZEVENRA editorial campaign"} loading="lazy" decoding="async"/></picture>}
+    <div className="absolute inset-0" style={{background:`rgba(0,0,0,${Math.min(90,Math.max(0,section.overlay))/100})`}}/>
+    {(section.title||section.subtitle)&&<div className={`absolute inset-x-0 top-1/2 z-10 -translate-y-1/2 px-6 text-white ${section.textPosition==="center"?"text-center":section.textPosition==="right"?"text-right":"text-left"}`}><h2 className="display text-4xl sm:text-6xl">{section.title}</h2>{section.subtitle&&<p className="mt-3 text-sm">{section.subtitle}</p>}</div>}
+    {section.ctaLink&&<Link to={section.ctaLink} className="home-banner__link">{section.ctaLabel||"SHOP NOW"}</Link>}
+  </section>;
 }
 
 function CategorySection({ categories }: { categories: Category[] }) {

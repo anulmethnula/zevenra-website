@@ -398,6 +398,33 @@ export const orderSchema = z
         message: "Bank transfer receipt is required.",
       });
   });
+
+export const homepageSectionSchema = z
+  .object({
+    id: z.string().trim().min(1).max(100),
+    type: z.enum(["editorial-image", "full-width-campaign"]),
+    enabled: z.boolean(),
+    title: z.string().trim().max(140),
+    subtitle: z.string().trim().max(500).optional(),
+    desktopMedia: z.string().trim().max(1000).refine((value) => !value || value.startsWith("/") || /^https:\/\//i.test(value), "Media must be a site path or HTTPS URL.").optional(),
+    mobileMedia: z.string().trim().max(1000).refine((value) => !value || value.startsWith("/") || /^https:\/\//i.test(value), "Media must be a site path or HTTPS URL.").optional(),
+    ctaLabel: z.string().trim().max(80).optional(),
+    ctaLink: z.string().trim().max(500).optional(),
+    referenceId: z.string().trim().max(100).optional(),
+    textPosition: z.enum(["left", "center", "right"]),
+    overlay: z.number().finite().min(0).max(90),
+    spacing: z.enum(["compact", "normal", "generous"]),
+    sortOrder: z.number().int().min(0).max(10000),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.enabled && !value.desktopMedia && !value.mobileMedia)
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["desktopMedia"], message: "Add media before publishing this section." });
+    if (value.ctaLabel && !value.ctaLink)
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["ctaLink"], message: "Add a CTA link when a CTA label is provided." });
+    if (value.ctaLink && !/^(\/|https:\/\/)/i.test(value.ctaLink))
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["ctaLink"], message: "CTA link must be a site path or HTTPS URL." });
+  });
 export const preorderSchema = z
   .object({
     customerName: z.string().trim().min(2).max(100),

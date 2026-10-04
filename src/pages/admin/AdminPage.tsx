@@ -20,6 +20,7 @@ import { adminApi } from "../../services/adminApi";
 import { uploadAdminMedia } from "../../services/cloudinaryUpload";
 import { useStore } from "../../features/store/StoreContext";
 import { adminToast } from "../../components/admin/AdminToasts";
+import HomepageBuilder from "../../components/admin/homepage/HomepageBuilder";
 import type {
   Category,
   Collection,
@@ -68,7 +69,7 @@ export default function AdminPage() {
   if (section === "categories") return <Categories />;
   if (section === "collections") return <Collections />;
   if (section === "navigation") return <Navigation />;
-  if (section === "homepage") return <Homepage />;
+  if (section === "homepage") return <HomepageBuilder />;
   if (section === "size-charts") return <SizeCharts />;
   if (section === "settings") return <ExplicitSettings focus={section} />;
   if (section === "delivery") return <DeliveryRates />;
@@ -1111,7 +1112,7 @@ function NavRow({
     </div>
   );
 }
-function Homepage() {
+export function Homepage() {
   const s = useStore(),
     [creating, setCreating] = useState(false),
     blank: HomepageSection = {

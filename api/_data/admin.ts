@@ -78,7 +78,7 @@ export async function adminBootstrap(section = "/admin") {
     deliveryRates,
   ] = await Promise.all([
     section === "/admin" ? dashboard() : Promise.resolve(null),
-    productEditorId ? getProductById(productEditorId).then(value => value ? [value] : []) : (isOrders || isPreorders || isHomepage ? listProducts() : Promise.resolve([])),
+    productEditorId ? getProductById(productEditorId).then(value => value ? [value] : []) : (isOrders || isPreorders ? listProducts() : Promise.resolve([])),
     isProducts || isCategories || isHomepage ? listCategories() : Promise.resolve([]),
     isProducts || isCollections || isHomepage ? listCollections() : Promise.resolve([]),
     isProducts ? listSizeCharts() : Promise.resolve([]),

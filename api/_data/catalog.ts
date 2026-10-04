@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { query, withTransaction } from "../_db.js";
+import { homepageSectionSchema } from "../_shared.js";
 import {
   mapCategory,
   mapCollection,
@@ -111,6 +112,24 @@ export async function listHomepageSections() {
     )
   ).rows.map(mapHomepageSection);
 }
+export async function saveHomepageSection(input: Record<string, unknown>) {
+  const value = homepageSectionSchema.parse(input);
+  return withTransaction(async (client) => {
+    const previous = (await client.query<Record<string, unknown>>("SELECT * FROM homepage_sections WHERE id=$1 FOR UPDATE", [value.id])).rows[0];
+    await client.query(`INSERT INTO homepage_sections(id,type,enabled,title,subtitle,desktop_media,mobile_media,cta_label,cta_link,reference_id,text_position,overlay,spacing,sort_order,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,now()) ON CONFLICT(id) DO UPDATE SET type=EXCLUDED.type,enabled=EXCLUDED.enabled,title=EXCLUDED.title,subtitle=EXCLUDED.subtitle,desktop_media=EXCLUDED.desktop_media,mobile_media=EXCLUDED.mobile_media,cta_label=EXCLUDED.cta_label,cta_link=EXCLUDED.cta_link,reference_id=EXCLUDED.reference_id,text_position=EXCLUDED.text_position,overlay=EXCLUDED.overlay,spacing=EXCLUDED.spacing,sort_order=EXCLUDED.sort_order,updated_at=now()`, [value.id,value.type,value.enabled,value.title,value.subtitle||"",value.desktopMedia||"",value.mobileMedia||"",value.ctaLabel||"",value.ctaLink||"",value.referenceId||"",value.textPosition,value.overlay,value.spacing,value.sortOrder]);
+    const action = previous ? (previous.enabled !== value.enabled ? (value.enabled ? "section_enabled" : "section_disabled") : "section_edited") : "section_created";
+    await client.query("INSERT INTO audit_logs(actor,action,entity_type,entity_id,details) VALUES('owner',$2,'homepage_section',$1,$3::jsonb)",[value.id,action,JSON.stringify({type:value.type,title:value.title})]);
+    return mapHomepageSection((await client.query<Record<string, unknown>>("SELECT * FROM homepage_sections WHERE id=$1",[value.id])).rows[0]);
+  });
+}
+export async function duplicateHomepageSection(id: string) {
+  return withTransaction(async(client)=>{const row=(await client.query<Record<string,unknown>>("SELECT * FROM homepage_sections WHERE id=$1 FOR UPDATE",[id])).rows[0];if(!row)throw new Error("Homepage section not found.");const nextId=randomUUID(),max=Number((await client.query<{value:number}>("SELECT COALESCE(max(sort_order),0)::int value FROM homepage_sections")).rows[0]?.value||0);await client.query("INSERT INTO homepage_sections(id,type,enabled,title,subtitle,desktop_media,mobile_media,cta_label,cta_link,reference_id,text_position,overlay,spacing,sort_order,updated_at) VALUES($1,$2,false,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,now())",[nextId,row.type,`${row.title||"Untitled"} Copy`,row.subtitle,row.desktop_media,row.mobile_media,row.cta_label,row.cta_link,row.reference_id,row.text_position,row.overlay,row.spacing,max+1]);await client.query("INSERT INTO audit_logs(actor,action,entity_type,entity_id,details) VALUES('owner','section_duplicated','homepage_section',$1,$2::jsonb)",[nextId,JSON.stringify({sourceId:id})]);return mapHomepageSection((await client.query<Record<string,unknown>>("SELECT * FROM homepage_sections WHERE id=$1",[nextId])).rows[0]);});
+}
+export async function reorderHomepageSections(ids: string[]) {
+  if(!ids.length||new Set(ids).size!==ids.length||ids.length>100)throw new Error("Invalid homepage section order.");
+  return withTransaction(async(client)=>{const existing=await client.query<{id:string}>("SELECT id FROM homepage_sections WHERE id=ANY($1::text[]) FOR UPDATE",[ids]);if(existing.rowCount!==ids.length)throw new Error("One or more homepage sections no longer exist.");for(let index=0;index<ids.length;index++)await client.query("UPDATE homepage_sections SET sort_order=$2,updated_at=now() WHERE id=$1",[ids[index],index+1]);await client.query("INSERT INTO audit_logs(actor,action,entity_type,entity_id,details) VALUES('owner','sections_reordered','homepage','homepage',$1::jsonb)",[JSON.stringify({ids})]);return (await client.query<Record<string,unknown>>("SELECT * FROM homepage_sections ORDER BY sort_order,id")).rows.map(mapHomepageSection);});
+}
+export async function deleteHomepageSection(id:string){return withTransaction(async(client)=>{const row=(await client.query<Record<string,unknown>>("DELETE FROM homepage_sections WHERE id=$1 RETURNING title,type",[id])).rows[0];if(!row)throw new Error("Homepage section not found.");await client.query("INSERT INTO audit_logs(actor,action,entity_type,entity_id,details) VALUES('owner','section_deleted','homepage_section',$1,$2::jsonb)",[id,JSON.stringify({title:row.title,type:row.type})]);return {deleted:true};});}
 export async function listCouriers(activeOnly = false) {
   return (
     await query<Record<string, unknown>>(
