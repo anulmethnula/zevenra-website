@@ -262,6 +262,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         { error: (error as Error & { issues?: { message?: string }[] }).issues?.[0]?.message || "Please check the submitted details." },
         400,
       );
+    const databaseError = typeof (error as { code?:unknown } | null)?.code === "string" || /relation |column |constraint|postgres|duplicate key|null value/i.test(message);
+    if (databaseError) {
+      console.error("admin action database failure", error);
+      return json(res,{ error: "The operation could not be completed. Please review the details and try again." },400);
+    }
     return json(
       res,
       { error: message || "The operation could not be completed." },

@@ -192,13 +192,14 @@ export function AdminLayout() {
           </span>
         </header>
         <main className="admin-main p-4 sm:p-8 lg:p-12 xl:p-14">
-          {store.adminLoading ? (
+          {store.adminLoading && !store.adminReady ? (
             <div className="grid min-h-[65vh] place-content-center text-center">
               <span className="mx-auto mb-5 h-6 w-6 animate-spin rounded-full border border-black/15 border-t-black" />
               <p className="eyebrow text-black/45">Loading control room…</p>
             </div>
           ) : (
             <>
+              {store.adminLoading && <div className="mb-5 h-1 overflow-hidden rounded-full bg-black/[.06]" role="status" aria-label={`Loading ${pageLabel}`}><div className="h-full w-1/3 animate-pulse rounded-full bg-black/35" /></div>}
               {store.adminError && (
                 <div
                   className="mb-6 border border-amber-900/15 bg-amber-950/[.07] p-4 text-sm text-amber-950"

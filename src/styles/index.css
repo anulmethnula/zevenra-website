@@ -17,6 +17,10 @@ img{display:block;max-width:100%}
 .display{font-family:'Italiana',serif;font-weight:400;letter-spacing:-.025em}
 .eyebrow{font-size:.625rem;font-weight:500;letter-spacing:.26em;text-transform:uppercase}
 .section{padding:clamp(5rem,9vw,9.5rem) 0}
+.home-hero~.section{padding-block:clamp(56px,5.5vw,88px)}
+.product-section+.product-section,.home-categories+.product-section,.product-section+.home-categories{padding-top:0}
+.home-banner+.product-section,.home-split+.product-section,.service-strip+.product-section{padding-top:clamp(56px,5.5vw,88px)}
+@media(max-width:767px){.home-hero~.section{padding-block:clamp(36px,10vw,56px)}.product-section+.product-section,.home-categories+.product-section,.product-section+.home-categories{padding-top:0}}
 .hairline{border-color:var(--line)}
 .hide-scrollbar{scrollbar-width:none}
 .hide-scrollbar::-webkit-scrollbar{display:none}

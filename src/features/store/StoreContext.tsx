@@ -55,6 +55,7 @@ type Value = {
   loading: boolean;
   error: string;
   adminLoading: boolean;
+  adminReady: boolean;
   adminError: string;
   admin: AdminState;
   live: boolean;
@@ -446,6 +447,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [loading, setLoading] = useState(!demo && !adminRoute),
     [error, setError] = useState(""),
     [adminLoading, setAdminLoading] = useState(!demo),
+    [adminReady, setAdminReady] = useState(demo),
     [adminError, setAdminError] = useState(""),
     [admin, setAdmin] = useState<AdminState>(() =>
       demo
@@ -589,6 +591,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         couriers,
         deliveryRates,
       });
+      setAdminReady(true);
     } catch (reason) {
       setAdminError(message(reason));
     } finally {
@@ -927,6 +930,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       loading,
       error,
       adminLoading,
+      adminReady,
       adminError,
       admin,
       live: !demo,
@@ -951,6 +955,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       loading,
       error,
       adminLoading,
+      adminReady,
       adminError,
       admin,
       loadAdmin,

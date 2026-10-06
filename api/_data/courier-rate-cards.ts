@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { query, withTransaction } from "../_db.js";
-import { parseCourierRateFile, suggestedCourierRateField } from "./courier-rate-parser.js";
+import { normalizeCourierRateImportRows, parseCourierRateFile, suggestedCourierRateField } from "./courier-rate-parser.js";
 
 const fields = ["fromBranch", "destinationDistrict", "destinationCity", "firstKgCharge", "additionalKgCharge"] as const;
 type Mapping = Record<(typeof fields)[number], string>;
@@ -22,7 +22,7 @@ export async function importCourierRateSheet(input: Record<string, unknown>) {
     const version = Number((await client.query<{ version: number }>("SELECT COALESCE(max(version),0)::int+1 version FROM courier_rate_cards WHERE courier_provider_id=$1", [courierProviderId])).rows[0]?.version || 1);
     await client.query(`INSERT INTO courier_rate_cards(id,courier_provider_id,version,source_file_name,source_file_type,detected_headers,total_rows) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7)`, [id,courierProviderId,version,fileName,parsed.extension,JSON.stringify(parsed.headers),parsed.rows.length]);
     await client.query(`INSERT INTO courier_rate_import_rows(rate_card_id,row_number,raw_data)
-      SELECT $1,x.row_number,x.raw::jsonb FROM jsonb_to_recordset($2::jsonb) AS x(row_number int,raw jsonb)`, [id,JSON.stringify(parsed.rows)]);
+      SELECT $1,x.row_number,x.raw::jsonb FROM jsonb_to_recordset($2::jsonb) AS x(row_number int,raw jsonb)`, [id,JSON.stringify(normalizeCourierRateImportRows(parsed.rows))]);
     const suggestions = Object.fromEntries(parsed.headers.map((header) => [header,suggestedCourierRateField(header)]).filter(([,field]) => field));
     return { id, version, fileName, headers: parsed.headers, suggestions, totalRows: parsed.rows.length, preview: parsed.rows.slice(0,8) };
   });
