@@ -84,6 +84,7 @@ textarea.field{padding-block:1rem}
 .home-hero__cta:hover{border-color:rgba(211,174,133,.8);background:rgba(10,8,6,.82);color:#fff}
 .home-hero__cta:hover::after{color:#e2bb91;transform:translateX(3px)}
 @media(max-width:767px){.home-hero__cta{bottom:max(5svh,36px);left:50%;width:min(190px,calc(100% - 40px));transform:translateX(-50%)}}
+@media(min-width:768px){.home-hero__cta{width:225px;min-height:56px;border-color:rgba(255,250,243,.58);background:rgba(6,6,5,.78);box-shadow:0 10px 24px rgba(0,0,0,.18);color:#fff;font-size:10px;letter-spacing:.23em}.home-hero__cta::after{color:#fff}.home-hero__cta:hover{border-color:rgba(255,255,255,.78);background:rgba(15,15,13,.88)}.home-hero__cta:hover::after{color:#fff}}
 .section-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:clamp(2rem,4vw,3.5rem)}
 .section-heading h2{font-size:clamp(2.8rem,5vw,5.2rem);line-height:.92}
 .section-heading>a{padding-bottom:6px;border-bottom:1px solid;font-size:9px;font-weight:500;letter-spacing:.2em;transition:color .2s}
@@ -617,7 +618,9 @@ textarea.field{padding-block:1rem}
 .home-category-tile::after{position:absolute;inset:45% 0 0;background:linear-gradient(0deg,rgba(0,0,0,.38),transparent);content:''}
 .home-category-tile span{position:absolute;z-index:2;right:16px;bottom:14px;left:16px;color:#fff;font-family:'DM Sans',sans-serif;font-size:clamp(1.5rem,2.5vw,2.5rem);font-weight:400;letter-spacing:-.04em}
 
-.shop-search{width:min(100%,520px);height:49px;align-items:center;gap:12px;padding-left:15px;border:1px solid rgba(17,17,15,.14);background:rgba(255,255,255,.28)}
+.shop-search{width:min(100%,520px);height:49px;align-items:center;gap:12px;padding-left:15px;border:1px solid rgba(17,17,15,.14);background:rgba(255,255,255,.28);transition:border-color .18s}
+.shop-search:focus-within{border-color:rgba(17,17,15,.42)}
+.shop-search input,.shop-search input:focus,.shop-search input:focus-visible{border:0;outline:0;box-shadow:none}
 .shop-search__action{display:grid;width:47px;height:47px;flex:0 0 47px;place-items:center;border-left:1px solid rgba(17,17,15,.1);color:rgba(17,17,15,.65)}
 .shop-style-filter{margin:0 0 26px;padding:14px 0 18px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
 .shop-style-filter__head{display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:12px}
