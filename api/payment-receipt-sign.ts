@@ -37,8 +37,8 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
       signature,
       apiKey: config.CLOUDINARY_API_KEY,
       cloudName: config.CLOUDINARY_CLOUD_NAME,
-      maxBytes: 8_000_000,
-      allowed: ["image/jpeg", "image/png", "image/webp", "application/pdf"],
+      maxBytes: 15_000_000,
+      allowed: ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif", "application/pdf"],
     });
   } catch {
     return json(

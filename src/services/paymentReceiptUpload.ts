@@ -18,9 +18,9 @@ export async function uploadPaymentReceipt(file: File): Promise<string> {
   if (!signedResponse.ok)
     throw new Error(signed.error || "Receipt upload is unavailable.");
   if (!signed.allowed.includes(file.type))
-    throw new Error("Upload a JPG, PNG, WebP or PDF receipt.");
+    throw new Error("Upload an image or PDF receipt.");
   if (file.size > signed.maxBytes)
-    throw new Error("Receipt must be smaller than 8 MB.");
+    throw new Error("This receipt file is too large. Try a smaller file.");
   const form = new FormData();
   form.append("file", file);
   form.append("api_key", signed.apiKey);
