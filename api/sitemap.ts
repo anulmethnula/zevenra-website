@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { storeBootstrap } from "./_data/catalog.js";
+import { listCategories,listCollections,listPublishedProductSlugs } from "./_data/catalog.js";
 import { methodNotAllowed } from "./_shared.js";
 
 const escapeXml = (value: string) =>
@@ -26,7 +26,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ),
       proto = String(req.headers["x-forwarded-proto"] || "https").split(",")[0],
       origin = `${proto}://${host}`;
-    const data = await storeBootstrap();
+    const [productSlugs,categories,collections]=await Promise.all([listPublishedProductSlugs(),listCategories(),listCollections()]);
     const paths = new Set<string>([
       "/",
       "/shop",
@@ -37,17 +37,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       "/privacy",
       "/terms",
     ]);
-    for (const row of Array.isArray(data.products) ? data.products : []) {
-      const slug = String(row.slug || "").trim();
+    for (const value of productSlugs) {
+      const slug = String(value || "").trim();
       if (slug) paths.add("/product/" + encodeURIComponent(slug));
     }
-    for (const row of Array.isArray(data.categories) ? data.categories : []) {
+    for (const row of categories) {
       const slug = String(row.slug || "").trim(),
         active =
           row.active === true || String(row.active).toLowerCase() === "true";
       if (slug && active) paths.add("/category/" + encodeURIComponent(slug));
     }
-    for (const row of Array.isArray(data.collections) ? data.collections : []) {
+    for (const row of collections) {
       const slug = String(row.slug || "").trim(),
         active =
           row.active === true || String(row.active).toLowerCase() === "true";

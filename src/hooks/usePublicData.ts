@@ -1,0 +1,8 @@
+import { useCallback,useEffect,useRef,useState } from "react";
+import type { CourierProvider,DeliveryRate,HomepageData,Product,ShopResponse } from "../types";
+const base=import.meta.env.VITE_API_BASE||"/api";
+function useRequest<T>(path:string){const [data,setData]=useState<T|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState(""),controller=useRef<AbortController>();const load=useCallback(async()=>{controller.current?.abort();const request=new AbortController();controller.current=request;setLoading(true);setError("");try{const response=await fetch(base+path,{signal:request.signal}),payload=await response.json() as T&{error?:string};if(!response.ok)throw new Error(payload.error||"Content temporarily unavailable");if(!request.signal.aborted)setData(payload);}catch(reason){if(!(reason instanceof DOMException&&reason.name==="AbortError"))setError(reason instanceof Error?reason.message:"Content temporarily unavailable");}finally{if(!request.signal.aborted)setLoading(false);}},[path]);useEffect(()=>{void load();return()=>controller.current?.abort();},[load]);return{data,loading,error,retry:load};}
+export const useHomepageData=()=>useRequest<HomepageData>("/home");
+export const useProduct=(slug:string)=>useRequest<{product:Product;sizeChart?:import("../types").SizeChart;related:import("../types").ProductSummary[]}>(`/products/${encodeURIComponent(slug)}`);
+export const useShopProducts=(query:string)=>useRequest<ShopResponse>(`/products?${query}`);
+export const useCheckoutConfig=()=>useRequest<{settings:Array<{key:string;value:unknown}>;couriers:CourierProvider[];deliveryRates:DeliveryRate[]}>("/checkout-config");

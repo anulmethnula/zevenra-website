@@ -82,15 +82,11 @@ type Value = {
 };
 type SettingsRow = { key: string; value: unknown };
 type PublicPayload = {
-  products: unknown[];
   categories: unknown[];
   collections: unknown[];
-  sizeCharts: unknown[];
   navigation: unknown[];
   homepageSections: unknown[];
   settings: SettingsRow[] | Record<string, unknown>;
-  couriers?: unknown[];
-  deliveryRates?: unknown[];
 };
 type AdminBootstrap = {
   dashboard: DashboardData | null;
@@ -433,7 +429,7 @@ function message(error: unknown) {
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<StoreData>(() =>
-      demo ? demoLoad() : initialStoreData,
+      demo ? demoLoad() : {...initialStoreData,products:[],sizeCharts:[],couriers:[],deliveryRates:[],settings:{...initialStoreData.settings,codEnabled:false,bankEnabled:false,bankName:"",accountName:"",accountNumber:"",branch:"",bankInstructions:""}},
     ),
     [loading, setLoading] = useState(!demo && !adminRoute),
     [error, setError] = useState(""),
@@ -452,22 +448,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const applyPublic = useCallback(
     (payload: PublicPayload) =>
       setData((current) => {
-        const clean = cleanCatalogue({
-          products: payload.products.map(normalizeProduct),
-          categories: payload.categories.map(normalizeCategory),
-          collections: payload.collections.map(normalizeCollection),
-          sizeCharts: payload.sizeCharts.map(normalizeSizeChart),
-          navigation: payload.navigation.map(normalizeNavigation),
-          homepageSections: payload.homepageSections.map(normalizeHomepage),
-        });
         return {
           ...current,
-          ...clean,
-          settings: normalizeSettings(payload.settings),
-          couriers: (payload.couriers || []).map(normalizeCourier),
-          deliveryRates: (payload.deliveryRates || []).map(
-            normalizeDeliveryRate,
-          ),
+          categories:payload.categories.map(normalizeCategory),
+          collections:payload.collections.map(normalizeCollection),
+          navigation:payload.navigation.map(normalizeNavigation),
+          homepageSections:payload.homepageSections.map(normalizeHomepage),
+          settings: {...normalizeSettings(payload.settings),codEnabled:false,bankEnabled:false,bankName:"",accountName:"",accountNumber:"",branch:"",bankInstructions:"",deliveryEnabled:false,deliveryFee:0,freeDeliveryThreshold:0,defaultCourierProviderId:"",storeOpen:false,ordersEnabled:false},
         };
       }),
     [],

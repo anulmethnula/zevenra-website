@@ -64,7 +64,7 @@ export function StoreLayout() {
     addEventListener("scroll", update, { passive: true });
     return () => removeEventListener("scroll", update);
   }, [location.pathname, location.search]);
-  const categories = getNavigationCategories(data.categories, data.products);
+  const categories = getNavigationCategories(data.categories);
   const configured = data.navigation
     .filter((item) => item.visible)
     .sort((a, b) => a.sortOrder - b.sortOrder);

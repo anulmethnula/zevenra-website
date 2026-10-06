@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ProductCard } from "../ProductCard";
-import type { Category, HomepageSection, Product, StoreData } from "../../types";
+import type { Category, HomepageData, HomepageSection, ProductSummary, SiteSettings } from "../../types";
 import { validExternalUrl } from "../../utils/contact";
 
 const videoPattern = /\.(mp4|webm)(?:\?|$)/i;
 
-export function ProductSection({ title, products, link = "/shop" }: { title: string; products: Product[]; link?: string }) {
+export function ProductSection({ title, products, link = "/shop" }: { title: string; products: ProductSummary[]; link?: string }) {
   if (!products.length) return null;
   return <section className="section product-section"><div className="container"><div className="section-heading"><h2 className="display">{title}</h2><Link to={link}>VIEW ALL</Link></div><div className="store-product-grid">{products.slice(0, 4).map(product => <ProductCard key={product.id} product={product} />)}</div></div></section>;
 }
@@ -35,8 +35,8 @@ function SplitStory({ section }: { section: HomepageSection }) {
   return <section className={`home-split home-section--${section.spacing}`}><div className="home-split__media"><ResponsiveMedia section={section}/></div><div className={`home-split__copy home-split__copy--${section.textPosition}`}><h2 className="display">{section.title}</h2>{section.subtitle && <p>{section.subtitle}</p>}{section.ctaLink && <Link className="btn mt-6" to={section.ctaLink}>{section.ctaLabel || "DISCOVER"}</Link>}</div></section>;
 }
 
-export function HomepageSectionRenderer({ section, data }: { section: HomepageSection; data: StoreData }) {
-  const products = data.products.filter(product => product.status === "published"), activeCategories = data.categories.filter(category => category.active);
+export function HomepageSectionRenderer({ section, data, settings }: { section: HomepageSection; data: HomepageData; settings:SiteSettings }) {
+  const products = data.products, activeCategories = data.categories.filter(category => category.active);
   switch (section.type) {
     case "new-arrivals": return <ProductSection title={section.title || "New arrivals"} products={products.filter(product => product.newArrival)} link="/shop?new=true"/>;
     case "featured-products": return <ProductSection title={section.title || "Featured"} products={products.filter(product => product.featured)}/>;
@@ -46,8 +46,8 @@ export function HomepageSectionRenderer({ section, data }: { section: HomepageSe
     case "editorial-image": case "full-width-campaign": return <Campaign section={section}/>;
     case "split-story": return <SplitStory section={section}/>;
     case "text-statement": return (section.title || section.subtitle) ? <section className={`home-statement home-section--${section.spacing}`}><div className="container"><h2 className="display">{section.title}</h2>{section.subtitle && <p>{section.subtitle}</p>}{section.ctaLink && <Link className="btn mt-6" to={section.ctaLink}>{section.ctaLabel || "DISCOVER"}</Link>}</div></section> : null;
-    case "social": { const instagram = validExternalUrl(data.settings.instagram), tiktok = validExternalUrl(data.settings.tiktok); return (instagram || tiktok) ? <section className="home-statement home-section--compact"><div className="container"><p className="eyebrow">{section.subtitle || "Follow the story"}</p><h2 className="display">{section.title || "ZEVENRA, in motion."}</h2><div className="mt-6 flex justify-center gap-3">{instagram && <a className="btn" href={instagram} rel="noreferrer noopener" target="_blank">Instagram</a>}{tiktok && <a className="btn" href={tiktok} rel="noreferrer noopener" target="_blank">TikTok</a>}</div></div></section> : null; }
-    case "service-strip": return <section className="service-strip"><div className="container"><span>Islandwide delivery</span><span>Secure checkout</span><span>{data.settings.whatsapp ? "Support on WhatsApp" : "Customer support"}</span></div></section>;
+    case "social": { const instagram = validExternalUrl(settings.instagram), tiktok = validExternalUrl(settings.tiktok); return (instagram || tiktok) ? <section className="home-statement home-section--compact"><div className="container"><p className="eyebrow">{section.subtitle || "Follow the story"}</p><h2 className="display">{section.title || "ZEVENRA, in motion."}</h2><div className="mt-6 flex justify-center gap-3">{instagram && <a className="btn" href={instagram} rel="noreferrer noopener" target="_blank">Instagram</a>}{tiktok && <a className="btn" href={tiktok} rel="noreferrer noopener" target="_blank">TikTok</a>}</div></div></section> : null; }
+    case "service-strip": return <section className="service-strip"><div className="container"><span>Islandwide delivery</span><span>Secure checkout</span><span>{settings.whatsapp ? "Support on WhatsApp" : "Customer support"}</span></div></section>;
     default: return null;
   }
 }

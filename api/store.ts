@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { storeBootstrap } from "./_data/catalog.js";
+import { publicStoreBootstrap } from "./_data/catalog.js";
 import { json, methodNotAllowed } from "./_shared.js";
 const privateBankKeys = new Set([
   "bankName",
@@ -14,7 +14,7 @@ const privateBankKeys = new Set([
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "GET") return methodNotAllowed(res, ["GET"]);
   try {
-    const payload = await storeBootstrap(),
+    const payload = await publicStoreBootstrap(),
       bankEnabled = payload.settings.some(
         (row) =>
           ["bankTransferEnabled", "bankEnabled"].includes(row.key) &&

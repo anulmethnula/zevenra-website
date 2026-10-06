@@ -11,45 +11,26 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useCart } from "../features/cart/CartContext";
-import { useStore } from "../features/store/StoreContext";
 import { money } from "../config/site";
 
 export function CartDrawer() {
   const c = useCart(),
-    { data } = useStore(),
     recommendationsRef = useRef<HTMLDivElement>(null);
   const currentPrice = (item: (typeof c.items)[number]) =>
-    data.products.find(
-      (p) => p.id === item.productId && p.status === "published",
-    )?.price ?? item.unitPrice;
+    c.live[item.variantId]?.currentPrice ?? item.unitPrice;
   const currentStock = (item: (typeof c.items)[number]) =>
-    data.products
-      .find((p) => p.id === item.productId && p.status === "published")
-      ?.variants.find((v) => v.id === item.variantId && v.active)?.stock ?? 0;
+    c.live[item.variantId]?.stock ?? 0;
   const valid = (item: (typeof c.items)[number]) => {
     if (item.isPreorder) return false;
-    const product = data.products.find(
-        (p) => p.id === item.productId && p.status === "published",
-      ),
-      variant = product?.variants.find(
-        (v) => v.id === item.variantId && v.active,
-      );
-    return Boolean(product && variant && variant.stock >= item.quantity);
+    const variant=c.live[item.variantId];
+    return Boolean(variant?.active&&variant.published&&variant.stock>=item.quantity);
   };
   const subtotal = c.items.reduce(
       (sum, item) => sum + currentPrice(item) * item.quantity,
       0,
     ),
     canCheckout = c.items.length > 0 && c.items.every(valid);
-  const cartProductIds = new Set(c.items.map((item) => item.productId));
-  const recommendations = data.products
-    .filter(
-      (product) =>
-        product.status === "published" &&
-        !cartProductIds.has(product.id) &&
-        (product.preorderEnabled || product.variants.some((variant) => variant.active && variant.stock > 0)),
-    )
-    .slice(0, 8);
+  const recommendations = c.recommendations;
   const moveRecommendations = (direction: -1 | 1) =>
     recommendationsRef.current?.scrollBy({
       left: direction * (recommendationsRef.current.clientWidth * 0.72),
@@ -104,6 +85,7 @@ export function CartDrawer() {
             </header>
 
             <div className="min-h-0 flex-1 overflow-y-auto">
+              {c.hydrationError&&<div className="mx-5 mt-4 flex items-center justify-between gap-3 border border-red-900/20 bg-red-950/[.04] p-3 text-[10px] text-red-900 sm:mx-7"><span>{c.hydrationError}</span><button className="underline" onClick={c.retryHydration}>Retry</button></div>}
               {c.items.length === 0 ? (
                 <div className="grid min-h-[58vh] place-content-center px-8 text-center">
                   <ShoppingBag className="mx-auto text-black/35" size={30} />
@@ -172,7 +154,7 @@ export function CartDrawer() {
                                 this item before checkout.
                               </p>
                             ) : (
-                              !available && (
+                              !c.hydrationLoading && !available && (
                                 <p className="mt-2 text-[10px] leading-4 text-red-800">
                                   Availability changed. Please review this item.
                                 </p>

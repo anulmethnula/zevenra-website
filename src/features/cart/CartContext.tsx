@@ -1,12 +1,14 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
-import type { CartItem } from "../../types";
+import type { CartItem,CartProduct,ProductSummary } from "../../types";
 
 type CartState = {
   items: CartItem[];
@@ -18,6 +20,11 @@ type CartState = {
   remove: (id: string) => void;
   quantity: (id: string, n: number, maxStock?: number) => void;
   clear: () => void;
+  live:Record<string,CartProduct>;
+  hydrationLoading:boolean;
+  hydrationError:string;
+  retryHydration:()=>void;
+  recommendations:ProductSummary[];
 };
 const Context = createContext<CartState | null>(null),
   key = "zevenra-cart-v1";
@@ -33,8 +40,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
         return [];
       }
     }),
-    [open, setOpen] = useState(false);
+    [open, setOpen] = useState(false),[live,setLive]=useState<Record<string,CartProduct>>({}),[hydrationLoading,setHydrationLoading]=useState(false),[hydrationError,setHydrationError]=useState(""),[recommendations,setRecommendations]=useState<ProductSummary[]>([]),controller=useRef<AbortController>();
   useEffect(() => localStorage.setItem(key, JSON.stringify(items)), [items]);
+  const hydrate=useCallback(async()=>{controller.current?.abort();if(!items.length){setLive({});setRecommendations([]);setHydrationError("");return;}const request=new AbortController();controller.current=request;setHydrationLoading(true);setHydrationError("");try{const response=await fetch(`${import.meta.env.VITE_API_BASE||"/api"}/cart-products`,{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({variantIds:[...new Set(items.map(item=>item.variantId))]}),signal:request.signal}),payload=await response.json() as {items?:CartProduct[];error?:string};if(!response.ok)throw new Error(payload.error||"Cart availability temporarily unavailable");const map=Object.fromEntries((payload.items||[]).map(item=>[item.variantId,item]));setLive(map);const categories=[...new Set(Object.values(map).map(item=>item.categoryId).filter(Boolean))],exclude=[...new Set(items.map(item=>item.productId))],recommendationResponse=await fetch(`${import.meta.env.VITE_API_BASE||"/api"}/recommendations?category=${encodeURIComponent(categories.join(","))}&exclude=${encodeURIComponent(exclude.join(","))}`,{signal:request.signal});if(recommendationResponse.ok)setRecommendations(await recommendationResponse.json() as ProductSummary[]);}catch(reason){if(!(reason instanceof DOMException&&reason.name==="AbortError"))setHydrationError(reason instanceof Error?reason.message:"Cart availability temporarily unavailable");}finally{if(!request.signal.aborted)setHydrationLoading(false);}},[items]);
+  useEffect(()=>{void hydrate();return()=>controller.current?.abort();},[hydrate]);
   const value = useMemo<CartState>(
     () => ({
       items,
@@ -76,8 +85,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
           ),
         ),
       clear: () => setItems([]),
+      live,hydrationLoading,hydrationError,retryHydration:()=>{void hydrate();},recommendations,
     }),
-    [items, open],
+    [hydrate,hydrationError,hydrationLoading,items,live,open,recommendations],
   );
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }

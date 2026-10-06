@@ -18,6 +18,21 @@ const productSelect = `
   COALESCE((SELECT jsonb_agg(to_jsonb(v) ORDER BY v.color,v.size) FROM variants v WHERE v.product_id=p.id),'[]') AS variants
  FROM products p`;
 
+const productSummarySelect = `
+ SELECT p.id,p.slug,p.name,p.price,p.compare_at_price,p.category_id,p.subcategory,
+  p.featured,p.new_arrival,p.preorder_enabled,p.status,p.sort_order,
+  COALESCE((SELECT array_agg(pc.collection_id ORDER BY pc.collection_id) FROM product_collections pc WHERE pc.product_id=p.id),'{}') AS collection_ids,
+  COALESCE((SELECT jsonb_agg(media.value ORDER BY media.ordinality) FROM jsonb_array_elements(p.media) WITH ORDINALITY media(value,ordinality) WHERE media.value->>'type'='image' AND media.ordinality<=4),'[]') AS media,
+  COALESCE((SELECT jsonb_agg(jsonb_build_object('id',v.id,'color',v.color,'size',v.size,'stock',v.stock,'lowStockThreshold',v.low_stock_threshold,'active',v.active) ORDER BY v.color,v.size) FROM variants v WHERE v.product_id=p.id AND v.active=true),'[]') AS variants
+ FROM products p`;
+
+const mapProductSummary = (row: Record<string, unknown>) => ({
+  id:String(row.id||""),slug:String(row.slug||""),name:String(row.name||""),price:Number(row.price)||0,
+  compareAtPrice:row.compare_at_price==null?undefined:Number(row.compare_at_price)||0,categoryId:String(row.category_id||""),subcategory:String(row.subcategory||""),
+  collectionIds:Array.isArray(row.collection_ids)?row.collection_ids.map(String):[],media:Array.isArray(row.media)?row.media:[],featured:Boolean(row.featured),newArrival:Boolean(row.new_arrival),
+  preorderEnabled:Boolean(row.preorder_enabled),status:"published" as const,sortOrder:Number(row.sort_order)||0,variants:Array.isArray(row.variants)?row.variants:[],
+});
+
 export async function listProducts(publishedOnly = false) {
   const result = await query<Record<string, unknown>>(
     `${productSelect}${publishedOnly ? " WHERE p.status='published'" : ""} ORDER BY p.sort_order,p.name`,
@@ -26,17 +41,39 @@ export async function listProducts(publishedOnly = false) {
 }
 
 export async function listPublicProducts(input: Record<string, unknown>) {
-  const page = Math.max(1, Math.floor(Number(input.page) || 1)), pageSize = Math.min(48, Math.max(1, Math.floor(Number(input.pageSize) || 24))), search = String(input.search || "").trim().slice(0, 100), category = String(input.category || ""), collection = String(input.collection || ""), sort = String(input.sort || "featured");
+  const page = Math.max(1, Math.floor(Number(input.page) || 1)), pageSize = Math.min(48, Math.max(1, Math.floor(Number(input.pageSize) || 24))), search = String(input.search || input.q || "").trim().slice(0, 100), category = String(input.category || "").trim().slice(0,100), collection = String(input.collection || "").trim().slice(0,100), size=String(input.size||"").trim().slice(0,60), color=String(input.color||"").trim().slice(0,60), maxPrice=Math.min(10000000,Math.max(0,Number(input.maxPrice)||0)), sort = String(input.sort || "newest");
   const values: unknown[] = [], conditions = ["p.status='published'"];
-  if (search) { values.push(`%${search.toLowerCase()}%`); conditions.push(`(lower(p.name) LIKE $${values.length} OR lower(p.description) LIKE $${values.length})`); }
-  if (category) { values.push(category); conditions.push(`(p.category_id=$${values.length} OR EXISTS(SELECT 1 FROM categories child WHERE child.id=p.category_id AND child.parent_id=$${values.length}))`); }
-  if (collection) { values.push(collection); conditions.push(`EXISTS(SELECT 1 FROM product_collections pc WHERE pc.product_id=p.id AND pc.collection_id=$${values.length})`); }
+  if (search) { values.push(`%${search.toLowerCase()}%`); conditions.push(`(lower(p.name) LIKE $${values.length} OR lower(p.short_description) LIKE $${values.length} OR EXISTS(SELECT 1 FROM unnest(p.tags) tag WHERE lower(tag) LIKE $${values.length}) OR EXISTS(SELECT 1 FROM categories c LEFT JOIN categories parent ON parent.id=c.parent_id WHERE c.id=p.category_id AND (lower(c.name) LIKE $${values.length} OR lower(COALESCE(parent.name,'')) LIKE $${values.length})))`); }
+  if (category && category!=="all") { values.push(category); conditions.push(`EXISTS(SELECT 1 FROM categories selected LEFT JOIN categories child ON child.parent_id=selected.id WHERE (selected.id=$${values.length} OR selected.slug=$${values.length}) AND (p.category_id=selected.id OR p.category_id=child.id))`); }
+  if (collection && collection!=="all") { values.push(collection); conditions.push(`EXISTS(SELECT 1 FROM product_collections pc JOIN collections c ON c.id=pc.collection_id WHERE pc.product_id=p.id AND (c.id=$${values.length} OR c.slug=$${values.length}))`); }
   if (String(input.new) === "true") conditions.push("p.new_arrival=true");
-  const orders: Record<string,string> = { featured:"p.featured DESC,p.sort_order,p.name", newest:"p.new_arrival DESC,p.updated_at DESC", price_asc:"p.price ASC,p.name", price_desc:"p.price DESC,p.name" }, order = orders[sort] || orders.featured;
+  if (String(input.available)==="true") conditions.push("EXISTS(SELECT 1 FROM variants av WHERE av.product_id=p.id AND av.active=true AND av.stock>0)");
+  if(size){values.push(size);conditions.push(`EXISTS(SELECT 1 FROM variants sv WHERE sv.product_id=p.id AND sv.active=true AND sv.size=$${values.length})`);}
+  if(color){values.push(color);conditions.push(`EXISTS(SELECT 1 FROM variants cv WHERE cv.product_id=p.id AND cv.active=true AND cv.color=$${values.length})`);}
+  if(maxPrice){values.push(maxPrice);conditions.push(`p.price<=$${values.length}`);}
+  const orders: Record<string,string> = { featured:"p.featured DESC,p.sort_order,p.name", newest:"p.new_arrival DESC,p.updated_at DESC", low:"p.price ASC,p.name", high:"p.price DESC,p.name", price_asc:"p.price ASC,p.name", price_desc:"p.price DESC,p.name" }, order = orders[sort] || orders.newest;
   const where = ` WHERE ${conditions.join(" AND ")}`, total = Number((await query<{count:number}>(`SELECT count(*)::int count FROM products p${where}`, values)).rows[0]?.count || 0);
   values.push(pageSize, (page - 1) * pageSize);
-  const rows = await query<Record<string,unknown>>(`${productSelect}${where} ORDER BY ${order} LIMIT $${values.length-1} OFFSET $${values.length}`, values);
-  return { items: rows.rows.map(mapProduct), page, pageSize, total, pageCount: Math.max(1, Math.ceil(total/pageSize)) };
+  const [rows,filterRows]=await Promise.all([query<Record<string,unknown>>(`${productSummarySelect}${where} ORDER BY ${order} LIMIT $${values.length-1} OFFSET $${values.length}`, values),query<Record<string,unknown>>(`SELECT COALESCE(min(p.price),0) min_price,COALESCE(max(p.price),0) max_price,COALESCE(array_agg(DISTINCT v.size) FILTER(WHERE v.active AND v.size<>''),'{}') sizes,COALESCE(array_agg(DISTINCT v.color) FILTER(WHERE v.active AND v.color<>''),'{}') colors FROM products p LEFT JOIN variants v ON v.product_id=p.id WHERE p.status='published'`)]);
+  const filters=filterRows.rows[0]||{};
+  return { items: rows.rows.map(mapProductSummary), page, pageSize, total, pageCount: Math.max(1, Math.ceil(total/pageSize)),filters:{sizes:filters.sizes||[],colors:filters.colors||[],minPrice:Number(filters.min_price)||0,maxPrice:Number(filters.max_price)||0} };
+}
+
+export async function listHomepageProducts(sections: Array<{type:string;referenceId?:string}>) {
+  const references=sections.map(section=>section.referenceId).filter(Boolean) as string[];
+  const rows=await query<Record<string,unknown>>(`${productSummarySelect} WHERE p.status='published' AND (p.new_arrival=true OR p.featured=true OR p.id=ANY($1::text[]) OR p.category_id=ANY($1::text[]) OR EXISTS(SELECT 1 FROM categories hc WHERE hc.id=p.category_id AND hc.parent_id=ANY($1::text[])) OR EXISTS(SELECT 1 FROM product_collections pc WHERE pc.product_id=p.id AND pc.collection_id=ANY($1::text[]))) ORDER BY p.sort_order,p.name LIMIT 64`,[references]);
+  return rows.rows.map(mapProductSummary);
+}
+
+export async function getCartProducts(variantIds:string[]){
+  if(!variantIds.length)return [];
+  const rows=await query<Record<string,unknown>>(`SELECT p.id product_id,p.slug,p.name,p.price,p.category_id,p.preorder_enabled,p.status,COALESCE((SELECT media.value->>'url' FROM jsonb_array_elements(p.media) WITH ORDINALITY media(value,ordinality) WHERE media.value->>'type'='image' ORDER BY media.ordinality LIMIT 1),'') thumbnail,v.id variant_id,v.sku,v.color,v.size,v.stock,v.active FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=ANY($1::text[])`,[variantIds]);
+  return rows.rows.map(row=>({productId:String(row.product_id),slug:String(row.slug),name:String(row.name),thumbnail:String(row.thumbnail||""),categoryId:String(row.category_id||""),variantId:String(row.variant_id),sku:String(row.sku||""),color:String(row.color||""),size:String(row.size||""),currentPrice:Number(row.price)||0,stock:Number(row.stock)||0,active:Boolean(row.active)&&row.status==="published",published:row.status==="published",preorderEnabled:Boolean(row.preorder_enabled)}));
+}
+
+export async function listRecommendations(categoryIds:string[],excludeIds:string[]){
+  const rows=await query<Record<string,unknown>>(`${productSummarySelect} WHERE p.status='published' AND NOT(p.id=ANY($1::text[])) AND (p.preorder_enabled=true OR EXISTS(SELECT 1 FROM variants rv WHERE rv.product_id=p.id AND rv.active=true AND rv.stock>0)) ORDER BY (p.category_id=ANY($2::text[])) DESC,p.featured DESC,p.sort_order LIMIT 8`,[excludeIds,categoryIds]);
+  return rows.rows.map(mapProductSummary);
 }
 
 export async function getProductById(id: string) {
@@ -90,6 +127,7 @@ export async function getProductBySlug(slug: string) {
   );
   return result.rows[0] ? mapProduct(result.rows[0]) : null;
 }
+export async function listPublishedProductSlugs(){return (await query<{slug:string}>("SELECT slug FROM products WHERE status='published' ORDER BY slug")).rows.map(row=>row.slug);}
 
 export async function listCategories() {
   return (
@@ -112,6 +150,7 @@ export async function listSizeCharts() {
     )
   ).rows.map(mapSizeChart);
 }
+export async function getSizeChartById(id:string){if(!id)return null;const row=(await query<Record<string,unknown>>("SELECT * FROM size_charts WHERE id=$1 LIMIT 1",[id])).rows[0];return row?mapSizeChart(row):null;}
 export async function listNavigation() {
   return (
     await query<Record<string, unknown>>(
@@ -199,39 +238,16 @@ export async function listSettings() {
   ).rows;
 }
 
-export async function storeBootstrap() {
-  const [
-    products,
-    categories,
-    collections,
-    sizeCharts,
-    navigation,
-    homepageSections,
-    settings,
-    couriers,
-    deliveryRates,
-  ] = await Promise.all([
-    listProducts(true),
-    listCategories(),
-    listCollections(),
-    listSizeCharts(),
-    listNavigation(),
-    listHomepageSections(),
-    listSettings(),
-    listCouriers(true),
-    listDeliveryRates(),
-  ]);
-  return {
-    products,
-    categories,
-    collections,
-    sizeCharts,
-    navigation,
-    homepageSections,
-    settings,
-    couriers,
-    deliveryRates,
-  };
+export async function publicStoreBootstrap() {
+  const [categories,collections,navigation,homepageSections,settings]=await Promise.all([listCategories(),listCollections(),listNavigation(),listHomepageSections(),listSettings()]);
+  const allowed=new Set(["brandName","tagline","logoLight","logoDark","favicon","announcement","whatsapp","email","phone","instagram","tiktok","currency","defaultTitle","defaultDescription","ogImage","hero"]);
+  return {categories:categories.filter(item=>item.active),collections:collections.filter(item=>item.active),navigation:navigation.filter(item=>item.visible),homepageSections,settings:settings.filter(row=>allowed.has(row.key))};
+}
+
+export async function publicCheckoutConfig(){
+  const [settings,couriers,rates]=await Promise.all([listSettings(),listCouriers(true),listDeliveryRates()]);
+  const allowed=new Set(["codEnabled","bankTransferEnabled","bankEnabled","bankName","bankAccountName","accountName","bankAccountNumber","accountNumber","bankBranch","branch","bankInstructions","deliveryEnabled","deliveryFlatFee","deliveryFee","freeDeliveryThreshold","defaultCourierProviderId","currency","storeOpen","ordersEnabled"]);
+  return {settings:settings.filter(row=>allowed.has(row.key)),couriers:couriers.map(({id,name,pricingMode,flatRate,active})=>({id,name,pricingMode,flatRate,active})),deliveryRates:rates.filter(rate=>rate.active).map(({id,courierProviderId,name,fee,active,districts,cities,postalCodes,fallback,sortOrder})=>({id,courierProviderId,name,fee,active,districts,cities,postalCodes,fallback,sortOrder}))};
 }
 
 type Entity =

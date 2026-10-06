@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { money } from "../config/site";
 import { useStore } from "../features/store/StoreContext";
-import type { Product } from "../types";
+import type { ProductSummary } from "../types";
 
 const swatchMap: Record<string, string> = {
   black: "#171717",
@@ -38,7 +38,7 @@ function swatch(color: string) {
   return key ? swatchMap[key] : "#8e8377";
 }
 
-export function ProductCard({ product }: { product: Product }) {
+export function ProductCard({ product }: { product: ProductSummary }) {
   const { data } = useStore(),
     active = product.variants.filter((variant) => variant.active),
     out = active.length === 0 || active.every((variant) => variant.stock < 1),

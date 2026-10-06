@@ -12,6 +12,7 @@ import { api } from "../services/api";
 import { uploadPaymentReceipt } from "../services/paymentReceiptUpload";
 import type { PaymentMethod } from "../types";
 import { checkoutCourier, deliveryQuote } from "../utils/delivery";
+import { useCheckoutConfig } from "../hooks/usePublicData";
 
 const districts = ["Ampara","Anuradhapura","Badulla","Batticaloa","Colombo","Galle","Gampaha","Hambantota","Jaffna","Kalutara","Kandy","Kegalle","Kilinochchi","Kurunegala","Mannar","Matale","Matara","Monaragala","Mullaitivu","Nuwara Eliya","Polonnaruwa","Puttalam","Ratnapura","Trincomalee","Vavuniya"] as const;
 const schema = z.object({
@@ -26,7 +27,7 @@ const schema = z.object({
 const enter = { initial:{ opacity:0,y:12 }, animate:{ opacity:1,y:0 } };
 
 export default function CheckoutPage() {
-  const cart=useCart(), navigate=useNavigate(), formRef=useRef<HTMLFormElement>(null), {data}=useStore(), {user}=useCustomerAuth(), {settings}=data;
+  const cart=useCart(), navigate=useNavigate(), formRef=useRef<HTMLFormElement>(null), {data}=useStore(), checkout=useCheckoutConfig(), {user}=useCustomerAuth(), raw=Object.fromEntries((checkout.data?.settings||[]).map(row=>[row.key,row.value])), bool=(value:unknown)=>value===true||String(value).toLowerCase()==="true", settings={...data.settings,codEnabled:bool(raw.codEnabled),bankEnabled:bool(raw.bankEnabled??raw.bankTransferEnabled),bankName:String(raw.bankName||""),accountName:String(raw.accountName??raw.bankAccountName??""),accountNumber:String(raw.accountNumber??raw.bankAccountNumber??""),branch:String(raw.branch??raw.bankBranch??""),bankInstructions:String(raw.bankInstructions||""),deliveryEnabled:bool(raw.deliveryEnabled),deliveryFee:Number(raw.deliveryFee??raw.deliveryFlatFee)||0,freeDeliveryThreshold:Number(raw.freeDeliveryThreshold)||0,defaultCourierProviderId:String(raw.defaultCourierProviderId||""),storeOpen:bool(raw.storeOpen),ordersEnabled:bool(raw.ordersEnabled)};
   const savedName=[user?.firstName,user?.lastName].filter(Boolean).join(" ");
   const bankConfigured=Boolean(settings.bankEnabled&&settings.bankName.trim()&&settings.accountName.trim()&&settings.accountNumber.trim());
   const availablePayments=useMemo<PaymentMethod[]>(()=>[...(settings.codEnabled?["cod" as const]:[]),...(bankConfigured?["bank" as const]:[])],[settings.codEnabled,bankConfigured]);
@@ -34,11 +35,12 @@ export default function CheckoutPage() {
   const [error,setError]=useState(""), [fieldErrors,setFieldErrors]=useState<Record<string,string>>({}), [busy,setBusy]=useState(false), [receiptBusy,setReceiptBusy]=useState(false), [receiptUrl,setReceiptUrl]=useState(""), [receiptName,setReceiptName]=useState("");
   useEffect(()=>{ if(!availablePayments.includes(payment)&&availablePayments[0]) setPayment(availablePayments[0]); },[availablePayments,payment]);
   if(!cart.items.length||cart.items.some(i=>i.isPreorder)) return <Navigate to="/cart" replace/>;
-  const productFor=(id:string)=>data.products.find(p=>p.id===id&&p.status==="published");
-  const stockFor=(pid:string,vid:string)=>productFor(pid)?.variants.find(v=>v.id===vid&&v.active)?.stock??0;
-  const price=(i:(typeof cart.items)[number])=>productFor(i.productId)?.price??i.unitPrice;
+  if(checkout.loading)return <main className="container min-h-[70vh] py-20"><div className="home-skeleton"><div/><div/><div/><div/></div></main>;
+  if(checkout.error)return <main className="container grid min-h-[70vh] place-content-center py-20 text-center"><h1 className="display text-5xl">Checkout is temporarily unavailable.</h1><p className="mt-3 text-sm text-ink/55">Your bag is safe. Please try again.</p><button className="btn mx-auto mt-6" onClick={()=>void checkout.retry()}>Retry</button></main>;
+  const stockFor=(_pid:string,vid:string)=>cart.live[vid]?.stock??0;
+  const price=(i:(typeof cart.items)[number])=>cart.live[i.variantId]?.currentPrice??i.unitPrice;
   const subtotal=cart.items.reduce((sum,i)=>sum+price(i)*i.quantity,0), addressReady=Boolean(district&&city.trim().length>=2&&(!postalCode||/^\d{5}$/.test(postalCode)));
-  const courier=checkoutCourier(data.couriers,settings.defaultCourierProviderId), quote=addressReady?deliveryQuote(courier,data.deliveryRates,{district,city,postalCode}):undefined, deliveryReady=!settings.deliveryEnabled||Boolean(quote);
+  const courier=checkoutCourier(checkout.data?.couriers||[],settings.defaultCourierProviderId), quote=addressReady?deliveryQuote(courier,checkout.data?.deliveryRates||[],{district,city,postalCode}):undefined, deliveryReady=!settings.deliveryEnabled||Boolean(quote);
   const deliveryFee=settings.freeDeliveryThreshold>0&&subtotal>=settings.freeDeliveryThreshold?0:settings.deliveryEnabled?(quote?.fee??0):0;
   const clearError=(name:string)=>setFieldErrors(current=>{if(!current[name])return current;const next={...current};delete next[name];return next;});
   const focusFirst=(errors:Record<string,string>)=>requestAnimationFrame(()=>{const el=formRef.current?.querySelector<HTMLElement>(`[name="${Object.keys(errors)[0]}"]`);el?.scrollIntoView({behavior:"smooth",block:"center"});el?.focus({preventScroll:true});});

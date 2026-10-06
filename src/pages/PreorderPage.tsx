@@ -5,8 +5,8 @@ import { z } from "zod";
 import { Seo } from "../components/Seo";
 import { money } from "../config/site";
 import { useCustomerAuth } from "../features/account/CustomerAuthContext";
-import { useStore } from "../features/store/StoreContext";
 import { api } from "../services/api";
+import { useProduct } from "../hooks/usePublicData";
 
 const requestSchema = z.object({
   customerName: z.string().trim().min(2, "Enter your full name.").max(100),
@@ -26,11 +26,9 @@ const requestSchema = z.object({
 export default function PreorderPage() {
   const { slug } = useParams(),
     [search] = useSearchParams(),
-    { data } = useStore(),
+    request=useProduct(slug||""),
     { user } = useCustomerAuth(),
-    product = data.products.find(
-      (p) => p.slug === slug && p.status === "published",
-    ),
+    product = request.data?.product,
     variant = product?.variants.find(
       (v) => v.id === search.get("variant") && v.active,
     ),
@@ -45,6 +43,7 @@ export default function PreorderPage() {
     () => [user?.firstName, user?.lastName].filter(Boolean).join(" "),
     [user],
   );
+  if(request.loading)return <main className="container min-h-[70vh] py-36"><div className="home-skeleton"><div/><div/></div></main>;
   if (!product || !variant || !product.preorderEnabled || variant.stock > 0)
     return (
       <Navigate to={product ? "/product/" + product.slug : "/shop"} replace />

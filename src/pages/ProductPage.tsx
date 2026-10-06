@@ -15,17 +15,15 @@ import {
 import { AnimatePresence, motion } from "framer-motion";
 import { money } from "../config/site";
 import { useCart } from "../features/cart/CartContext";
-import { useStore } from "../features/store/StoreContext";
 import { ProductCard } from "../components/ProductCard";
 import { Seo } from "../components/Seo";
 import type { Media } from "../types";
+import { useProduct } from "../hooks/usePublicData";
 
 export default function ProductPage() {
   const { slug } = useParams(),
     cart = useCart(),
-    { data } = useStore();
-  const products = data.products.filter((p) => p.status === "published"),
-    product = products.find((p) => p.slug === slug);
+    request = useProduct(slug||""),product=request.data?.product;
   const [color, setColor] = useState(
       product?.variants.find((v) => v.active)?.color || "",
     ),
@@ -43,10 +41,12 @@ export default function ProductPage() {
     setActiveMedia(0);
   }, [product]);
 
+  if(request.loading)return <div className="container min-h-[70vh] pt-36"><div className="home-skeleton"><div/><div/><div/><div/></div></div>;
   if (!product)
     return (
       <div className="container grid min-h-[70vh] place-content-center pt-28 text-center">
-        <h1 className="display text-5xl">Piece not found.</h1>
+        <h1 className="display text-5xl">{request.error==="Not found"?"Piece not found.":"This piece is temporarily unavailable."}</h1>
+        {request.error!=="Not found"&&<button className="btn mx-auto mt-6" onClick={()=>void request.retry()}>Retry</button>}
         <Link to="/shop" className="mt-5 underline">
           Return to shop
         </Link>
@@ -61,9 +61,7 @@ export default function ProductPage() {
     sold =
       product.variants.filter((v) => v.active).every((v) => v.stock < 1) &&
       !product.preorderEnabled,
-    chart = product.sizeChartId
-      ? data.sizeCharts.find((x) => x.id === product.sizeChartId)
-      : undefined,
+    chart = request.data?.sizeChart,
     primaryImage =
       product.media.find((media) => media.type === "image")?.url || "",
     inCart = variant
@@ -279,9 +277,7 @@ export default function ProductPage() {
           <p className="eyebrow text-bronze">Continue exploring</p>
           <h2 className="display mt-3 text-5xl">You may also like</h2>
           <div className="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
-            {products
-              .filter((p) => p.id !== product.id)
-              .slice(0, 4)
+            {(request.data?.related||[])
               .map((p) => (
                 <ProductCard key={p.id} product={p} />
               ))}

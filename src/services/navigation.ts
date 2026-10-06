@@ -1,4 +1,4 @@
-import type { Category, Product } from "../types";
+import type { Category } from "../types";
 export type NavigationCategory = Category & {
   children: Category[];
   publishedProductCount: number;
@@ -19,37 +19,23 @@ export function getDescendantCategoryIds(
 }
 export function getNavigationCategories(
   categories: Category[],
-  products: Product[],
-  allowEmpty = true,
 ): NavigationCategory[] {
-  const publishedProducts = products.filter(
-      (product) => product.status === "published",
-    ),
-    hasNavigationConfig = categories.some(
+  const hasNavigationConfig = categories.some(
       (category) => category.showInNavigation,
     ),
     rootVisible = (category: Category) =>
       category.active && (!hasNavigationConfig || category.showInNavigation);
-  const countProducts = (categoryId: string) => {
-    const ids = getDescendantCategoryIds(categoryId, categories);
-    return publishedProducts.filter((product) =>
-      ids.includes(product.categoryId),
-    ).length;
-  };
   return categories
     .filter((category) => !category.parentId && rootVisible(category))
     .map((category) => {
-      const publishedProductCount = countProducts(category.id);
       const children = categories
         .filter(
           (child) =>
             child.parentId === category.id &&
-            child.active &&
-            (allowEmpty || countProducts(child.id) > 0),
+            child.active,
         )
         .sort((a, b) => a.sortOrder - b.sortOrder);
-      return { ...category, children, publishedProductCount };
+      return { ...category, children, publishedProductCount:0 };
     })
-    .filter((category) => allowEmpty || category.publishedProductCount > 0)
     .sort((a, b) => a.sortOrder - b.sortOrder);
 }

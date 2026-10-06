@@ -1,30 +1,20 @@
 import { Link } from "react-router-dom";
 import { Minus, Plus } from "lucide-react";
 import { useCart } from "../features/cart/CartContext";
-import { useStore } from "../features/store/StoreContext";
 import { money } from "../config/site";
 import { Seo } from "../components/Seo";
 
 export default function CartPage() {
   const c = useCart(),
-    { data } = useStore();
+    live=c.live;
   const currentPrice = (item: (typeof c.items)[number]) =>
-    data.products.find(
-      (p) => p.id === item.productId && p.status === "published",
-    )?.price ?? item.unitPrice;
+    live[item.variantId]?.currentPrice ?? item.unitPrice;
   const currentStock = (item: (typeof c.items)[number]) =>
-    data.products
-      .find((p) => p.id === item.productId && p.status === "published")
-      ?.variants.find((v) => v.id === item.variantId && v.active)?.stock ?? 0;
+    live[item.variantId]?.stock ?? 0;
   const valid = (item: (typeof c.items)[number]) => {
     if (item.isPreorder) return false;
-    const product = data.products.find(
-        (p) => p.id === item.productId && p.status === "published",
-      ),
-      variant = product?.variants.find(
-        (v) => v.id === item.variantId && v.active,
-      );
-    return Boolean(product && variant && variant.stock >= item.quantity);
+    const variant=live[item.variantId];
+    return Boolean(variant?.active&&variant.published&&variant.stock>=item.quantity);
   };
   const displaySubtotal = c.items.reduce(
       (sum, item) => sum + currentPrice(item) * item.quantity,
@@ -35,6 +25,7 @@ export default function CartPage() {
     <div className="container min-h-[70vh] pb-24 pt-36 lg:pt-44">
       <Seo title="Your Bag" />
       <p className="eyebrow text-ink/50">Your selection</p>
+      {c.hydrationError&&<div className="mt-6 flex items-center justify-between gap-4 border border-red-900/20 bg-red-950/[.04] p-4 text-xs text-red-900"><span>{c.hydrationError}</span><button className="underline" onClick={c.retryHydration}>Retry</button></div>}
       <h1 className="display mt-3 text-5xl md:text-7xl">Bag · {c.count}</h1>
       {!c.items.length ? (
         <div className="mt-20 border-y hairline py-24 text-center">
@@ -76,7 +67,7 @@ export default function CartPage() {
                             cannot be checked out from the bag.
                           </p>
                         )}
-                        {!available && !i.isPreorder && (
+                        {!c.hydrationLoading && !available && !i.isPreorder && (
                           <p className="mt-2 text-xs text-red-800">
                             This option is no longer available. Please remove it
                             or choose another option.

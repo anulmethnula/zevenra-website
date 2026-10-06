@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { CategorySection, HomepageSectionRenderer, ProductSection } from "../components/home/HomepageSectionRenderer";
 import { Seo } from "../components/Seo";
 import { useStore } from "../features/store/StoreContext";
+import { useHomepageData } from "../hooks/usePublicData";
 
 const defaultVideo = "/media/hero-final-v2.mp4", defaultPoster = "/brand/hero.jpg";
 const videoLoadTimeout = 15000;
@@ -12,8 +13,8 @@ function prefersReducedMotion() {
 }
 
 export default function HomePage() {
-  const { data, loading, error, retry } = useStore(), hero = data.settings.hero, videoRef = useRef<HTMLVideoElement>(null), [videoReady, setVideoReady] = useState(false), [videoFailed, setVideoFailed] = useState(false), [reducedMotion, setReducedMotion] = useState(prefersReducedMotion);
-  const enabled = data.homepageSections.filter(section => section.enabled).sort((a,b) => a.sortOrder-b.sortOrder);
+  const { data, error:storeError, retry:retryStore } = useStore(), home=useHomepageData(), hero = data.settings.hero, videoRef = useRef<HTMLVideoElement>(null), [videoReady, setVideoReady] = useState(false), [videoFailed, setVideoFailed] = useState(false), [reducedMotion, setReducedMotion] = useState(prefersReducedMotion);
+  const content=home.data,enabled = (content?.sections||[]).filter(section => section.enabled).sort((a,b) => a.sortOrder-b.sortOrder);
   useEffect(() => {
     const preference = matchMedia("(prefers-reduced-motion: reduce)"), updatePreference = () => setReducedMotion(preference.matches);
     preference.addEventListener("change", updatePreference);
@@ -33,9 +34,9 @@ export default function HomePage() {
     return () => { clearTimeout(timer); clearTimeout(loadTimer); video.removeEventListener("loadeddata", ready); video.removeEventListener("canplay", ready); document.removeEventListener("visibilitychange", visibility); };
   }, [hero.desktopVideo, hero.mobileVideo, reducedMotion]);
   const poster = hero.poster || hero.fallbackImage || defaultPoster, showVideo = hero.videoEnabled && !videoFailed && !reducedMotion, showFallback = reducedMotion || !hero.videoEnabled || videoFailed;
-  const products = data.products.filter(product => product.status === "published"), activeCategories = data.categories.filter(category => category.active), categories = activeCategories.filter(category => category.showOnHomepage || category.featured).sort((a,b)=>a.sortOrder-b.sortOrder);
-  return <><Seo title="The Art of Becoming" description={data.settings.defaultDescription} image={poster}/><section className="home-hero">{showFallback && <img className="home-hero__fallback" src={poster} alt="ZEVENRA fashion and lifestyle collection" fetchPriority="high" decoding="async"/>}{showVideo && <video ref={videoRef} className={"home-hero__video " + (videoReady ? "home-hero__video--ready" : "")} autoPlay muted loop playsInline preload="auto" onLoadedData={() => setVideoReady(true)} onCanPlay={() => setVideoReady(true)} onError={() => setVideoFailed(true)}><source media="(max-width: 767px)" src={hero.mobileVideo || hero.desktopVideo || defaultVideo}/><source src={hero.desktopVideo || defaultVideo}/></video>}<div className="home-hero__shade"/><Link to={hero.ctaLink || "/shop"} className="home-hero__cta">{hero.ctaLabel || "EXPLORE SHOP"}</Link></section>
-    {error && <section className="store-notice" role="status"><span>Live store content could not be refreshed.</span><button onClick={retry}>Retry</button></section>}
-    {loading ? <div className="container home-skeleton" aria-label="Loading homepage content"><div/><div/><div/><div/></div> : enabled.length ? enabled.map(section => <HomepageSectionRenderer key={section.id} section={section} data={data}/>) : <><ProductSection title="New arrivals" products={products.filter(product => product.newArrival)} link="/shop?new=true"/><CategorySection categories={categories.length ? categories : activeCategories.filter(category => !category.parentId).sort((a,b)=>a.sortOrder-b.sortOrder)}/><ProductSection title="Featured" products={products.filter(product => product.featured)}/></>}
+  const products = content?.products||[], activeCategories = content?.categories||data.categories, categories = activeCategories.filter(category => category.showOnHomepage || category.featured).sort((a,b)=>a.sortOrder-b.sortOrder);
+  return <><Seo title="The Art of Becoming" description={data.settings.defaultDescription} image={poster}/><section className="home-hero">{showFallback && <img className="home-hero__fallback" src={poster} alt="ZEVENRA fashion and lifestyle collection" decoding="async"/>}{showVideo && <video ref={videoRef} className={"home-hero__video " + (videoReady ? "home-hero__video--ready" : "")} autoPlay muted loop playsInline preload="auto" onLoadedData={() => setVideoReady(true)} onCanPlay={() => setVideoReady(true)} onError={() => setVideoFailed(true)}><source media="(max-width: 767px)" src={hero.mobileVideo || hero.desktopVideo || defaultVideo}/><source src={hero.desktopVideo || defaultVideo}/></video>}<div className="home-hero__shade"/><Link to={hero.ctaLink || "/shop"} className="home-hero__cta">{hero.ctaLabel || "EXPLORE SHOP"}</Link></section>
+    {(storeError||home.error) && <section className="store-notice" role="status"><span>Live store content could not be refreshed.</span><button onClick={()=>{void retryStore();void home.retry();}}>Retry</button></section>}
+    {home.loading ? <div className="container home-skeleton" aria-label="Loading homepage content"><div/><div/><div/><div/></div> : content && enabled.length ? enabled.map(section => <HomepageSectionRenderer key={section.id} section={section} data={content} settings={data.settings}/>) : <><ProductSection title="New arrivals" products={products.filter(product => product.newArrival)} link="/shop?new=true"/><CategorySection categories={categories.length ? categories : activeCategories.filter(category => !category.parentId).sort((a,b)=>a.sortOrder-b.sortOrder)}/><ProductSection title="Featured" products={products.filter(product => product.featured)}/></>}
   </>;
 }

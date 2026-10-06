@@ -38,6 +38,10 @@ export type Product = {
   variants: Variant[];
   sizeChartId?: string;
 };
+export type ProductSummary = Pick<Product,"id"|"slug"|"name"|"price"|"compareAtPrice"|"categoryId"|"subcategory"|"collectionIds"|"media"|"featured"|"newArrival"|"preorderEnabled"|"status"|"sortOrder"> & { variants: Array<Pick<Variant,"id"|"color"|"size"|"stock"|"lowStockThreshold"|"active">> };
+export type ShopResponse = {items:ProductSummary[];page:number;pageSize:number;total:number;pageCount:number;filters:{sizes:string[];colors:string[];minPrice:number;maxPrice:number}};
+export type HomepageData = {sections:HomepageSection[];products:ProductSummary[];categories:Category[];collections:Collection[]};
+export type CartProduct = {productId:string;slug:string;name:string;thumbnail:string;categoryId:string;variantId:string;sku:string;color:string;size:string;currentPrice:number;stock:number;active:boolean;published:boolean;preorderEnabled:boolean};
 export type Category = {
   id: string;
   name: string;
