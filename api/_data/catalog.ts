@@ -11,6 +11,7 @@ import {
   mapProduct,
   mapSizeChart,
 } from "./mappers.js";
+import { buildPublicCheckoutConfig } from "./public-checkout.js";
 
 const productSelect = `
  SELECT p.*,
@@ -246,8 +247,7 @@ export async function publicStoreBootstrap() {
 
 export async function publicCheckoutConfig(){
   const [settings,couriers,rates]=await Promise.all([listSettings(),listCouriers(true),listDeliveryRates()]);
-  const allowed=new Set(["codEnabled","bankTransferEnabled","bankEnabled","bankName","bankAccountName","accountName","bankAccountNumber","accountNumber","bankBranch","branch","bankInstructions","deliveryEnabled","deliveryFlatFee","deliveryFee","freeDeliveryThreshold","defaultCourierProviderId","currency","storeOpen","ordersEnabled"]);
-  return {settings:settings.filter(row=>allowed.has(row.key)),couriers:couriers.map(({id,name,pricingMode,flatRate,active})=>({id,name,pricingMode,flatRate,active})),deliveryRates:rates.filter(rate=>rate.active).map(({id,courierProviderId,name,fee,active,districts,cities,postalCodes,fallback,sortOrder})=>({id,courierProviderId,name,fee,active,districts,cities,postalCodes,fallback,sortOrder}))};
+  return buildPublicCheckoutConfig(settings,couriers,rates);
 }
 
 type Entity =

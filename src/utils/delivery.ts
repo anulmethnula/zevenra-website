@@ -1,4 +1,6 @@
 import type { CourierProvider, DeliveryRate } from "../types";
+type PublicCourier=Pick<CourierProvider,"id"|"pricingMode"|"flatRate"|"active">;
+type PublicDeliveryRate=Pick<DeliveryRate,"courierProviderId"|"fee"|"active"|"districts"|"cities"|"postalCodes"|"fallback"|"sortOrder">;
 
 export const legacyCourierId = "courier-legacy-zone";
 export const defaultCourier: CourierProvider = {
@@ -170,7 +172,7 @@ const postalMatches = (rule: string, postalCode: string) => {
     : postalCode === clean;
 };
 export function findDeliveryZone(
-  zones: DeliveryRate[],
+  zones: PublicDeliveryRate[],
   address: { district: string; city: string; postalCode: string },
   courierProviderId?: string,
 ) {
@@ -211,14 +213,14 @@ export function findDeliveryZone(
   return matches[0]?.zone || active.find((zone) => zone.fallback);
 }
 export function checkoutCourier(
-  couriers: CourierProvider[],
+  couriers: PublicCourier[],
   defaultId: string,
 ) {
   return couriers.find((courier) => courier.id === defaultId && courier.active);
 }
 export function deliveryQuote(
-  courier: CourierProvider | undefined,
-  zones: DeliveryRate[],
+  courier: PublicCourier | undefined,
+  zones: PublicDeliveryRate[],
   address: { district: string; city: string; postalCode: string },
 ) {
   if (!courier) return undefined;

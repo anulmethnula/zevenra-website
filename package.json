@@ -11,6 +11,7 @@
     "preview": "vite preview",
     "dev:demo": "vite --mode demo",
     "qa": "npm run typecheck && npm run lint && npm run build",
+    "test:checkout-config": "node --experimental-strip-types --test tests/checkout-config.test.ts",
     "dev:full": "node --env-file=.env.local scripts/dev-full.mjs",
     "admin:hash-password": "node scripts/hash-admin-password.mjs",
     "db:migrate": "node scripts/db-migrate.mjs",
