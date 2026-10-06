@@ -20,6 +20,7 @@ import { adminApi } from "../../services/adminApi";
 import { uploadAdminMedia } from "../../services/cloudinaryUpload";
 import { useStore } from "../../features/store/StoreContext";
 import { adminToast } from "../../components/admin/AdminToasts";
+import { CourierRateSheetImport } from "../../components/admin/CourierRateSheetImport";
 import HomepageBuilder from "../../components/admin/homepage/HomepageBuilder";
 import type {
   Category,
@@ -1648,6 +1649,8 @@ function DeliveryRates() {
         <button type="button" role="tab" aria-selected={deliveryTab === "couriers"} className={deliveryTab === "couriers" ? "rounded-lg bg-black px-5 py-3 text-xs text-white" : "rounded-lg px-5 py-3 text-xs text-black/55"} onClick={() => setDeliveryTab("couriers")}>Courier Providers</button>
         <button type="button" role="tab" aria-selected={deliveryTab === "zones"} className={deliveryTab === "zones" ? "rounded-lg bg-black px-5 py-3 text-xs text-white" : "rounded-lg px-5 py-3 text-xs text-black/55"} onClick={() => setDeliveryTab("zones")}>Delivery Zones</button>
       </div>
+
+      <CourierRateSheetImport couriers={couriers} />
 
       {deliveryTab === "couriers" && <section className="mt-5 overflow-hidden rounded-2xl border border-black/[.07] bg-[#f8f6f1] shadow-[0_18px_60px_rgba(17,17,15,.05)]">
         <div className="grid gap-6 p-5 sm:p-7 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-center">

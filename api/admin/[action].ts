@@ -42,6 +42,14 @@ import {
   updatePreorder,
 } from "../_data/preorders.js";
 import {
+  confirmCourierRateSheet,
+  importCourierRateSheet,
+  listCourierRateCards,
+  previewCourierRateCard,
+  setCourierRateCardStatus,
+  validateCourierRateSheet,
+} from "../_data/courier-rate-cards.js";
+import {
   authEnv,
   body,
   json,
@@ -95,6 +103,12 @@ const allowed = new Set([
   "listDeliveryRates",
   "saveDeliveryRates",
   "saveCourierConfig",
+  "importCourierRateSheet",
+  "validateCourierRateSheet",
+  "confirmCourierRateSheet",
+  "listCourierRateCards",
+  "previewCourierRateCard",
+  "setCourierRateCardStatus",
 ]);
 
 async function execute(action: string, payload: Record<string, unknown>) {
@@ -193,6 +207,18 @@ async function execute(action: string, payload: Record<string, unknown>) {
       return saveCourierConfig(payload);
     case "saveDeliveryRates":
       return saveCourierConfig(payload);
+    case "importCourierRateSheet":
+      return importCourierRateSheet(payload);
+    case "validateCourierRateSheet":
+      return validateCourierRateSheet(payload);
+    case "confirmCourierRateSheet":
+      return confirmCourierRateSheet(String(payload.id || ""));
+    case "listCourierRateCards":
+      return listCourierRateCards(String(payload.courierProviderId || ""));
+    case "previewCourierRateCard":
+      return previewCourierRateCard(String(payload.id || ""), Number(payload.page) || 1);
+    case "setCourierRateCardStatus":
+      return setCourierRateCardStatus(String(payload.id || ""), payload.active === true || String(payload.active) === "true");
     default:
       throw new Error("Unknown action");
   }

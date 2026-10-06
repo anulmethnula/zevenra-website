@@ -10,24 +10,27 @@
     "typecheck": "tsc -b --pretty false",
     "preview": "vite preview",
     "dev:demo": "vite --mode demo",
-    "qa": "npm run test:checkout-config && npm run test:receipt-upload && npm run typecheck && npm run lint && npm run build",
+    "qa": "npm run test:checkout-config && npm run test:receipt-upload && npm run test:rate-sheet && npm run typecheck && npm run lint && npm run build",
     "test:checkout-config": "node --experimental-strip-types --test tests/checkout-config.test.ts",
     "test:receipt-upload": "node --experimental-strip-types --test tests/payment-receipt-upload.test.ts",
+    "test:rate-sheet": "node --experimental-strip-types --test tests/courier-rate-sheet.test.ts",
     "dev:full": "node --env-file=.env.local scripts/dev-full.mjs",
     "admin:hash-password": "node scripts/hash-admin-password.mjs",
     "db:migrate": "node scripts/db-migrate.mjs",
-    "db:verify": "node scripts/db-verify.mjs"
-    ,"perf:reads": "node scripts/load-test-reads.mjs"
+    "db:verify": "node scripts/db-verify.mjs",
+    "perf:reads": "node scripts/load-test-reads.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
     "@neondatabase/serverless": "^1.2.0",
+    "csv-parse": "^7.0.3",
     "framer-motion": "^11.11.17",
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-hook-form": "^7.54.2",
     "react-router-dom": "^7.1.1",
+    "read-excel-file": "^5.8.8",
     "ws": "^8.22.0",
     "zod": "^3.24.1"
   },
