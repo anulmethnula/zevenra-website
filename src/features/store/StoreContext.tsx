@@ -10,6 +10,7 @@ import {
 } from "react";
 import { initialStoreData } from "../../data/demo";
 import { adminApi } from "../../services/adminApi";
+import { fetchPublic,getCachedPublic,invalidatePublic,revalidatePublic } from "../../services/publicDataCache";
 import type {
   Category,
   Collection,
@@ -439,12 +440,16 @@ function message(error: unknown) {
     ? error.message
     : "The operation could not be completed.";
 }
+function isPublicPayload(value:unknown):value is PublicPayload{const payload=value as Partial<PublicPayload>|null;return Boolean(payload&&Array.isArray(payload.categories)&&Array.isArray(payload.collections)&&Array.isArray(payload.navigation)&&Array.isArray(payload.homepageSections)&&payload.settings&&typeof payload.settings==="object");}
+function mergePublic(current:StoreData,payload:PublicPayload):StoreData{return{...current,categories:payload.categories.map(normalizeCategory),collections:payload.collections.map(normalizeCollection),navigation:payload.navigation.map(normalizeNavigation),homepageSections:payload.homepageSections.map(normalizeHomepage),settings:{...normalizeSettings(payload.settings,true),codEnabled:false,bankEnabled:false,bankName:"",accountName:"",accountNumber:"",branch:"",bankInstructions:"",deliveryEnabled:false,deliveryFee:0,freeDeliveryThreshold:0,defaultCourierProviderId:"",storeOpen:false,ordersEnabled:false}};}
+function invalidateEntity(entity:Entity){if(entity==="products"){invalidatePublic("/products");invalidatePublic("/home");invalidatePublic("/recommendations");}else if(entity==="categories"||entity==="collections"){invalidatePublic("/products");invalidatePublic("/home");invalidatePublic("/store");}else if(entity==="navigation")invalidatePublic("/store");else if(entity==="homepageSections"){invalidatePublic("/home");invalidatePublic("/store");}}
 
 export function StoreProvider({ children }: { children: ReactNode }) {
+  const cachedBootstrap=!demo&&!adminRoute?getCachedPublic<PublicPayload>("/store",{persist:true}):undefined,publicBootstrap=isPublicPayload(cachedBootstrap)?cachedBootstrap:undefined;
   const [data, setData] = useState<StoreData>(() =>
-      demo ? demoLoad() : liveInitialStoreData,
+      demo ? demoLoad() : publicBootstrap?mergePublic(liveInitialStoreData,publicBootstrap):liveInitialStoreData,
     ),
-    [loading, setLoading] = useState(!demo && !adminRoute),
+    [loading, setLoading] = useState(!demo && !adminRoute&&!publicBootstrap),
     [error, setError] = useState(""),
     [adminLoading, setAdminLoading] = useState(!demo),
     [adminReady, setAdminReady] = useState(demo),
@@ -460,32 +465,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     ),
     timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const applyPublic = useCallback(
-    (payload: PublicPayload) =>
-      setData((current) => {
-        return {
-          ...current,
-          categories:payload.categories.map(normalizeCategory),
-          collections:payload.collections.map(normalizeCollection),
-          navigation:payload.navigation.map(normalizeNavigation),
-          homepageSections:payload.homepageSections.map(normalizeHomepage),
-          settings: {...normalizeSettings(payload.settings, true),codEnabled:false,bankEnabled:false,bankName:"",accountName:"",accountNumber:"",branch:"",bankInstructions:"",deliveryEnabled:false,deliveryFee:0,freeDeliveryThreshold:0,defaultCourierProviderId:"",storeOpen:false,ordersEnabled:false},
-        };
-      }),
+    (payload: PublicPayload) => setData(current=>mergePublic(current,payload)),
     [],
   );
   const loadPublic = useCallback(async () => {
     if (demo || adminRoute) return;
-    setLoading(true);
+    const cached=getCachedPublic<PublicPayload>("/store",{persist:true});
+    setLoading(!cached);
     setError("");
     try {
-      const response = await fetch(
-          `${import.meta.env.VITE_API_BASE || "/api"}/store`,
-        ),
-        payload = (await response.json()) as PublicPayload & { error?: string };
-      if (!response.ok)
-        throw new Error(
-          payload.error || "Live store data could not be loaded.",
-        );
+      if(cached&&isPublicPayload(cached))applyPublic(cached);
+      const payload=cached?await revalidatePublic<PublicPayload>("/store",{ttlMs:60_000,persist:true}):await fetchPublic<PublicPayload>("/store",{ttlMs:60_000,persist:true});
+      if(!isPublicPayload(payload))throw new Error("Live store data could not be loaded.");
       applyPublic(payload);
     } catch (reason) {
       setError(message(reason));
@@ -640,6 +631,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setAdminError("");
       queue(`${entity}:${item.id}`, async () => {
         const saved = await adminApi.post<unknown>(action, item);
+        invalidateEntity(entity);
         if (entity === "products") {
           const product = normalizeProduct(saved);
           setData((current) => ({
@@ -679,6 +671,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setAdminError("");
       try {
         const saved = await adminApi.post<unknown>(action, item);
+        invalidateEntity(entity);
         if (entity === "products") {
           const product = normalizeProduct(saved);
           setData((current) => ({
@@ -722,7 +715,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setAdminError("");
       void adminApi
         .post(action, { id })
-        .then(() => refreshEntity(entity))
+        .then(() => {invalidateEntity(entity);return refreshEntity(entity);})
         .catch((reason) => setAdminError(message(reason)));
     },
     [data, refreshEntity],
@@ -772,6 +765,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setAdminError("");
       queue("settings", async () => {
         await adminApi.post("saveSettings", settingsPayload(patch));
+        invalidatePublic("/store");invalidatePublic("/home");invalidatePublic("/checkout-config");
         const rows = await adminApi.get<SettingsRow[]>("getSettings");
         setData((x) => ({ ...x, settings: normalizeSettings(rows) }));
       });
@@ -794,6 +788,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setAdminError("");
       try {
         await adminApi.post("saveSettings", settingsPayload(patch));
+        invalidatePublic("/store");invalidatePublic("/home");invalidatePublic("/checkout-config");
         const rows = await adminApi.get<SettingsRow[]>("getSettings");
         setData((x) => ({ ...x, settings: normalizeSettings(rows) }));
       } catch (reason) {
@@ -831,6 +826,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           }),
           normalizedCouriers = result.couriers.map(normalizeCourier),
           normalizedRates = result.deliveryRates.map(normalizeDeliveryRate);
+        invalidatePublic("/store");invalidatePublic("/checkout-config");
         setAdmin((x) => ({
           ...x,
           couriers: normalizedCouriers,

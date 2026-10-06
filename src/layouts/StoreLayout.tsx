@@ -22,6 +22,10 @@ import { getNavigationCategories } from "../services/navigation";
 import { useCustomerAuth } from "../features/account/CustomerAuthContext";
 import type { Category } from "../types";
 import { validExternalUrl, whatsappUrl } from "../utils/contact";
+import { prefetchPublic } from "../services/publicDataCache";
+
+function prefetchRoute(to:string){const url=new URL(to,"https://store.local");if(url.pathname==="/"){void prefetchPublic("/home",{ttlMs:60_000,persist:true}).catch(()=>{});return;}const query=new URLSearchParams({page:"1",pageSize:"24",sort:"newest"});if(url.pathname.startsWith("/category/"))query.set("category",decodeURIComponent(url.pathname.slice(10)));else if(url.pathname.startsWith("/collections/"))query.set("collection",decodeURIComponent(url.pathname.slice(13)));if(url.searchParams.get("new")==="true")query.set("new","true");if(url.pathname==="/shop"||url.pathname.startsWith("/category/")||url.pathname.startsWith("/collections/"))void prefetchPublic(`/products?${query}`,{ttlMs:25_000,maxEntries:40}).catch(()=>{});}
+const warmRoute=(to:string)=>({onPointerEnter:()=>prefetchRoute(to),onFocus:()=>prefetchRoute(to),onTouchStart:()=>prefetchRoute(to)});
 
 function TikTokIcon({ size = 16 }: { size?: number }) {
   return (
@@ -121,7 +125,7 @@ export function StoreLayout() {
           >
             <Menu size={20} />
           </button>
-          <Link to="/" className="site-logo" aria-label="ZEVENRA home">
+          <Link to="/" className="site-logo" aria-label="ZEVENRA home" {...warmRoute("/")}>
             <img src="/brand/zevenraname.png" alt="ZEVENRA" />
           </Link>
           <DesktopNavigation items={nav} />
@@ -190,7 +194,7 @@ function NavEntryLink({
       {children}
     </a>
   ) : (
-    <NavLink to={item.to} className={className}>
+    <NavLink to={item.to} className={className} {...warmRoute(item.to)}>
       {children}
     </NavLink>
   );
@@ -208,11 +212,12 @@ function DesktopNavigation({ items }: { items: NavEntry[] }) {
             <div className="category-menu category-menu--visual">
               <div className="category-menu__top">
                 <span>SHOP {item.label}</span>
-                <Link to={item.to}>VIEW ALL</Link>
+                <Link to={item.to} {...warmRoute(item.to)}>VIEW ALL</Link>
               </div>
               <div className="category-menu__grid">
                 <Link
                   to={item.to}
+                  {...warmRoute(item.to)}
                   className="category-menu__tile category-menu__tile--all"
                 >
                   <span className="category-menu__all-mark">ALL</span>
@@ -222,6 +227,7 @@ function DesktopNavigation({ items }: { items: NavEntry[] }) {
                   <Link
                     key={child.id}
                     to={"/category/" + child.slug}
+                    {...warmRoute("/category/"+child.slug)}
                     className="category-menu__tile"
                   >
                     {child.imageUrl ? (

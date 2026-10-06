@@ -1,12 +1,15 @@
-import { useCallback,useEffect,useRef,useState } from "react";
+import { useCallback,useEffect,useState } from "react";
 import type { HomepageData,Product,ProductSummary,ShopResponse,SizeChart } from "../types";
-const base=import.meta.env.VITE_API_BASE||"/api";
-function useRequest<T>(path:string){const [data,setData]=useState<T|null>(null),[loading,setLoading]=useState(Boolean(path)),[error,setError]=useState(""),controller=useRef<AbortController>();const load=useCallback(async()=>{if(!path){setLoading(false);return;}controller.current?.abort();const request=new AbortController();controller.current=request;setLoading(true);setError("");try{const response=await fetch(base+path,{signal:request.signal}),payload=await response.json() as T&{error?:string};if(!response.ok)throw new Error(payload.error||"Content temporarily unavailable");if(!request.signal.aborted)setData(payload);}catch(reason){if(!(reason instanceof DOMException&&reason.name==="AbortError"))setError(reason instanceof Error?reason.message:"Content temporarily unavailable");}finally{if(!request.signal.aborted)setLoading(false);}},[path]);useEffect(()=>{void load();return()=>controller.current?.abort();},[load]);return{data,loading,error,retry:load};}
-export const useHomepageData=()=>useRequest<Pick<HomepageData,"products">>("/home");
-export const useProduct=(slug:string)=>useRequest<{product:Product}>(`/products/${encodeURIComponent(slug)}`);
-export const useRecommendations=(categoryId:string,productId:string)=>useRequest<ProductSummary[]>(categoryId&&productId?`/recommendations?category=${encodeURIComponent(categoryId)}&exclude=${encodeURIComponent(productId)}`:"");
-export async function getSizeChart(id:string){const response=await fetch(`${base}/size-chart?id=${encodeURIComponent(id)}`),payload=await response.json() as SizeChart&{error?:string};if(!response.ok)throw new Error(payload.error||"Size guide temporarily unavailable");return payload;}
-export const useShopProducts=(query:string)=>useRequest<ShopResponse>(`/products?${query}`);
+import { fetchPublic,getCachedPublic,revalidatePublic,subscribePublic } from "../services/publicDataCache";
+type RequestOptions={ttlMs?:number;persist?:boolean;maxEntries?:number;revalidateFresh?:boolean};
+function useRequest<T>(path:string,options:RequestOptions={}){const cached=path?getCachedPublic<T>(path,options):undefined,[data,setData]=useState<T|null>(cached??null),[loading,setLoading]=useState(Boolean(path&&!cached)),[error,setError]=useState("");const {ttlMs,persist,maxEntries,revalidateFresh}=options;
+  const load=useCallback(async(force=false)=>{if(!path){setLoading(false);return;}const current=getCachedPublic<T>(path,{persist});if(!current)setLoading(true);setError("");try{const payload=force?await revalidatePublic<T>(path,{ttlMs,persist,maxEntries}):await fetchPublic<T>(path,{ttlMs,persist,maxEntries});setData(payload);}catch(reason){setError(reason instanceof Error?reason.message:"Content temporarily unavailable");}finally{setLoading(false);}},[maxEntries,path,persist,ttlMs]);
+  useEffect(()=>{if(!path){setData(null);setLoading(false);return;}const current=getCachedPublic<T>(path,{persist});setData(current??null);setLoading(!current);const unsubscribe=subscribePublic<T>(path,next=>{setData(next);setLoading(false);setError("");});void load(Boolean(current&&revalidateFresh));return unsubscribe;},[load,path,persist,revalidateFresh]);return{data,loading,error,retry:()=>load(true)};}
+export const useHomepageData=()=>useRequest<Pick<HomepageData,"products">>("/home",{ttlMs:60_000,persist:true,revalidateFresh:true});
+export const useProduct=(slug:string)=>useRequest<{product:Product}>(slug?`/products/${encodeURIComponent(slug)}`:"",{ttlMs:60_000,persist:true});
+export const useRecommendations=(categoryId:string,productId:string)=>useRequest<ProductSummary[]>(categoryId&&productId?`/recommendations?category=${encodeURIComponent(categoryId)}&exclude=${encodeURIComponent(productId)}`:"",{ttlMs:300_000});
+export const getSizeChart=(id:string)=>fetchPublic<SizeChart>(`/size-chart?id=${encodeURIComponent(id)}`,{ttlMs:300_000});
+export const useShopProducts=(query:string)=>useRequest<ShopResponse>(`/products?${query}`,{ttlMs:25_000,maxEntries:40});
 export type PublicCourier={id:string;pricingMode:"zone"|"flat";flatRate:number;active:boolean};
 export type PublicDeliveryRate={courierProviderId?:string;fee:number;active:boolean;districts:string[];cities:string[];postalCodes:string[];fallback:boolean;sortOrder:number};
-export const useCheckoutConfig=()=>useRequest<{settings:Array<{key:string;value:unknown}>;couriers:PublicCourier[];deliveryRates:PublicDeliveryRate[]}>("/checkout-config");
+export const useCheckoutConfig=()=>useRequest<{settings:Array<{key:string;value:unknown}>;couriers:PublicCourier[];deliveryRates:PublicDeliveryRate[]}>("/checkout-config",{ttlMs:15_000});

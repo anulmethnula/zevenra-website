@@ -29,7 +29,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           : payload.settings.filter((row) => !privateBankKeys.has(row.key)),
       },
       200,
-      { "Cache-Control": "public, max-age=30, stale-while-revalidate=120" },
+      { "Cache-Control": "public, max-age=0, s-maxage=300, stale-while-revalidate=1800" },
     );
   } catch (error) {
     console.error("store bootstrap failed", error);

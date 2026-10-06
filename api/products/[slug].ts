@@ -9,7 +9,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         : req.query.slug,
       started=performance.now(),data = await getProductBySlug(String(slug || "")),databaseMs=performance.now()-started;
     res.setHeader("Server-Timing",`db;dur=${databaseMs.toFixed(1)}`);
-    if(data)return json(res,{product:data},200,{"Cache-Control":"public, max-age=60, stale-while-revalidate=300"});
+    if(data)return json(res,{product:data},200,{"Cache-Control":"public, max-age=0, s-maxage=60, stale-while-revalidate=300"});
     return json(res, { error: "Not found" }, 404);
   } catch (error) {
     console.error("product detail failed",error);

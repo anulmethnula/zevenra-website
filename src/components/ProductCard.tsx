@@ -1,9 +1,15 @@
-import { useState } from "react";
+import { useCallback,useEffect,useRef,useState } from "react";
 import { Link } from "react-router-dom";
 import { money } from "../config/site";
 import { useStore } from "../features/store/StoreContext";
-import type { ProductSummary } from "../types";
+import type { Product,ProductSummary } from "../types";
 import { cloudinaryImage, cloudinarySrcSet } from "../utils/cloudinary";
+import { prefetchPublic } from "../services/publicDataCache";
+
+let nearViewportPrefetches=0;
+const MAX_NEAR_VIEWPORT_PREFETCHES=4;
+function preloadImage(url:string){if(typeof Image==="undefined")return;const image=new Image();image.decoding="async";image.src=url;}
+function prefetchProduct(slug:string){return prefetchPublic<{product:Product}>(`/products/${encodeURIComponent(slug)}`,{ttlMs:60_000,persist:true}).then(({product})=>{const first=product.media.find(media=>media.type==="image");if(first)preloadImage(cloudinaryImage(first.url,1200));});}
 
 const swatchMap: Record<string, string> = {
   black: "#171717",
@@ -42,6 +48,9 @@ function swatch(color: string) {
 
 export function ProductCard({ product }: { product: ProductSummary }) {
   const [secondaryReady,setSecondaryReady]=useState(false);
+  const cardRef=useRef<HTMLElement>(null),prefetched=useRef(false);
+  const warm=useCallback(()=>{setSecondaryReady(true);if(prefetched.current)return;prefetched.current=true;void prefetchProduct(product.slug).catch(()=>{prefetched.current=false;});},[product.slug]);
+  useEffect(()=>{const element=cardRef.current;if(!element||nearViewportPrefetches>=MAX_NEAR_VIEWPORT_PREFETCHES||!("IntersectionObserver" in window))return;const observer=new IntersectionObserver(entries=>{if(!entries.some(entry=>entry.isIntersecting)||nearViewportPrefetches>=MAX_NEAR_VIEWPORT_PREFETCHES)return;nearViewportPrefetches+=1;observer.disconnect();warm();},{rootMargin:"240px"});observer.observe(element);return()=>observer.disconnect();},[warm]);
   const { data } = useStore(),
     active = product.variants.filter((variant) => variant.active),
     out = active.length === 0 || active.every((variant) => variant.stock < 1),
@@ -75,8 +84,8 @@ export function ProductCard({ product }: { product: ProductSummary }) {
   const styleLabel =
     category?.name || product.subcategory || parent?.name || "ZEVENRA";
   return (
-    <article className="product-card">
-      <Link to={`/product/${product.slug}`} aria-label={`View ${product.name}`} onMouseEnter={()=>setSecondaryReady(true)} onFocus={()=>setSecondaryReady(true)} onTouchStart={()=>setSecondaryReady(true)}>
+    <article className="product-card" ref={cardRef}>
+      <Link to={`/product/${product.slug}`} aria-label={`View ${product.name}`} onPointerEnter={warm} onFocus={warm} onTouchStart={warm}>
         <div className="product-card__media">
           {primary ? (
             <>
