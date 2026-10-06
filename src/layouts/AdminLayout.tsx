@@ -10,6 +10,7 @@ import {
   Inbox,
   LogOut,
   Menu,
+  Search,
   Settings,
   Truck,
   X,
@@ -32,18 +33,19 @@ const links = [
 export function AdminLayout() {
   const [open, setOpen] = useState(false),
     [checking, setChecking] = useState(true),
+    [authorized, setAuthorized] = useState(false),
+    [commandOpen, setCommandOpen] = useState(false),
+    [commandQuery, setCommandQuery] = useState(""),
     [sessionError, setSessionError] = useState(""),
     navigate = useNavigate(),
     location = useLocation(),
     store = useStore();
   useEffect(() => {
     let active = true;
-    async function boot() {
-      setChecking(true);
+    async function validate() {
       setSessionError("");
       if (!store.live) {
-        await store.loadAdmin(location.pathname);
-        if (active) setChecking(false);
+        if (active) { setAuthorized(true); setChecking(false); }
         return;
       }
       try {
@@ -60,7 +62,7 @@ export function AdminLayout() {
         }
         if (!response.ok)
           throw new Error("Admin session service is temporarily unavailable.");
-        await store.loadAdmin(location.pathname);
+        if (active) setAuthorized(true);
       } catch (reason) {
         if (active)
           setSessionError(
@@ -72,11 +74,24 @@ export function AdminLayout() {
         if (active) setChecking(false);
       }
     }
-    void boot();
+    void validate();
     return () => {
       active = false;
     };
-  }, [store.loadAdmin, location.pathname]);
+  }, []);
+  useEffect(() => {
+    if (authorized) void store.loadAdmin(location.pathname);
+  }, [authorized, location.pathname, store.loadAdmin]);
+  useEffect(() => {
+    const shortcut = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault(); setCommandOpen(true);
+      }
+      if (event.key === "Escape") setCommandOpen(false);
+    };
+    window.addEventListener("keydown", shortcut);
+    return () => window.removeEventListener("keydown", shortcut);
+  }, []);
   async function logout() {
     if (store.live)
       await fetch("/api/admin/logout", { method: "POST" }).catch(
@@ -142,6 +157,9 @@ export function AdminLayout() {
       </button>
     </>
   );
+  const pageLabel = links.find(([to]) => to === location.pathname || (to !== "/admin" && location.pathname.startsWith(to)))?.[2] || "Operations";
+  const commands = links.filter(([, , label]) => label.toLowerCase().includes(commandQuery.trim().toLowerCase()));
+  const runCommand = (to: string) => { setCommandOpen(false); setCommandQuery(""); navigate(to); };
   return (
     <div className="admin-shell min-h-dvh">
       <AdminToasts />
@@ -164,8 +182,9 @@ export function AdminLayout() {
           </button>
           <div className="admin-topbar__brand hidden items-center gap-3 sm:flex">
             <span />
-            <p>ZEVENRA / OPERATIONS</p>
+            <p>ZEVENRA / {pageLabel.toUpperCase()}</p>
           </div>
+          <button type="button" className="admin-command-trigger" onClick={() => setCommandOpen(true)} aria-label="Open admin command bar"><Search size={15}/><span>Search admin</span><kbd>⌘K</kbd></button>
           <span
             className={`admin-live-badge ${store.live ? "is-live" : "is-demo"}`}
           >
@@ -201,6 +220,7 @@ export function AdminLayout() {
           )}
         </main>
       </div>
+      {commandOpen && <div className="admin-command-backdrop" role="presentation" onMouseDown={() => setCommandOpen(false)}><section className="admin-command" role="dialog" aria-modal="true" aria-label="Admin navigation" onMouseDown={event => event.stopPropagation()}><div className="admin-command__search"><Search size={18}/><input autoFocus value={commandQuery} onChange={event => setCommandQuery(event.target.value)} placeholder="Go to products, orders, categories…" aria-label="Search admin pages"/><kbd>ESC</kbd></div><div className="admin-command__results"><p>Navigate</p>{commands.length ? commands.map(([to,Icon,label])=><button key={to} type="button" onClick={() => runCommand(to)}><Icon size={17}/><span>{label}</span></button>) : <div className="admin-command__empty">No matching results</div>}</div></section></div>}
     </div>
   );
 }

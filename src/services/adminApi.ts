@@ -10,6 +10,10 @@ async function request<T>(action: string, init?: RequestInit): Promise<T> {
     .catch(() => ({
       error: "The server returned an invalid response.",
     }))) as T & { error?: string };
+  if (response.status === 401 && typeof window !== "undefined") {
+    const next = window.location.pathname + window.location.search;
+    window.location.assign(`/admin/login?next=${encodeURIComponent(next)}`);
+  }
   if (!response.ok)
     throw new Error(result.error || "The operation could not be completed.");
   return result;

@@ -88,11 +88,14 @@ export async function listAdminProducts(input: Record<string, unknown>) {
   const q = String(input.q || "").trim().slice(0, 100),
     category = String(input.category || "all"),
     status = String(input.status || "all"),
+    stock = String(input.stock || "all"),
     sort = String(input.sort || "updated_desc"),
     page = Math.max(1, Math.floor(Number(input.page) || 1)),
     pageSize = Math.min(100, Math.max(10, Math.floor(Number(input.pageSize) || 25)));
   if (!["all", "published", "draft", "archived"].includes(status))
     throw new Error("Invalid product status filter.");
+  if (!["all", "available", "low", "out"].includes(stock))
+    throw new Error("Invalid stock filter.");
   const sorts: Record<string, string> = {
       updated_desc: "p.updated_at DESC,p.name",
       name_asc: "p.name ASC",
@@ -111,12 +114,12 @@ export async function listAdminProducts(input: Record<string, unknown>) {
   }
   if (category !== "all") { values.push(category); conditions.push(`(p.category_id=$${values.length} OR c.parent_id=$${values.length})`); }
   if (status !== "all") { values.push(status); conditions.push(`p.status=$${values.length}`); }
+  if(stock==="available")conditions.push("EXISTS(SELECT 1 FROM variants stock_v WHERE stock_v.product_id=p.id AND stock_v.active=true AND stock_v.stock>0)");
+  if(stock==="low")conditions.push("EXISTS(SELECT 1 FROM variants stock_v WHERE stock_v.product_id=p.id AND stock_v.active=true AND stock_v.stock<=stock_v.low_stock_threshold)");
+  if(stock==="out")conditions.push("NOT EXISTS(SELECT 1 FROM variants stock_v WHERE stock_v.product_id=p.id AND stock_v.active=true AND stock_v.stock>0)");
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "",
-    countValues = [...values],
-    total = Number((await query<{ count: number }>(`SELECT count(*)::int count FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN categories parent ON parent.id=c.parent_id ${where}`, countValues)).rows[0]?.count || 0);
-  values.push(pageSize, (page - 1) * pageSize);
-  const rows = (await query<Record<string, unknown>>(`SELECT p.id,p.name,p.slug,p.price,p.status,p.preorder_enabled,p.updated_at,p.category_id,c.name category_name,parent.id parent_category_id,parent.name parent_category_name,COALESCE(p.media->0->>'url','') thumbnail,COUNT(v.id) FILTER(WHERE v.active)::int variant_count,COALESCE(SUM(v.stock) FILTER(WHERE v.active),0)::int total_stock,COUNT(v.id) FILTER(WHERE v.active AND v.stock<=v.low_stock_threshold)::int low_stock_count FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN categories parent ON parent.id=c.parent_id LEFT JOIN variants v ON v.product_id=p.id ${where} GROUP BY p.id,c.id,parent.id ORDER BY ${orderBy} LIMIT $${values.length - 1} OFFSET $${values.length}`, values)).rows;
-  const counts = (await query<Record<string, unknown>>(`SELECT COALESCE(parent.id,c.id) id,COUNT(DISTINCT p.id)::int count FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN categories parent ON parent.id=c.parent_id GROUP BY COALESCE(parent.id,c.id)`)).rows;
+    countValues = [...values],rowValues=[...values,pageSize,(page-1)*pageSize],
+    [countResult,rowResult,countByCategory]=await Promise.all([query<{count:number}>(`SELECT count(*)::int count FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN categories parent ON parent.id=c.parent_id ${where}`,countValues),query<Record<string,unknown>>(`SELECT p.id,p.name,p.slug,p.price,p.status,p.preorder_enabled,p.updated_at,p.category_id,c.name category_name,parent.id parent_category_id,parent.name parent_category_name,COALESCE(p.media->0->>'url','') thumbnail,COUNT(v.id) FILTER(WHERE v.active)::int variant_count,COALESCE(SUM(v.stock) FILTER(WHERE v.active),0)::int total_stock,COUNT(v.id) FILTER(WHERE v.active AND v.stock<=v.low_stock_threshold)::int low_stock_count FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN categories parent ON parent.id=c.parent_id LEFT JOIN variants v ON v.product_id=p.id ${where} GROUP BY p.id,c.id,parent.id ORDER BY ${orderBy} LIMIT $${rowValues.length-1} OFFSET $${rowValues.length}`,rowValues),query<Record<string,unknown>>(`SELECT COALESCE(parent.id,c.id) id,COUNT(DISTINCT p.id)::int count FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN categories parent ON parent.id=c.parent_id GROUP BY COALESCE(parent.id,c.id)`)]),total=Number(countResult.rows[0]?.count||0),rows=rowResult.rows,counts=countByCategory.rows;
   return { items: rows.map(row => ({ id:String(row.id),name:String(row.name),slug:String(row.slug),price:Number(row.price),status:String(row.status),preorderEnabled:Boolean(row.preorder_enabled),updatedAt:String(row.updated_at),categoryId:String(row.category_id||""),categoryName:String(row.category_name||""),parentCategoryId:String(row.parent_category_id||""),parentCategoryName:String(row.parent_category_name||""),thumbnail:String(row.thumbnail||""),variantCount:Number(row.variant_count)||0,totalStock:Number(row.total_stock)||0,lowStockCount:Number(row.low_stock_count)||0 })), page, pageSize, total, pageCount: Math.max(1, Math.ceil(total/pageSize)), categoryCounts: Object.fromEntries(counts.map(row => [String(row.id||""),Number(row.count)||0])) };
 }
 

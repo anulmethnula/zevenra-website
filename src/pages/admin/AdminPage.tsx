@@ -96,6 +96,10 @@ function Head({
     </div>
   );
 }
+function AdminDrawer({title,onClose,children}:{title:string;onClose:()=>void;children:React.ReactNode}) {
+  useEffect(()=>{const close=(event:KeyboardEvent)=>{if(event.key==="Escape")onClose();};window.addEventListener("keydown",close);return()=>window.removeEventListener("keydown",close);},[onClose]);
+  return <><button type="button" className="admin-drawer-backdrop" onClick={onClose} aria-label="Close editor"/><aside className="admin-drawer" role="dialog" aria-modal="true" aria-label={title}><header className="admin-drawer__header"><div><p className="admin-kicker">Editor</p><h2 className="mt-1 text-xl font-bold">{title}</h2></div><button type="button" className="grid h-11 w-11 place-items-center rounded-full border" onClick={onClose} aria-label="Close editor"><X size={18}/></button></header><div className="admin-drawer__body">{children}</div></aside></>;
+}
 function UploadField({
   label,
   value,
@@ -510,17 +514,18 @@ export function Products() {
 type ProductListRow = { id:string;name:string;slug:string;price:number;status:string;preorderEnabled:boolean;updatedAt:string;categoryId:string;categoryName:string;parentCategoryId:string;parentCategoryName:string;thumbnail:string;variantCount:number;totalStock:number;lowStockCount:number };
 type ProductListResponse = { items:ProductListRow[];page:number;pageSize:number;total:number;pageCount:number;categoryCounts:Record<string,number> };
 function ProductsWorkspace() {
-  const { data }=useStore(), [query,setQuery]=useState(""),[debounced,setDebounced]=useState(""),[category,setCategory]=useState("all"),[status,setStatus]=useState("all"),[sort,setSort]=useState("updated_desc"),[page,setPage]=useState(1),[result,setResult]=useState<ProductListResponse>({items:[],page:1,pageSize:25,total:0,pageCount:1,categoryCounts:{}}),[loading,setLoading]=useState(true),[error,setError]=useState(""),[menu,setMenu]=useState(""),[danger,setDanger]=useState<ProductListRow|null>(null);
+  const { data }=useStore(), [query,setQuery]=useState(""),[debounced,setDebounced]=useState(""),[category,setCategory]=useState("all"),[status,setStatus]=useState("all"),[stock,setStock]=useState("all"),[sort,setSort]=useState("updated_desc"),[page,setPage]=useState(1),[result,setResult]=useState<ProductListResponse>({items:[],page:1,pageSize:25,total:0,pageCount:1,categoryCounts:{}}),[loading,setLoading]=useState(true),[error,setError]=useState(""),[menu,setMenu]=useState(""),[danger,setDanger]=useState<ProductListRow|null>(null);
   const main=data.categories.filter(item=>item.active&&!item.parentId).sort((a,b)=>a.sortOrder-b.sortOrder), selectedMain=main.find(item=>item.id===category)||data.categories.find(item=>item.id===category&&item.parentId), mainId=selectedMain?.parentId||selectedMain?.id||"", subs=data.categories.filter(item=>item.active&&item.parentId===mainId).sort((a,b)=>a.sortOrder-b.sortOrder);
   useEffect(()=>{const timer=setTimeout(()=>setDebounced(query.trim()),300);return()=>clearTimeout(timer);},[query]);
-  const load=useCallback(async(signal?:AbortSignal)=>{setLoading(true);setError("");try{const next=await adminApi.get<ProductListResponse>("listAdminProducts",{q:debounced,category,status,sort,page:String(page),pageSize:"25"},signal);setResult(next);}catch(reason){if(reason instanceof DOMException&&reason.name==="AbortError")return;setError(reason instanceof Error?reason.message:"Could not load products.");}finally{if(!signal?.aborted)setLoading(false);}},[category,debounced,page,sort,status]);
+  const load=useCallback(async(signal?:AbortSignal)=>{setLoading(true);setError("");try{const next=await adminApi.get<Partial<ProductListResponse>>("listAdminProducts",{q:debounced,category,status,stock,sort,page:String(page),pageSize:"25"},signal);setResult({items:next.items??[],page:next.page??page,pageSize:next.pageSize??25,total:next.total??0,pageCount:next.pageCount??1,categoryCounts:next.categoryCounts??{}});}catch(reason){if(reason instanceof DOMException&&reason.name==="AbortError")return;setError(reason instanceof Error?reason.message:"Could not load products.");}finally{if(!signal?.aborted)setLoading(false);}},[category,debounced,page,sort,status,stock]);
   useEffect(()=>{const controller=new AbortController();void load(controller.signal);return()=>controller.abort();},[load]);
-  useEffect(()=>setPage(1),[debounced,category,status,sort]);
+  useEffect(()=>setPage(1),[debounced,category,status,stock,sort]);
   async function changeStatus(item:ProductListRow,next:string){setMenu("");try{await adminApi.post("setProductStatus",{id:item.id,status:next});setResult(current=>({...current,items:current.items.map(row=>row.id===item.id?{...row,status:next}:row)}));adminToast(next==="archived"?"Product archived":next==="published"?"Product published":"Product unpublished");}catch(reason){const message=reason instanceof Error?reason.message:"Could not update product.";setError(message);adminToast(message,"error");}}
   async function removeProduct(){if(!danger)return;try{await adminApi.post("deleteProduct",{id:danger.id});setDanger(null);adminToast("Product deleted");void load();}catch(reason){const message=reason instanceof Error?reason.message:"This product cannot be deleted. Archive it instead.";setError(message);adminToast(message,"error");}}
-  const active=Boolean(query||category!=="all"||status!=="all"||sort!=="updated_desc");
+  const active=Boolean(query||category!=="all"||status!=="all"||stock!=="all"||sort!=="updated_desc");
   return <><Head eyebrow="Catalogue" title="Products" action={<Link to="/admin/products/new" className="btn btn-dark"><PackagePlus size={16}/> Add product</Link>}/>
-    <div className="mt-7 hidden flex-wrap gap-2 sm:flex"><button onClick={()=>setCategory("all")} className={`rounded-full border px-4 py-2 text-xs ${category==="all"?"border-black bg-black text-white":"border-black/10 bg-white/35"}`}>All <span className="ml-1 opacity-60">{result.total}</span></button>{main.map(item=><button key={item.id} onClick={()=>setCategory(item.id)} className={`rounded-full border px-4 py-2 text-xs ${mainId===item.id?"border-black bg-black text-white":"border-black/10 bg-white/35"}`}>{item.name} <span className="ml-1 opacity-60">{result.categoryCounts[item.id]||0}</span></button>)}</div>
+    <div className="mt-5 flex flex-wrap gap-2" aria-label="Product quick views"><button className={`btn ${stock==="all"?"btn-dark":""}`} onClick={()=>setStock("all")}>All inventory</button><button className={`btn ${stock==="low"?"btn-dark":""}`} onClick={()=>setStock("low")}>Low stock</button><button className={`btn ${stock==="out"?"btn-dark":""}`} onClick={()=>setStock("out")}>Out of stock</button><button className={`btn ${status==="draft"?"btn-dark":""}`} onClick={()=>setStatus(status==="draft"?"all":"draft")}>Draft</button><button className={`btn ${status==="published"?"btn-dark":""}`} onClick={()=>setStatus(status==="published"?"all":"published")}>Published</button></div>
+    <div className="mt-7 hidden flex-wrap gap-2 sm:flex"><button onClick={()=>setCategory("all")} className={`rounded-full border px-4 py-2 text-xs ${category==="all"?"border-black bg-black text-white":"border-black/10 bg-white/35"}`}>All <span className="ml-1 opacity-60">{result.total}</span></button>{main.map(item=><button key={item.id} onClick={()=>setCategory(item.id)} className={`rounded-full border px-4 py-2 text-xs ${mainId===item.id?"border-black bg-black text-white":"border-black/10 bg-white/35"}`}>{item.name} <span className="ml-1 opacity-60">{result.categoryCounts?.[item.id]||0}</span></button>)}</div>
     {mainId&&subs.length>0&&<div className="mt-3 hidden flex-wrap gap-2 sm:flex"><button onClick={()=>setCategory(mainId)} className={`border-b px-2 py-1 text-xs ${category===mainId?"border-bronze text-bronze":"border-transparent text-black/50"}`}>All {main.find(item=>item.id===mainId)?.name}</button>{subs.map(item=><button key={item.id} onClick={()=>setCategory(item.id)} className={`border-b px-2 py-1 text-xs ${category===item.id?"border-bronze text-bronze":"border-transparent text-black/50"}`}>{item.name}</button>)}</div>}
     <div className="mt-6 grid items-center gap-3 border-b border-black/10 pb-4 md:grid-cols-[minmax(240px,1fr)_170px_190px_auto]"><div className="relative flex min-h-12 items-center border-b border-black/20 focus-within:border-bronze"><Search className="pointer-events-none absolute left-1 text-black/40" size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} className="h-12 w-full bg-transparent pl-8 pr-10 text-sm outline-none" placeholder="Search products, SKU, category…"/>{query&&<button onClick={()=>setQuery("")} className="absolute right-1 grid h-9 w-9 place-items-center" aria-label="Clear search"><X size={15}/></button>}</div><select value={status} onChange={e=>setStatus(e.target.value)} className="field"><option value="all">All statuses</option><option value="published">Published</option><option value="draft">Draft</option><option value="archived">Archived</option></select><select value={sort} onChange={e=>setSort(e.target.value)} className="field"><option value="updated_desc">Recently updated</option><option value="name_asc">Name A–Z</option><option value="name_desc">Name Z–A</option><option value="stock_asc">Lowest stock</option><option value="stock_desc">Highest stock</option><option value="price_asc">Price low–high</option><option value="price_desc">Price high–low</option></select>{active&&<button className="btn" onClick={()=>{setQuery("");setCategory("all");setStatus("all");setSort("updated_desc");}}>Clear filters</button>}<select value={category} onChange={e=>setCategory(e.target.value)} className="field sm:hidden"><option value="all">All categories</option>{main.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></div>
     {error&&<div role="alert" className="mt-4 flex items-center justify-between border border-red-900/15 bg-red-950/[.06] p-4 text-xs text-red-900"><span>{error}</span><button className="btn" onClick={()=>void load()}>Try again</button></div>}
@@ -530,11 +535,17 @@ function ProductsWorkspace() {
 }
 function Categories() {
   const store = useStore(),
-    [creating, setCreating] = useState<"main" | "sub" | null>(null),
+    [editing, setEditing] = useState<Category | null>(null),
+    [query, setQuery] = useState(""),
+    [type, setType] = useState("all"),
+    [parentFilter, setParentFilter] = useState("all"),
+    [statusFilter, setStatusFilter] = useState("all"),
+    [page, setPage] = useState(1),
+    pageSize = 25,
     main = [...store.data.categories]
       .filter((category) => !category.parentId)
       .sort((a, b) => a.sortOrder - b.sortOrder);
-  const blank: Category = {
+  const create = (kind:"main"|"sub") => setEditing({
     id: crypto.randomUUID(),
     name: "",
     slug: "",
@@ -542,11 +553,13 @@ function Categories() {
     imageUrl: "",
     active: true,
     featured: false,
-    showInNavigation: creating === "main",
+    showInNavigation: kind === "main",
     showOnHomepage: false,
-    parentId: creating === "sub" ? main[0]?.id : undefined,
+    parentId: kind === "sub" ? main[0]?.id : undefined,
     sortOrder: store.data.categories.length + 1,
-  };
+  });
+  const needle=query.trim().toLowerCase(), filtered=[...store.data.categories].filter(item=>{const parent=main.find(value=>value.id===item.parentId);return (!needle||[item.name,item.slug,parent?.name].some(value=>String(value||"").toLowerCase().includes(needle)))&&(type==="all"||(type==="main"?!item.parentId:Boolean(item.parentId)))&&(parentFilter==="all"||item.parentId===parentFilter)&&(statusFilter==="all"||(statusFilter==="active"?item.active:!item.active));}).sort((a,b)=>a.sortOrder-b.sortOrder||a.name.localeCompare(b.name)),pageCount=Math.max(1,Math.ceil(filtered.length/pageSize)),safePage=Math.min(page,pageCount),visible=filtered.slice((safePage-1)*pageSize,safePage*pageSize);
+  useEffect(()=>setPage(1),[query,type,parentFilter,statusFilter]);
   return (
     <>
       <Head
@@ -554,15 +567,12 @@ function Categories() {
         title="Categories"
         action={
           <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => setCreating("main")}
-              className="btn btn-dark"
-            >
+            <button onClick={() => create("main")} className="btn btn-dark">
               <Plus size={16} /> Main category
             </button>
             <button
               disabled={!main.length}
-              onClick={() => setCreating("sub")}
+              onClick={() => create("sub")}
               className="btn disabled:opacity-40"
             >
               <Plus size={16} /> Subcategory
@@ -570,50 +580,11 @@ function Categories() {
           </div>
         }
       />
-      <p className="mt-4 max-w-3xl text-sm leading-7 text-black/55">
-        Use main categories for the top menu, such as WOMEN, MEN and
-        ACCESSORIES. Put more specific groups such as Crop Tops under a main
-        category. Products can then be assigned to the exact subcategory.
-      </p>
-      {creating && (
-        <div className="mt-7">
-          <CategoryCard
-            key={creating}
-            item={blank}
-            fresh
-            onCancel={() => setCreating(null)}
-          />
-        </div>
-      )}
-      <div className="mt-7 space-y-5">
-        {main.map((parent) => {
-          const children = store.data.categories
-            .filter((child) => child.parentId === parent.id)
-            .sort((a, b) => a.sortOrder - b.sortOrder);
-          return (
-            <section
-              key={parent.id}
-              className="border border-black/10 bg-white/25 p-4 sm:p-5"
-            >
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
-                  <p className="eyebrow text-black/45">Main category</p>
-                  <h2 className="display mt-1 text-2xl">{parent.name}</h2>
-                </div>
-                <span className="text-xs text-black/45">
-                  {children.length} subcategories
-                </span>
-              </div>
-              <div className="grid gap-4 lg:grid-cols-2">
-                <CategoryCard item={parent} />
-                {children.map((child) => (
-                  <CategoryCard key={child.id} item={child} />
-                ))}
-              </div>
-            </section>
-          );
-        })}
-      </div>
+      <p className="mt-3 max-w-2xl text-sm text-[#5f574f]">Organise storefront navigation and product discovery. Edit details only when needed.</p>
+      <div className="admin-resource-toolbar"><input className="field" value={query} onChange={event=>setQuery(event.target.value)} placeholder="Search name, slug or parent" aria-label="Search categories"/><select className="field" value={type} onChange={event=>setType(event.target.value)} aria-label="Category type"><option value="all">All types</option><option value="main">Main</option><option value="sub">Subcategories</option></select><select className="field" value={parentFilter} onChange={event=>setParentFilter(event.target.value)} aria-label="Parent category"><option value="all">All parents</option>{main.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select><select className="field" value={statusFilter} onChange={event=>setStatusFilter(event.target.value)} aria-label="Category status"><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
+      <div className="admin-resource-list"><div className="admin-resource-row admin-resource-row--head"><span>Category</span><span>Type</span><span>Parent</span><span>Status</span><span>Navigation</span><span>Homepage</span><span>Action</span></div>{visible.length?visible.map(item=>{const parent=main.find(value=>value.id===item.parentId);return <div className="admin-resource-row" key={item.id}><span><b className="block">{item.name}</b><small className="mt-1 block text-[#8a7f73]">/{item.slug}</small></span><span>{item.parentId?"Subcategory":"Main"}</span><span>{parent?.name||"—"}</span><span className={`admin-status ${item.active?"admin-status--success":""}`}>{item.active?"Active":"Inactive"}</span><span>{item.showInNavigation?"Shown":"—"}</span><span>{item.showOnHomepage?"Shown":"—"}</span><button className="btn min-h-10 px-3" onClick={()=>setEditing(item)}>Edit</button></div>}):<div className="admin-empty m-4 p-10 text-center"><b>No matching results</b><button className="mt-3 block w-full text-xs underline" onClick={()=>{setQuery("");setType("all");setParentFilter("all");setStatusFilter("all");}}>Reset filters</button></div>}</div>
+      <div className="admin-pagination"><span>Showing {visible.length} of {filtered.length}</span><div className="flex gap-2"><button className="btn" disabled={safePage<=1} onClick={()=>setPage(value=>value-1)}>Previous</button><span className="self-center">{safePage} / {pageCount}</span><button className="btn" disabled={safePage>=pageCount} onClick={()=>setPage(value=>value+1)}>Next</button></div></div>
+      {editing&&<AdminDrawer title={editing.name||"New category"} onClose={()=>setEditing(null)}><CategoryCard key={editing.id} item={editing} fresh={!store.data.categories.some(item=>item.id===editing.id)} onCancel={()=>setEditing(null)}/></AdminDrawer>}
     </>
   );
 }
@@ -790,8 +761,11 @@ function CategoryCard({
 }
 function Collections() {
   const s = useStore(),
-    [creating, setCreating] = useState(false),
-    blank: Collection = {
+    [editing, setEditing] = useState<Collection|null>(null),
+    [query,setQuery]=useState(""),
+    [statusFilter,setStatusFilter]=useState("all"),
+    [page,setPage]=useState(1),pageSize=25;
+  const create=()=>setEditing({
       id: crypto.randomUUID(),
       name: "",
       slug: "",
@@ -801,32 +775,24 @@ function Collections() {
       showInNavigation: false,
       showOnHomepage: false,
       sortOrder: s.data.collections.length + 1,
-    };
+    }),needle=query.trim().toLowerCase(),filtered=[...s.data.collections].filter(item=>(!needle||[item.name,item.slug,item.description].some(value=>String(value||"").toLowerCase().includes(needle)))&&(statusFilter==="all"||(statusFilter==="active"?item.active:!item.active))).sort((a,b)=>a.sortOrder-b.sortOrder||a.name.localeCompare(b.name)),pageCount=Math.max(1,Math.ceil(filtered.length/pageSize)),safePage=Math.min(page,pageCount),visible=filtered.slice((safePage-1)*pageSize,safePage*pageSize);
+  useEffect(()=>setPage(1),[query,statusFilter]);
   return (
     <>
       <Head
         eyebrow="How pieces are grouped"
         title="Collections"
         action={
-          <button onClick={() => setCreating(true)} className="btn btn-dark">
+          <button onClick={create} className="btn btn-dark">
             <Plus size={16} /> Add collection
           </button>
         }
       />
-      {creating && (
-        <div className="mt-7">
-          <CollectionCard
-            item={blank}
-            fresh
-            onCancel={() => setCreating(false)}
-          />
-        </div>
-      )}
-      <div className="mt-7 grid gap-4 lg:grid-cols-2">
-        {s.data.collections.map((c) => (
-          <CollectionCard key={c.id} item={c} />
-        ))}
-      </div>
+      <p className="mt-3 max-w-2xl text-sm text-[#5f574f]">Manage curated product groups without expanding every editor.</p>
+      <div className="admin-resource-toolbar"><input className="field" value={query} onChange={event=>setQuery(event.target.value)} placeholder="Search collections" aria-label="Search collections"/><select className="field" value={statusFilter} onChange={event=>setStatusFilter(event.target.value)} aria-label="Collection status"><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
+      <div className="admin-resource-list"><div className="admin-resource-row admin-resource-row--head"><span>Collection</span><span>Status</span><span>Navigation</span><span>Homepage</span><span>Order</span><span>Media</span><span>Action</span></div>{visible.length?visible.map(item=><div className="admin-resource-row" key={item.id}><span><b className="block">{item.name}</b><small className="mt-1 block text-[#8a7f73]">/{item.slug}</small></span><span className={`admin-status ${item.active?"admin-status--success":""}`}>{item.active?"Active":"Inactive"}</span><span>{item.showInNavigation?"Shown":"—"}</span><span>{item.showOnHomepage?"Shown":"—"}</span><span>{item.sortOrder}</span><span>{item.heroImage||item.videoUrl?"Ready":"—"}</span><button className="btn min-h-10 px-3" onClick={()=>setEditing(item)}>Edit</button></div>):<div className="admin-empty m-4 p-10 text-center"><b>No matching results</b><button className="mt-3 block w-full text-xs underline" onClick={()=>{setQuery("");setStatusFilter("all");}}>Reset filters</button></div>}</div>
+      <div className="admin-pagination"><span>Showing {visible.length} of {filtered.length}</span><div className="flex gap-2"><button className="btn" disabled={safePage<=1} onClick={()=>setPage(value=>value-1)}>Previous</button><span className="self-center">{safePage} / {pageCount}</span><button className="btn" disabled={safePage>=pageCount} onClick={()=>setPage(value=>value+1)}>Next</button></div></div>
+      {editing&&<AdminDrawer title={editing.name||"New collection"} onClose={()=>setEditing(null)}><CollectionCard key={editing.id} item={editing} fresh={!s.data.collections.some(item=>item.id===editing.id)} onCancel={()=>setEditing(null)}/></AdminDrawer>}
     </>
   );
 }
@@ -2149,6 +2115,7 @@ function Preorders() {
     [query, setQuery] = useState(""),
     [filter, setFilter] = useState("active"),
     [page, setPage] = useState(1),
+    [open, setOpen] = useState(""),
     [busy, setBusy] = useState(""),
     [message, setMessage] = useState(""),
     [drafts, setDrafts] = useState<Record<string, PreorderAdminDraft>>({}),
@@ -2574,10 +2541,9 @@ function Preorders() {
                       })}
                     </p>
                   </div>
-                  <a href={wa} target="_blank" rel="noreferrer" className="btn">
-                    <MessageCircle size={14} /> WhatsApp customer
-                  </a>
+                  <div className="flex gap-2"><a href={wa} target="_blank" rel="noreferrer" className="btn" aria-label={`WhatsApp ${item.customerName}`}><MessageCircle size={14} /> WhatsApp</a><button type="button" className="btn btn-dark" onClick={()=>setOpen(open===item.requestId?"":item.requestId)}>{open===item.requestId?"Close":"View"}</button></div>
                 </div>
+                {open===item.requestId&&<>
                 <div className="preorder-admin-grid">
                   <section className="preorder-product-box">
                     {image ? (
@@ -2817,6 +2783,7 @@ function Preorders() {
                     </label>
                   </div>
                 </details>
+                </>}
               </article>
             );
           })

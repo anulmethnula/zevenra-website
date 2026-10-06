@@ -14,19 +14,21 @@ import { recentOrders } from "./orders.js";
 import { listPreorders } from "./preorders.js";
 
 export async function dashboard() {
-  const counts = await query<Record<string, unknown>>(
-    `SELECT count(*) FILTER(WHERE created_at::date=(now() AT TIME ZONE 'Asia/Colombo')::date)::int AS orders_today,count(*) FILTER(WHERE order_status='pending')::int AS pending,count(*) FILTER(WHERE order_status='confirmed')::int AS confirmed,count(*) FILTER(WHERE order_status='packed')::int AS packed,count(*) FILTER(WHERE order_status='shipped')::int AS shipped,count(*) FILTER(WHERE order_status='delivered')::int AS delivered,count(*) FILTER(WHERE order_status='cancelled')::int AS cancelled,COALESCE(sum(subtotal) FILTER(WHERE order_status='delivered' AND payment_status IN('paid','verified')),0) AS product_revenue,COALESCE(sum(delivery_fee) FILTER(WHERE order_status='delivered' AND payment_status IN('paid','verified')),0) AS delivery_collected FROM orders`,
-  );
-  const top = await query<Record<string, unknown>>(
-    `SELECT oi.product_id,oi.product_name AS name,sum(oi.quantity)::int AS quantity,sum(oi.line_total) AS revenue FROM order_items oi JOIN orders o ON o.order_id=oi.order_id WHERE o.order_status='delivered' AND o.payment_status IN('paid','verified') GROUP BY oi.product_id,oi.product_name ORDER BY quantity DESC,revenue DESC LIMIT 8`,
-  );
-  const items = await query<{ count: number }>(
+  const [counts,top,items,preorders,recent] = await Promise.all([
+    query<Record<string, unknown>>(
+      `SELECT count(*) FILTER(WHERE created_at::date=(now() AT TIME ZONE 'Asia/Colombo')::date)::int AS orders_today,count(*) FILTER(WHERE order_status='pending')::int AS pending,count(*) FILTER(WHERE order_status='confirmed')::int AS confirmed,count(*) FILTER(WHERE order_status='packed')::int AS packed,count(*) FILTER(WHERE order_status='shipped')::int AS shipped,count(*) FILTER(WHERE order_status='delivered')::int AS delivered,count(*) FILTER(WHERE order_status='cancelled')::int AS cancelled,COALESCE(sum(subtotal) FILTER(WHERE order_status='delivered' AND payment_status IN('paid','verified')),0) AS product_revenue,COALESCE(sum(delivery_fee) FILTER(WHERE order_status='delivered' AND payment_status IN('paid','verified')),0) AS delivery_collected FROM orders`,
+    ),
+    query<Record<string, unknown>>(
+      `SELECT oi.product_id,oi.product_name AS name,sum(oi.quantity)::int AS quantity,sum(oi.line_total) AS revenue FROM order_items oi JOIN orders o ON o.order_id=oi.order_id WHERE o.order_status='delivered' AND o.payment_status IN('paid','verified') GROUP BY oi.product_id,oi.product_name ORDER BY quantity DESC,revenue DESC LIMIT 8`,
+    ),
+    query<{ count: number }>(
       `SELECT COALESCE(sum(oi.quantity),0)::int AS count FROM order_items oi JOIN orders o ON o.order_id=oi.order_id WHERE o.order_status='delivered' AND o.payment_status IN('paid','verified')`,
     ),
-    preorders = await query<Record<string, unknown>>(
+    query<Record<string, unknown>>(
       `SELECT count(*) FILTER(WHERE status='new')::int AS new_count,COALESCE(sum(quantity) FILTER(WHERE status='confirmed' AND batch_id=''),0)::int AS confirmed_count FROM preorders`,
     ),
-    recent = await recentOrders(10),
+    recentOrders(10),
+  ]),
     row = counts.rows[0] || {},
     pre = preorders.rows[0] || {};
   return {
