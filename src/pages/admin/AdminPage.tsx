@@ -97,7 +97,7 @@ function Head({
   );
 }
 function AdminDrawer({title,onClose,children}:{title:string;onClose:()=>void;children:React.ReactNode}) {
-  useEffect(()=>{const close=(event:KeyboardEvent)=>{if(event.key==="Escape")onClose();};window.addEventListener("keydown",close);return()=>window.removeEventListener("keydown",close);},[onClose]);
+  useEffect(()=>{const close=(event:KeyboardEvent)=>{if(event.key==="Escape")onClose();};const previous=document.body.style.overflow;document.body.style.overflow="hidden";window.addEventListener("keydown",close);return()=>{document.body.style.overflow=previous;window.removeEventListener("keydown",close);};},[onClose]);
   return <><button type="button" className="admin-drawer-backdrop" onClick={onClose} aria-label="Close editor"/><aside className="admin-drawer" role="dialog" aria-modal="true" aria-label={title}><header className="admin-drawer__header"><div><p className="admin-kicker">Editor</p><h2 className="mt-1 text-xl font-bold">{title}</h2></div><button type="button" className="grid h-11 w-11 place-items-center rounded-full border" onClick={onClose} aria-label="Close editor"><X size={18}/></button></header><div className="admin-drawer__body">{children}</div></aside></>;
 }
 function UploadField({
@@ -161,13 +161,9 @@ function UploadField({
   );
 }
 function Dashboard() {
-  const { data, admin } = useStore(),
+  const { admin } = useStore(),
     stats = admin.dashboard,
-    low = data.products.filter(
-      (p) =>
-        p.status === "published" &&
-        p.variants.some((v) => v.active && v.stock <= v.lowStockThreshold),
-    );
+    low = stats?.stockAttention || [];
   return (
     <>
       <Head
@@ -183,12 +179,16 @@ function Dashboard() {
         {[
           [
             "Published products",
-            data.products.filter((p) => p.status === "published").length,
+            stats?.publishedProducts || 0,
           ],
-          ["Low stock", low.length],
+          ["Low stock", stats?.lowStockProducts || 0],
           ["Orders today", stats?.ordersToday || 0],
           ["Pending orders", stats?.pending || 0],
+          ["Confirmed", stats?.confirmed || 0],
+          ["Packed", stats?.packed || 0],
+          ["Shipped", stats?.shipped || 0],
           ["Delivered", stats?.delivered || 0],
+          ["Cancelled", stats?.cancelled || 0],
           [
             "Product revenue",
             money(stats?.productRevenue ?? stats?.revenue ?? 0),
@@ -268,10 +268,8 @@ function Dashboard() {
           {low.length ? (
             <div className="grid gap-2 md:grid-cols-2">
               {low.slice(0, 10).map((p) => {
-                const image = p.media.find((m) => m.type === "image"),
-                  stock = p.variants
-                    .filter((v) => v.active)
-                    .reduce((sum, v) => sum + v.stock, 0);
+                const image = p.thumbnail,
+                  stock = p.totalStock;
                 return (
                   <Link
                     to={"/admin/products/" + p.id}
@@ -280,7 +278,7 @@ function Dashboard() {
                   >
                     {image ? (
                       <img
-                        src={image.url}
+                        src={image}
                         alt=""
                         loading="lazy"
                         className="h-16 w-12 object-cover"
@@ -1378,7 +1376,12 @@ function DeliveryRates() {
       s.data.settings.defaultCourierProviderId,
     ),
     [busy, setBusy] = useState(false),
-    [notice, setNotice] = useState<DeliveryNotice | null>(null);
+    [notice, setNotice] = useState<DeliveryNotice | null>(null),
+    [deliveryTab, setDeliveryTab] = useState<"couriers" | "zones">("couriers"),
+    [zoneSearch, setZoneSearch] = useState(""),
+    [zoneState, setZoneState] = useState("all"),
+    [zoneCourier, setZoneCourier] = useState("all"),
+    [editingZone, setEditingZone] = useState<string | null>(null);
 
   useEffect(() => {
     setCouriers(s.admin.couriers);
@@ -1582,6 +1585,15 @@ function DeliveryRates() {
   };
 
   const selected = couriers.find((item) => item.id === defaultId);
+  const visibleZones = rates.filter((rate) => {
+    const courier = couriers.find((item) => item.id === rate.courierProviderId),
+      needle = zoneSearch.trim().toLowerCase(),
+      haystack = [rate.name, courier?.name, ...rate.districts, ...rate.cities, ...rate.postalCodes].join(" ").toLowerCase();
+    return (!needle || haystack.includes(needle)) &&
+      (zoneState === "all" || (zoneState === "active") === rate.active) &&
+      (zoneCourier === "all" || zoneCourier === rate.courierProviderId);
+  });
+  const zoneBeingEdited = rates.find((rate) => rate.id === editingZone);
 
   return (
     <div className="mx-auto max-w-[1120px]">
@@ -1632,7 +1644,12 @@ function DeliveryRates() {
         }
       />
 
-      <section className="mt-7 overflow-hidden rounded-2xl border border-black/[.07] bg-[#f8f6f1] shadow-[0_18px_60px_rgba(17,17,15,.05)]">
+      <div className="mt-7 inline-flex rounded-xl border border-black/[.08] bg-white/55 p-1" role="tablist" aria-label="Delivery configuration">
+        <button type="button" role="tab" aria-selected={deliveryTab === "couriers"} className={deliveryTab === "couriers" ? "rounded-lg bg-black px-5 py-3 text-xs text-white" : "rounded-lg px-5 py-3 text-xs text-black/55"} onClick={() => setDeliveryTab("couriers")}>Courier Providers</button>
+        <button type="button" role="tab" aria-selected={deliveryTab === "zones"} className={deliveryTab === "zones" ? "rounded-lg bg-black px-5 py-3 text-xs text-white" : "rounded-lg px-5 py-3 text-xs text-black/55"} onClick={() => setDeliveryTab("zones")}>Delivery Zones</button>
+      </div>
+
+      {deliveryTab === "couriers" && <section className="mt-5 overflow-hidden rounded-2xl border border-black/[.07] bg-[#f8f6f1] shadow-[0_18px_60px_rgba(17,17,15,.05)]">
         <div className="grid gap-6 p-5 sm:p-7 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-center">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[.18em] text-black/45">
@@ -1679,7 +1696,7 @@ function DeliveryRates() {
             </span>
           </div>
         )}
-      </section>
+      </section>}
 
       {!couriers.length && (
         <section className="mt-5 rounded-2xl border border-dashed border-black/15 bg-white/45 p-8 text-center sm:p-12">
@@ -1694,7 +1711,23 @@ function DeliveryRates() {
         </section>
       )}
 
-      <div className="mt-5 grid gap-5">
+      {deliveryTab === "zones" && <section className="mt-5">
+        <div className="grid gap-3 rounded-2xl border border-black/[.07] bg-[#f8f6f1] p-4 md:grid-cols-[minmax(220px,1fr)_180px_220px]">
+          <input className="field bg-white" value={zoneSearch} onChange={(event) => setZoneSearch(event.target.value)} placeholder="Search zones or coverage" aria-label="Search delivery zones" />
+          <select className="field bg-white" value={zoneState} onChange={(event) => setZoneState(event.target.value)} aria-label="Filter zones by state"><option value="all">All states</option><option value="active">Active</option><option value="inactive">Inactive</option></select>
+          <select className="field bg-white" value={zoneCourier} onChange={(event) => setZoneCourier(event.target.value)} aria-label="Filter zones by courier"><option value="all">All couriers</option>{couriers.map((courier) => <option key={courier.id} value={courier.id}>{courier.name || "Unnamed courier"}</option>)}</select>
+        </div>
+        <div className="mt-4 grid gap-3">
+          {visibleZones.map((rate) => { const courier = couriers.find((item) => item.id === rate.courierProviderId); return <article key={rate.id} className="grid gap-4 rounded-2xl border border-black/[.07] bg-white p-5 shadow-[0_8px_30px_rgba(17,17,15,.03)] md:grid-cols-[minmax(0,1fr)_180px_auto] md:items-center">
+            <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h3 className="text-base font-medium">{rate.name || "Untitled zone"}</h3><span className={rate.active ? "admin-status admin-status--success" : "admin-status"}>{rate.active ? "Active" : "Inactive"}</span>{rate.fallback && <span className="admin-status admin-status--info">Fallback</span>}</div><p className="mt-2 text-xs text-black/45">{courier?.name || "No courier"} · {rate.districts.length} district{rate.districts.length === 1 ? "" : "s"} · {rate.cities.length} cities/areas · {rate.postalCodes.length} postal codes</p><div className="mt-3 flex flex-wrap gap-1.5">{rate.districts.slice(0,5).map((district) => <span key={district} className="rounded-full bg-black/[.045] px-2.5 py-1 text-[9px] text-black/55">{district}</span>)}{rate.districts.length > 5 && <span className="rounded-full bg-black/[.045] px-2.5 py-1 text-[9px] text-black/55">+{rate.districts.length-5}</span>}</div></div>
+            <div><p className="text-[9px] uppercase tracking-[.14em] text-black/35">Pricing</p><p className="mt-1 text-xl font-medium">{money(rate.fee)}</p></div>
+            <button type="button" className="btn" onClick={() => setEditingZone(rate.id)}>Edit</button>
+          </article>; })}
+          {!visibleZones.length && <Empty text="No delivery zones match these filters." />}
+        </div>
+      </section>}
+
+      {deliveryTab === "couriers" && <div className="mt-5 grid gap-5">
         {couriers.map((courier, courierIndex) => {
           const courierRates = rates.filter(
               (rate) => rate.courierProviderId === courier.id,
@@ -2013,7 +2046,17 @@ function DeliveryRates() {
             </section>
           );
         })}
-      </div>
+      </div>}
+
+      {zoneBeingEdited && <AdminDrawer title={zoneBeingEdited.name || "Delivery zone"} onClose={() => setEditingZone(null)}><div className="space-y-5">
+        <Panel title="Zone identity"><Field label="Zone name" value={zoneBeingEdited.name} onChange={(name) => updateRate(zoneBeingEdited.id,{name})}/><label className="block text-xs">Courier<select className="field mt-2" value={zoneBeingEdited.courierProviderId} onChange={(event) => updateRate(zoneBeingEdited.id,{courierProviderId:event.target.value})}>{couriers.map((courier) => <option key={courier.id} value={courier.id}>{courier.name || "Unnamed courier"}</option>)}</select></label></Panel>
+        <Panel title="Price"><label className="block text-xs">Delivery fee (LKR)<input className="field mt-2" type="number" min="0" value={zoneBeingEdited.fee} onChange={(event) => updateRate(zoneBeingEdited.id,{fee:Number(event.target.value)})}/></label></Panel>
+        <Panel title="District coverage"><DistrictPicker values={zoneBeingEdited.districts} onChange={(districts) => updateRate(zoneBeingEdited.id,{districts})}/></Panel>
+        <Panel title="Cities / Areas"><textarea className="field min-h-28" value={zoneBeingEdited.cities.join("\n")} onChange={(event) => updateRate(zoneBeingEdited.id,{cities:event.target.value.split(/[,\n]/).map((value)=>value.trim()).filter(Boolean)})} placeholder="One city or area per line" /></Panel>
+        <Panel title="Postal codes"><textarea className="field min-h-28" value={zoneBeingEdited.postalCodes.join("\n")} onChange={(event) => updateRate(zoneBeingEdited.id,{postalCodes:event.target.value.split(/[,\n]/).map((value)=>value.trim()).filter(Boolean)})} placeholder="One postal code or prefix per line" /></Panel>
+        <Panel title="State & priority"><Toggles items={[["Active",zoneBeingEdited.active,(active)=>updateRate(zoneBeingEdited.id,{active})],["Fallback",zoneBeingEdited.fallback,(fallback)=>fallback?setFallback(zoneBeingEdited.courierProviderId || "",zoneBeingEdited.id):updateRate(zoneBeingEdited.id,{fallback:false})]]}/><label className="block text-xs">Sort order<input className="field mt-2" type="number" min="0" value={zoneBeingEdited.sortOrder} onChange={(event) => updateRate(zoneBeingEdited.id,{sortOrder:Number(event.target.value)})}/></label><div className="mt-5 rounded-xl bg-black/[.04] p-4 text-xs leading-6"><b className="block">Matching priority</b>Postal code<br/>→ City / Area<br/>→ District<br/>→ Outstation / Fallback</div></Panel>
+        <div className="sticky bottom-0 flex justify-end gap-2 border-t border-black/10 bg-[#e9e5de]/95 p-4 backdrop-blur"><button type="button" className="btn" onClick={() => setEditingZone(null)}>Close</button><button type="button" className="btn btn-dark" disabled={busy} onClick={() => void submit()}>{busy ? "Saving…" : "Save delivery"}</button></div>
+      </div></AdminDrawer>}
 
       {!!couriers.length && (
         <div className="sticky bottom-4 z-20 mt-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-black/10 bg-[#f8f6f1]/95 p-4 shadow-[0_18px_55px_rgba(17,17,15,.14)] backdrop-blur sm:px-5">

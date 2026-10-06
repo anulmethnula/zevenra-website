@@ -52,7 +52,7 @@ type NavEntry = {
 export function StoreLayout() {
   const cart = useCart(),
     { user } = useCustomerAuth(),
-    { data } = useStore(),
+    { data, loading } = useStore(),
     location = useLocation(),
     [menu, setMenu] = useState(false),
     [solid, setSolid] = useState(location.pathname !== "/");
@@ -94,7 +94,7 @@ export function StoreLayout() {
       seen.add(key);
       return true;
     });
-  const nav: NavEntry[] = [
+  const nav: NavEntry[] = loading ? [] : [
     { id: "core-new", label: "NEW", to: "/shop?new=true" },
     { id: "core-shop", label: "SHOP", to: "/shop" },
     ...categoryEntries,

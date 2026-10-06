@@ -119,6 +119,17 @@ const defaultHero = {
   desktopVideo: "/media/hero-final-v2.mp4",
   mobileVideo: "/media/hero-final-v2.mp4",
 };
+const liveInitialStoreData: StoreData = {
+  ...initialStoreData,
+  products: [], categories: [], collections: [], navigation: [],
+  homepageSections: [], sizeCharts: [], pages: [], couriers: [], deliveryRates: [],
+  settings: {
+    ...initialStoreData.settings,
+    announcement: "", whatsapp: "", phone: "", email: "", instagram: "", tiktok: "",
+    codEnabled: false, bankEnabled: false, bankName: "", accountName: "",
+    accountNumber: "", branch: "", bankInstructions: "",
+  },
+};
 const bool = (value: unknown) =>
   value === true || String(value).toLowerCase() === "true";
 const number = (value: unknown) => Number(value) || 0;
@@ -297,6 +308,7 @@ const normalizeProduct = (row: unknown): Product => {
 };
 function normalizeSettings(
   source: SettingsRow[] | Record<string, unknown>,
+  neutralMissingValues = false,
 ): SiteSettings {
   const raw = Array.isArray(source)
     ? Object.fromEntries(source.map((row) => [row.key, row.value]))
@@ -309,10 +321,10 @@ function normalizeSettings(
     accountNumber: raw.accountNumber ?? raw.bankAccountNumber,
     branch: raw.branch ?? raw.bankBranch,
   };
-  if (mapped.email === "hello@zevenra.test")
+  if (!neutralMissingValues && mapped.email === "hello@zevenra.test")
     mapped.email = initialStoreData.settings.email;
   const result = structuredClone(
-      initialStoreData.settings,
+      neutralMissingValues ? liveInitialStoreData.settings : initialStoreData.settings,
     ) as unknown as Record<string, unknown>,
     brandFallbackKeys = new Set([
       "whatsapp",
@@ -324,7 +336,7 @@ function normalizeSettings(
   for (const [key, defaultValue] of Object.entries(result)) {
     if (key === "hero" || mapped[key] === undefined) continue;
     const incoming = mapped[key];
-    if (brandFallbackKeys.has(key) && String(incoming ?? "").trim() === "")
+    if (!neutralMissingValues && brandFallbackKeys.has(key) && String(incoming ?? "").trim() === "")
       continue;
     if (typeof defaultValue === "boolean") result[key] = bool(incoming);
     else if (typeof defaultValue === "number") result[key] = number(incoming);
@@ -429,7 +441,7 @@ function message(error: unknown) {
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<StoreData>(() =>
-      demo ? demoLoad() : {...initialStoreData,products:[],sizeCharts:[],couriers:[],deliveryRates:[],settings:{...initialStoreData.settings,codEnabled:false,bankEnabled:false,bankName:"",accountName:"",accountNumber:"",branch:"",bankInstructions:""}},
+      demo ? demoLoad() : liveInitialStoreData,
     ),
     [loading, setLoading] = useState(!demo && !adminRoute),
     [error, setError] = useState(""),
@@ -454,7 +466,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           collections:payload.collections.map(normalizeCollection),
           navigation:payload.navigation.map(normalizeNavigation),
           homepageSections:payload.homepageSections.map(normalizeHomepage),
-          settings: {...normalizeSettings(payload.settings),codEnabled:false,bankEnabled:false,bankName:"",accountName:"",accountNumber:"",branch:"",bankInstructions:"",deliveryEnabled:false,deliveryFee:0,freeDeliveryThreshold:0,defaultCourierProviderId:"",storeOpen:false,ordersEnabled:false},
+          settings: {...normalizeSettings(payload.settings, true),codEnabled:false,bankEnabled:false,bankName:"",accountName:"",accountNumber:"",branch:"",bankInstructions:"",deliveryEnabled:false,deliveryFee:0,freeDeliveryThreshold:0,defaultCourierProviderId:"",storeOpen:false,ordersEnabled:false},
         };
       }),
     [],

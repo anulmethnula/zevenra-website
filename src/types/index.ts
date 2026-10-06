@@ -368,6 +368,9 @@ export type CustomerPreorder = Omit<
   "customerId" | "phone" | "email" | "notes"
 >;
 export type DashboardData = {
+  publishedProducts: number;
+  lowStockProducts: number;
+  stockAttention: Array<{ id: string; name: string; slug: string; thumbnail: string; totalStock: number; lowVariantCount: number; preorderEnabled: boolean }>;
   ordersToday: number;
   pending: number;
   confirmed: number;
