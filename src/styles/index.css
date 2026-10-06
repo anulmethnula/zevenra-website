@@ -79,12 +79,7 @@ textarea.field{padding-block:1rem}
 .home-hero__video--ready{opacity:1}
 .home-hero--video-only{background:#000}
 .home-hero__shade{position:absolute;z-index:2;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.08),rgba(0,0,0,.02) 55%,rgba(0,0,0,.28));pointer-events:none}
-.home-hero__cta{position:absolute;z-index:3;bottom:max(6.5svh,48px);left:max(24px,5.5vw);display:flex;width:185px;min-height:50px;align-items:center;justify-content:space-between;gap:18px;padding:0 17px 0 19px;border:1px solid rgba(191,151,108,.52);background:rgba(10,8,6,.62);color:#f7f1e8;font-size:9px;font-weight:600;letter-spacing:.2em;text-transform:uppercase;transition:background .22s,border-color .22s,color .22s}
-.home-hero__cta::after{content:'→';color:#c59a6d;font-size:15px;font-weight:300;line-height:1;transition:color .22s,transform .22s}
-.home-hero__cta:hover{border-color:rgba(211,174,133,.8);background:rgba(10,8,6,.82);color:#fff}
-.home-hero__cta:hover::after{color:#e2bb91;transform:translateX(3px)}
-@media(max-width:767px){.home-hero__cta{bottom:max(5svh,36px);left:50%;width:min(190px,calc(100% - 40px));transform:translateX(-50%)}}
-@media(min-width:768px){.home-hero__shade::after{position:absolute;inset:42% 48% 0 0;background:radial-gradient(ellipse at left bottom,rgba(0,0,0,.34),transparent 72%);content:''}.home-hero__cta{bottom:clamp(60px,6.5svh,75px);left:clamp(70px,5.5vw,90px);width:max-content;min-height:0;padding:0 0 13px;border:0;background:transparent;box-shadow:none;color:#f2eee7;font-size:10px;font-weight:600;letter-spacing:.22em}.home-hero__cta::before{position:absolute;bottom:0;left:0;width:125px;height:1px;background:rgba(242,238,231,.68);content:'';transition:width .25s,opacity .25s}.home-hero__cta::after{color:#f2eee7;content:'↗'}.home-hero__cta:hover{border-color:transparent;background:transparent;color:#fff}.home-hero__cta:hover::before{width:138px;opacity:1}.home-hero__cta:hover::after{color:#fff;transform:translate(3px,-2px)}}
+@media(min-width:768px){.home-hero__shade::after{position:absolute;inset:42% 48% 0 0;background:radial-gradient(ellipse at left bottom,rgba(0,0,0,.34),transparent 72%);content:''}}
 .section-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:clamp(2rem,4vw,3.5rem)}
 .section-heading h2{font-size:clamp(2.8rem,5vw,5.2rem);line-height:.92}
 .section-heading>a{padding-bottom:6px;border-bottom:1px solid;font-size:9px;font-weight:500;letter-spacing:.2em;transition:color .2s}
