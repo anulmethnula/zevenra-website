@@ -69,7 +69,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       "public, s-maxage=3600, stale-while-revalidate=86400",
     );
     return res.send(xml);
-  } catch {
+  } catch (error) {
+    console.error("sitemap generation failed",error);
     res.status(503);
     res.setHeader("Content-Type", "application/xml; charset=utf-8");
     return res.send(

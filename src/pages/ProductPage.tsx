@@ -17,19 +17,23 @@ import { money } from "../config/site";
 import { useCart } from "../features/cart/CartContext";
 import { ProductCard } from "../components/ProductCard";
 import { Seo } from "../components/Seo";
-import type { Media } from "../types";
-import { useProduct } from "../hooks/usePublicData";
+import type { Media, SizeChart } from "../types";
+import { getSizeChart, useProduct, useRecommendations } from "../hooks/usePublicData";
+import { cloudinaryImage, cloudinarySrcSet } from "../utils/cloudinary";
 
 export default function ProductPage() {
   const { slug } = useParams(),
     cart = useCart(),
-    request = useProduct(slug||""),product=request.data?.product;
+    request = useProduct(slug||""),product=request.data?.product,
+    recommendations=useRecommendations(product?.categoryId||"",product?.id||"");
   const [color, setColor] = useState(
       product?.variants.find((v) => v.active)?.color || "",
     ),
     [size, setSize] = useState(""),
     [qty, setQty] = useState(1),
     [guide, setGuide] = useState(false),
+    [chart,setChart]=useState<SizeChart|null>(null),
+    [chartLoading,setChartLoading]=useState(false),
     [activeMedia, setActiveMedia] = useState(0);
   const touchStart = useRef<number | null>(null);
 
@@ -38,10 +42,11 @@ export default function ProductPage() {
     setSize("");
     setQty(1);
     setGuide(false);
+    setChart(null);
     setActiveMedia(0);
   }, [product]);
 
-  if(request.loading)return <div className="container min-h-[70vh] pt-36"><div className="home-skeleton"><div/><div/><div/><div/></div></div>;
+  if(request.loading)return <ProductPageSkeleton/>;
   if (!product)
     return (
       <div className="container grid min-h-[70vh] place-content-center pt-28 text-center">
@@ -61,7 +66,6 @@ export default function ProductPage() {
     sold =
       product.variants.filter((v) => v.active).every((v) => v.stock < 1) &&
       !product.preorderEnabled,
-    chart = request.data?.sizeChart,
     primaryImage =
       product.media.find((media) => media.type === "image")?.url || "",
     inCart = variant
@@ -111,6 +115,7 @@ export default function ProductPage() {
     if (delta < 0) next();
     else previous();
   };
+  const openGuide=async()=>{if(chart){setGuide(true);return;}if(!product.sizeChartId)return;setChartLoading(true);try{setChart(await getSizeChart(product.sizeChartId));setGuide(true);}finally{setChartLoading(false);}};
 
   return (
     <>
@@ -171,12 +176,13 @@ export default function ProductPage() {
             <div className="mt-7">
               <div className="mb-3 flex items-center justify-between">
                 <span className="eyebrow">Size</span>
-                {chart?.imageUrl && (
+                {product.sizeChartId && (
                   <button
-                    onClick={() => setGuide(true)}
+                    onClick={() => void openGuide()}
+                    disabled={chartLoading}
                     className="size-guide-link"
                   >
-                    <Ruler size={14} /> Size guide
+                    <Ruler size={14} /> {chartLoading?"Loading guide…":"Size guide"}
                   </button>
                 )}
               </div>
@@ -277,7 +283,7 @@ export default function ProductPage() {
           <p className="eyebrow text-bronze">Continue exploring</p>
           <h2 className="display mt-3 text-5xl">You may also like</h2>
           <div className="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
-            {(request.data?.related||[])
+            {(recommendations.data||[]).slice(0,4)
               .map((p) => (
                 <ProductCard key={p.id} product={p} />
               ))}
@@ -340,6 +346,9 @@ function ProductGallery({
   onTouchEnd: (x: number) => void;
   name: string;
 }) {
+  const [loadedUrl,setLoadedUrl]=useState("");
+  useEffect(()=>{setLoadedUrl("");},[current?.url]);
+  useEffect(()=>{if(loadedUrl!==current?.url||media.length<2)return;for(const index of [(active-1+media.length)%media.length,(active+1)%media.length]){const item=media[index];if(item?.type==="image"){const preload=new Image();preload.src=cloudinaryImage(item.url,1200);}}},[active,current?.url,loadedUrl,media]);
   return (
     <div className="product-gallery">
       <div
@@ -361,8 +370,16 @@ function ProductGallery({
           ) : (
             <motion.img
               key={current.url}
-              src={current.url}
+              src={cloudinaryImage(current.url,1200)}
+              srcSet={cloudinarySrcSet(current.url,[640,900,1200,1600])}
+              sizes="(max-width: 1023px) 100vw, 58vw"
               alt={current.alt || name}
+              width="1200"
+              height="1500"
+              loading="eager"
+              fetchPriority="high"
+              decoding="async"
+              onLoad={(event)=>{setLoadedUrl(current.url);if(import.meta.env.DEV){const entry=performance.getEntriesByName(event.currentTarget.currentSrc).at(-1) as PerformanceResourceTiming|undefined;console.info("product image ready",{requestMs:entry?Math.round(entry.duration):undefined,decodedAtMs:Math.round(performance.now())});}}}
               className="product-gallery__media"
               initial={{ opacity: 0, scale: 0.992 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -410,7 +427,7 @@ function ProductGallery({
               {item.type === "video" ? (
                 <video src={item.url} muted playsInline preload="metadata" />
               ) : (
-                <img src={item.url} alt="" />
+                <img src={cloudinaryImage(item.url,240)} alt="" width="192" height="240" loading="lazy" decoding="async" />
               )}
             </button>
           ))}
@@ -426,6 +443,8 @@ function ProductGallery({
     </div>
   );
 }
+
+function ProductPageSkeleton(){return <div className="product-page pb-28 pt-[102px] lg:container lg:pt-36" aria-label="Loading product"><div className="product-detail-grid animate-pulse"><div className="product-gallery__stage"/><div className="product-detail-panel"><div className="h-3 w-24 bg-black/10"/><div className="mt-6 h-14 w-4/5 bg-black/10"/><div className="mt-5 h-5 w-28 bg-black/10"/><div className="mt-8 h-20 w-full bg-black/[.07]"/><div className="mt-8 h-28 w-full bg-black/[.07]"/></div></div></div>}
 
 function SizeGuide({
   chart,

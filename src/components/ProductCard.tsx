@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { money } from "../config/site";
 import { useStore } from "../features/store/StoreContext";
 import type { ProductSummary } from "../types";
+import { cloudinaryImage, cloudinarySrcSet } from "../utils/cloudinary";
 
 const swatchMap: Record<string, string> = {
   black: "#171717",
@@ -39,6 +41,7 @@ function swatch(color: string) {
 }
 
 export function ProductCard({ product }: { product: ProductSummary }) {
+  const [secondaryReady,setSecondaryReady]=useState(false);
   const { data } = useStore(),
     active = product.variants.filter((variant) => variant.active),
     out = active.length === 0 || active.every((variant) => variant.stock < 1),
@@ -73,23 +76,29 @@ export function ProductCard({ product }: { product: ProductSummary }) {
     category?.name || product.subcategory || parent?.name || "ZEVENRA";
   return (
     <article className="product-card">
-      <Link to={`/product/${product.slug}`} aria-label={`View ${product.name}`}>
+      <Link to={`/product/${product.slug}`} aria-label={`View ${product.name}`} onMouseEnter={()=>setSecondaryReady(true)} onFocus={()=>setSecondaryReady(true)} onTouchStart={()=>setSecondaryReady(true)}>
         <div className="product-card__media">
           {primary ? (
             <>
               <img
-                src={primary.url}
+                src={cloudinaryImage(primary.url,900)}
+                srcSet={cloudinarySrcSet(primary.url,[320,480,640,900])}
+                sizes="(max-width: 639px) 50vw, (max-width: 1023px) 33vw, 25vw"
                 alt={primary.alt || product.name}
                 loading="lazy"
+                decoding="async"
                 width="800"
                 height="1000"
               />
-              {secondary && (
+              {secondary && secondaryReady && (
                 <img
                   className="product-card__secondary"
-                  src={secondary.url}
+                  src={cloudinaryImage(secondary.url,900)}
+                  srcSet={cloudinarySrcSet(secondary.url,[320,480,640,900])}
+                  sizes="(max-width: 639px) 50vw, (max-width: 1023px) 33vw, 25vw"
                   alt=""
                   loading="lazy"
+                  decoding="async"
                   width="800"
                   height="1000"
                 />

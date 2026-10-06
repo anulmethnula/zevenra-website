@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ProductCard } from "../ProductCard";
 import type { Category, HomepageData, HomepageSection, ProductSummary, SiteSettings } from "../../types";
 import { validExternalUrl } from "../../utils/contact";
+import { cloudinaryImage, cloudinarySrcSet } from "../../utils/cloudinary";
 
 const videoPattern = /\.(mp4|webm)(?:\?|$)/i;
 
@@ -13,7 +14,7 @@ export function ProductSection({ title, products, link = "/shop" }: { title: str
 
 export function CategorySection({ categories, title = "SHOP BY CATEGORY" }: { categories: Category[]; title?: string }) {
   if (!categories.length) return null;
-  return <section className="section home-categories home-categories--editorial"><div className="container"><div className="home-category-heading"><div><p>BUILD YOUR STYLE</p><h2>{title}</h2></div></div><div className={`home-category-rail hide-scrollbar${categories.length === 3 ? " home-category-rail--three" : ""}`}>{categories.slice(0, 10).map(category => <Link key={category.id} to={`/category/${category.slug}`} className="home-category-tile">{category.imageUrl ? <picture>{category.mobileImageUrl && <source media="(max-width: 767px)" srcSet={category.mobileImageUrl}/>}<img src={category.imageUrl} alt={category.name} loading="lazy" decoding="async" /></picture> : <div className="category-grid__placeholder" aria-hidden="true"/>}<span>{category.name.toUpperCase()}</span></Link>)}</div></div></section>;
+  return <section className="section home-categories home-categories--editorial"><div className="container"><div className="home-category-heading"><div><p>BUILD YOUR STYLE</p><h2>{title}</h2></div></div><div className={`home-category-rail hide-scrollbar${categories.length === 3 ? " home-category-rail--three" : ""}`}>{categories.slice(0, 10).map(category => <Link key={category.id} to={`/category/${category.slug}`} className="home-category-tile">{category.imageUrl ? <picture>{category.mobileImageUrl && <source media="(max-width: 767px)" srcSet={cloudinaryImage(category.mobileImageUrl,900)}/>}<img src={cloudinaryImage(category.imageUrl,900)} srcSet={cloudinarySrcSet(category.imageUrl,[360,600,900])} sizes="(max-width: 767px) 78vw, 33vw" width="900" height="1125" alt={category.name} loading="lazy" decoding="async" /></picture> : <div className="category-grid__placeholder" aria-hidden="true"/>}<span>{category.name.toUpperCase()}</span></Link>)}</div></div></section>;
 }
 
 function ResponsiveMedia({ section }: { section: HomepageSection }) {
@@ -22,7 +23,7 @@ function ResponsiveMedia({ section }: { section: HomepageSection }) {
   useEffect(() => { const node = ref.current; if (!node) return; const observer = new IntersectionObserver(([entry]) => entry.isIntersecting ? void node.play().catch(() => undefined) : node.pause(), { rootMargin: "200px" }); observer.observe(node); return () => observer.disconnect(); }, [desktop, mobile]);
   if (!desktop || failed) return <div className="home-media-fallback" aria-hidden="true"/>;
   if (video) return <video ref={ref} muted loop playsInline preload="none" className="h-full w-full object-cover" onError={() => setFailed(true)}><source media="(max-width: 767px)" src={mobile}/><source src={desktop}/></video>;
-  return <picture><source media="(max-width: 767px)" srcSet={mobile}/><img src={desktop} alt={section.title || "ZEVENRA editorial campaign"} loading="lazy" decoding="async" onError={() => setFailed(true)}/></picture>;
+  return <picture><source media="(max-width: 767px)" srcSet={cloudinaryImage(mobile,900)}/><img src={cloudinaryImage(desktop,1600)} srcSet={cloudinarySrcSet(desktop,[640,900,1200,1600])} sizes="100vw" width="1600" height="1000" alt={section.title || "ZEVENRA editorial campaign"} loading="lazy" decoding="async" onError={() => setFailed(true)}/></picture>;
 }
 
 function Campaign({ section }: { section: HomepageSection }) {
