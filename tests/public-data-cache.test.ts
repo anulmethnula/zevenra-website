@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { fetchPublic,getCachedPublic,invalidatePublic,revalidatePublic } from "../src/services/publicDataCache.ts";
+import { shopSearchPolicy } from "../src/services/shopSearchPolicy.ts";
 
 class SessionStorageMock {
   private values=new Map<string,string>();
@@ -58,5 +59,34 @@ test("manual revalidation bypasses an older in-flight search request",async()=>{
   resolvers[0](new Response(JSON.stringify({total:0}),{status:200,headers:{"content-type":"application/json"}}));
   await old;
   assert.equal(getCachedPublic<{total:number}>(path)?.total,1);
+  invalidatePublic();
+});
+
+test("cached zero-result searches force revalidation and stay loading",async()=>{
+  const query="page=1&pageSize=24&sort=newest&q=classic",path=`/products?${query}`;
+  let requests=0;
+  globalThis.fetch=async()=>{requests+=1;return new Response(JSON.stringify(requests===1?{items:[],total:0}:{items:[{slug:"the-classic-fit"}],total:1}),{status:200,headers:{"content-type":"application/json"}});};
+  const cached=await fetchPublic<{items:Array<{slug:string}>;total:number}>(path,{ttlMs:25_000});
+  const policy=shopSearchPolicy(query,cached);
+  assert.deepEqual(policy,{search:true,revalidateFresh:true,loadingWhileRevalidate:true});
+  const fresh=await revalidatePublic<{items:Array<{slug:string}>;total:number}>(path,{ttlMs:25_000});
+  assert.equal(requests,2);
+  assert.equal(fresh.items[0]?.slug,"the-classic-fit");
+  assert.equal(getCachedPublic<typeof fresh>(path)?.total,1);
+  invalidatePublic();
+});
+
+test("cached search items may remain visible during forced revalidation",()=>{
+  const policy=shopSearchPolicy("page=1&q=fit",{items:[{slug:"classic-fit"}]});
+  assert.equal(policy.revalidateFresh,true);
+  assert.equal(policy.loadingWhileRevalidate,false);
+});
+
+test("one-word searches use the complete query string as their cache key",async()=>{
+  const urls:string[]=[];
+  globalThis.fetch=async input=>{urls.push(String(input));return new Response(JSON.stringify({items:[],total:0}),{status:200,headers:{"content-type":"application/json"}});};
+  const first="/products?page=1&pageSize=24&sort=newest&q=bloom",second="/products?page=2&pageSize=24&sort=newest&q=bloom";
+  await fetchPublic(first,{ttlMs:25_000});await fetchPublic(first,{ttlMs:25_000});await fetchPublic(second,{ttlMs:25_000});
+  assert.deepEqual(urls,[`/api${first}`,`/api${second}`]);
   invalidatePublic();
 });
