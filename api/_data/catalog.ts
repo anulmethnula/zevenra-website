@@ -12,6 +12,7 @@ import {
   mapSizeChart,
 } from "./mappers.js";
 import { buildPublicCheckoutConfig } from "./public-checkout.js";
+import { addProductSearchConditions, normalizeSearchTokens } from "./product-search.js";
 
 const productSelect = `
  SELECT p.*,
@@ -42,9 +43,9 @@ export async function listProducts(publishedOnly = false) {
 }
 
 export async function listPublicProducts(input: Record<string, unknown>) {
-  const page = Math.max(1, Math.floor(Number(input.page) || 1)), pageSize = Math.min(48, Math.max(1, Math.floor(Number(input.pageSize) || 24))), search = String(input.search || input.q || "").trim().slice(0, 100), category = String(input.category || "").trim().slice(0,100), collection = String(input.collection || "").trim().slice(0,100), size=String(input.size||"").trim().slice(0,60), color=String(input.color||"").trim().slice(0,60), maxPrice=Math.min(10000000,Math.max(0,Number(input.maxPrice)||0)), sort = String(input.sort || "newest");
+  const page = Math.max(1, Math.floor(Number(input.page) || 1)), pageSize = Math.min(48, Math.max(1, Math.floor(Number(input.pageSize) || 24))), searchTokens = normalizeSearchTokens(input.search || input.q), category = String(input.category || "").trim().slice(0,100), collection = String(input.collection || "").trim().slice(0,100), size=String(input.size||"").trim().slice(0,60), color=String(input.color||"").trim().slice(0,60), maxPrice=Math.min(10000000,Math.max(0,Number(input.maxPrice)||0)), sort = String(input.sort || "newest");
   const values: unknown[] = [], conditions = ["p.status='published'"];
-  if (search) { values.push(`%${search.toLowerCase()}%`); conditions.push(`(lower(p.name) LIKE $${values.length} OR lower(p.short_description) LIKE $${values.length} OR EXISTS(SELECT 1 FROM unnest(p.tags) tag WHERE lower(tag) LIKE $${values.length}) OR EXISTS(SELECT 1 FROM categories c LEFT JOIN categories parent ON parent.id=c.parent_id WHERE c.id=p.category_id AND (lower(c.name) LIKE $${values.length} OR lower(COALESCE(parent.name,'')) LIKE $${values.length})))`); }
+  addProductSearchConditions(conditions, values, searchTokens);
   if (category && category!=="all") { values.push(category); conditions.push(`EXISTS(SELECT 1 FROM categories selected LEFT JOIN categories child ON child.parent_id=selected.id WHERE (selected.id=$${values.length} OR selected.slug=$${values.length}) AND (p.category_id=selected.id OR p.category_id=child.id))`); }
   if (collection && collection!=="all") { values.push(collection); conditions.push(`EXISTS(SELECT 1 FROM product_collections pc JOIN collections c ON c.id=pc.collection_id WHERE pc.product_id=p.id AND (c.id=$${values.length} OR c.slug=$${values.length}))`); }
   if (String(input.new) === "true") conditions.push("p.new_arrival=true");

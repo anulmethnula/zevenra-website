@@ -118,8 +118,8 @@ const emptyAdmin: AdminState = {
 const defaultHero = {
   ...initialStoreData.settings.hero,
   videoEnabled: true,
-  desktopVideo: "/media/hero-final-v2.mp4",
-  mobileVideo: "/media/hero-final-v2.mp4",
+  desktopVideo: "/media/hero-desktop-v1.mp4",
+  mobileVideo: "/media/hero-mobile-v1.mp4",
 };
 const liveInitialStoreData: StoreData = {
   ...initialStoreData,

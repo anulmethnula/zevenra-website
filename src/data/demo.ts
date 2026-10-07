@@ -403,8 +403,8 @@ export const settings: SiteSettings = {
   ogImage: "/brand/og-image.jpg",
   hero: {
     videoEnabled: true,
-    desktopVideo: "/media/hero-final-v2.mp4",
-    mobileVideo: "/media/hero-final-v2.mp4",
+    desktopVideo: "/media/hero-desktop-v1.mp4",
+    mobileVideo: "/media/hero-mobile-v1.mp4",
     poster: "/brand/hero.jpg",
     fallbackImage: "/brand/hero.jpg",
     heading: "ZEVENRA",
