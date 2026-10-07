@@ -21,6 +21,7 @@
     "admin:hash-password": "node scripts/hash-admin-password.mjs",
     "db:migrate": "node scripts/db-migrate.mjs",
     "db:verify": "node scripts/db-verify.mjs",
+    "db:search-smoke": "node --env-file=.env.local --import tsx scripts/search-smoke.ts",
     "db:smoke": "node --env-file=.env.local scripts/query-smoke.mjs",
     "perf:reads": "node scripts/load-test-reads.mjs"
   },
@@ -53,6 +54,7 @@
     "globals": "^15.14.0",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
+    "tsx": "^4.21.0",
     "typescript": "~5.6.2",
     "typescript-eslint": "^8.18.2",
     "vite": "^6.0.5"

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { fetchPublic,getCachedPublic,invalidatePublic } from "../src/services/publicDataCache.ts";
+import { fetchPublic,getCachedPublic,invalidatePublic,revalidatePublic } from "../src/services/publicDataCache.ts";
 
 class SessionStorageMock {
   private values=new Map<string,string>();
@@ -31,5 +31,32 @@ test("does not cache failed requests or persist non-allowlisted payloads",async(
   assert.equal(getCachedPublic("/checkout-config",{persist:true}),undefined);
   await fetchPublic("/checkout-config",{persist:true});
   assert.equal(requests,2);assert.equal(sessionStorage.length,0);
+  invalidatePublic();
+});
+
+test("invalidation prevents an older response from repopulating a search cache",async()=>{
+  let finishOld:(response:Response)=>void=()=>{};
+  globalThis.fetch=()=>new Promise<Response>(resolve=>{finishOld=resolve;});
+  const path="/products?page=1&q=classic";
+  const old=fetchPublic<{total:number}>(path,{ttlMs:25_000});
+  invalidatePublic("/products");
+  finishOld(new Response(JSON.stringify({total:0}),{status:200,headers:{"content-type":"application/json"}}));
+  assert.equal((await old).total,0);
+  assert.equal(getCachedPublic(path),undefined);
+});
+
+test("manual revalidation bypasses an older in-flight search request",async()=>{
+  const resolvers:Array<(response:Response)=>void>=[];
+  globalThis.fetch=()=>new Promise<Response>(resolve=>resolvers.push(resolve));
+  const path="/products?page=1&q=porcelain";
+  const old=fetchPublic<{total:number}>(path,{ttlMs:25_000});
+  await new Promise(resolve=>setTimeout(resolve,0));
+  const retry=revalidatePublic<{total:number}>(path,{ttlMs:25_000});
+  assert.equal(resolvers.length,2);
+  resolvers[1](new Response(JSON.stringify({total:1}),{status:200,headers:{"content-type":"application/json"}}));
+  assert.equal((await retry).total,1);
+  resolvers[0](new Response(JSON.stringify({total:0}),{status:200,headers:{"content-type":"application/json"}}));
+  await old;
+  assert.equal(getCachedPublic<{total:number}>(path)?.total,1);
   invalidatePublic();
 });
