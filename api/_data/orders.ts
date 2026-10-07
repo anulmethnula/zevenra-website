@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import type { DatabaseClient } from "../_db.js";
 import { query, withTransaction } from "../_db.js";
 import { sriLankaDistricts } from "../_shared.js";
+import { receiptAsset } from "../_receipt-asset.js";
 import { mapOrder } from "./mappers.js";
 
 type OrderInput = {
@@ -58,30 +59,6 @@ const settingValue = (
 ) => rows.find((row) => row.key === key)?.value ?? fallback;
 const truthy = (value: unknown) =>
   value === true || String(value).toLowerCase() === "true";
-
-function receiptAsset(value: string | undefined) {
-  if (!value) return { publicId: "", resourceType: "", format: "" };
-  const url = new URL(value),
-    parts = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
-  if (
-    url.protocol !== "https:" ||
-    url.hostname !== "res.cloudinary.com" ||
-    !["image", "raw", "video"].includes(parts[1] || "") ||
-    parts[2] !== "authenticated" ||
-    parts[0] !== process.env.CLOUDINARY_CLOUD_NAME
-  )
-    throw new Error("Invalid payment receipt URL.");
-  let rest = parts.slice(3);
-  if (/^v\d+$/.test(rest[0] || "")) rest = rest.slice(1);
-  const last = rest.pop() || "",
-    dot = last.lastIndexOf("."),
-    name = dot > 0 ? last.slice(0, dot) : last,
-    format = dot > 0 ? last.slice(dot + 1) : "",
-    publicId = [...rest, name].join("/");
-  if (!publicId.startsWith("zevenra/payment-receipts/"))
-    throw new Error("Invalid payment receipt URL.");
-  return { publicId, resourceType: parts[1], format };
-}
 
 async function deliverySnapshot(
   client: DatabaseClient,

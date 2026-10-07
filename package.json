@@ -12,7 +12,7 @@
     "dev:demo": "vite --mode demo",
     "qa": "npm run test:checkout-config && npm run test:receipt-upload && npm run test:rate-sheet && npm run test:images && npm run test:public-cache && npm run test:product-search && npm run typecheck && npm run lint && npm run build",
     "test:checkout-config": "node --experimental-strip-types --test tests/checkout-config.test.ts",
-    "test:receipt-upload": "node --experimental-strip-types --test tests/payment-receipt-upload.test.ts",
+    "test:receipt-upload": "node --import tsx --test tests/payment-receipt-upload.test.ts",
     "test:rate-sheet": "node --experimental-strip-types --test tests/courier-rate-sheet.test.ts",
     "test:images": "node --experimental-strip-types --test tests/cloudinary-image.test.ts",
     "test:public-cache": "node --experimental-strip-types --test tests/public-data-cache.test.ts",

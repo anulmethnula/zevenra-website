@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { createHash } from "node:crypto";
+import { cloudinarySignature } from "./_cloudinary-signature.js";
 import {
   cloudinaryEnv,
   json,
@@ -23,17 +23,12 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     const config = cloudinaryEnv();
     if (!req.headers.origin || !validOrigin(req, config))
       return json(res, { error: "Invalid request origin" }, 403);
-    const timestamp = Math.floor(Date.now() / 1000),
-      folder = "zevenra/payment-receipts";
-    const signature = createHash("sha1")
-      .update(
-        `folder=${folder}&timestamp=${timestamp}${config.CLOUDINARY_API_SECRET}`,
-      )
-      .digest("hex");
+    const timestamp = Math.floor(Date.now() / 1000),folder = "zevenra/payment-receipts",type="authenticated";
+    const signature=cloudinarySignature({folder,timestamp,type},config.CLOUDINARY_API_SECRET);
     return json(res, {
       timestamp,
       folder,
-      deliveryType: "authenticated",
+      type,
       signature,
       apiKey: config.CLOUDINARY_API_KEY,
       cloudName: config.CLOUDINARY_CLOUD_NAME,
