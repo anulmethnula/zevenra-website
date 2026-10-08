@@ -2589,29 +2589,32 @@ function Preorders() {
             return (
               <article key={item.requestId} className="preorder-admin-card">
                 <div className="preorder-admin-card__top">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <b>{item.requestId}</b>
-                      <span
-                        className={
-                          "preorder-status preorder-status--" + item.status
-                        }
-                      >
-                        {labels[item.status]}
-                      </span>
-                      {item.batchId && (
-                        <span className="preorder-batch">{item.batchId}</span>
-                      )}
+                  <div className="flex min-w-0 items-center gap-3">
+                    {product ? <Link to={`/admin/products/${product.id}`} className="grid h-16 w-12 shrink-0 place-items-center overflow-hidden bg-black/[.05]" aria-label={`View ${item.productName}`}>{image ? <img src={image.url} alt="" loading="lazy" className="h-16 w-12 object-contain" /> : <span className="px-1 text-center text-[8px] uppercase tracking-wide text-black/30">No image</span>}</Link> : <div className="grid h-16 w-12 shrink-0 place-items-center bg-black/[.05]"><span className="px-1 text-center text-[8px] uppercase tracking-wide text-black/30">No image</span></div>}
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <b className="break-all">{item.requestId}</b>
+                        <span
+                          className={
+                            "preorder-status preorder-status--" + item.status
+                          }
+                        >
+                          {labels[item.status]}
+                        </span>
+                        {item.batchId && (
+                          <span className="preorder-batch">{item.batchId}</span>
+                        )}
+                      </div>
+                      <p>
+                        {new Date(item.createdAt).toLocaleString("en-LK", {
+                          year: "numeric",
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </p>
                     </div>
-                    <p>
-                      {new Date(item.createdAt).toLocaleString("en-LK", {
-                        year: "numeric",
-                        month: "short",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </p>
                   </div>
                   <div className="flex gap-2"><a href={wa} target="_blank" rel="noreferrer" className="btn" aria-label={`WhatsApp ${item.customerName}`}><MessageCircle size={14} /> WhatsApp</a><button type="button" className="btn btn-dark" onClick={()=>setOpen(open===item.requestId?"":item.requestId)}>{open===item.requestId?"Close":"View"}</button></div>
                 </div>
