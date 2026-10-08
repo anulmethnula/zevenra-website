@@ -3499,14 +3499,14 @@ function Orders() {
         </p>
       )}
       <div className="mt-5 overflow-hidden border border-black/10 bg-[#f6f3ed]">
-        <div className="hidden grid-cols-[64px_minmax(190px,1.1fr)_minmax(190px,1fr)_120px_145px_120px_70px] items-center gap-3 border-b border-black/10 px-4 py-3 text-[10px] uppercase tracking-[.14em] text-black/40 lg:grid">
+        <div className="hidden min-h-12 grid-cols-[64px_minmax(190px,1.1fr)_minmax(190px,1fr)_120px_145px_120px_70px] items-center gap-3 border-b border-black/10 bg-white/25 px-4 text-[10px] uppercase tracking-[.14em] text-black/45 lg:grid">
           <span className="text-center">Product</span>
-          <span>Order / date</span>
-          <span>Customer</span>
-          <span className="text-right">Total</span>
-          <span>Payment</span>
-          <span className="text-center">Status</span>
-          <span className="text-right">Action</span>
+          <span className="flex h-full items-center">Order / date</span>
+          <span className="flex h-full items-center">Customer</span>
+          <span className="flex h-full items-center justify-end text-right">Total</span>
+          <span className="flex h-full items-center">Payment</span>
+          <span className="flex h-full items-center justify-center text-center">Status</span>
+          <span className="flex h-full items-center justify-end text-right">Action</span>
         </div>
         {visible.length ? (
           visible.map((order) => {
@@ -3521,7 +3521,7 @@ function Orders() {
             return (
               <article
                 key={order.orderId}
-                className="border-b border-black/10 last:border-0"
+                className="border-b border-black/10 transition-colors last:border-0 hover:bg-white/25"
               >
                 <div className="grid grid-cols-[64px_minmax(0,1fr)] items-center gap-3 px-4 py-2.5 lg:grid-cols-[64px_minmax(190px,1.1fr)_minmax(190px,1fr)_120px_145px_120px_70px]">
                   <button
@@ -3533,7 +3533,7 @@ function Orders() {
                     {firstImage ? <img src={firstImage.url} alt="" loading="lazy" className="h-16 w-12 object-contain" /> : <span className="px-1 text-center text-[8px] uppercase tracking-wide text-black/30">No image</span>}
                     {additionalItems > 0 && <span className="absolute -right-2 -top-2 grid min-h-5 min-w-5 place-items-center rounded-full border border-white bg-black px-1 text-[9px] font-medium text-white">+{additionalItems}</span>}
                   </button>
-                  <button type="button" onClick={() => void toggle(order.orderId)} className="min-w-0 text-left">
+                  <button type="button" onClick={() => void toggle(order.orderId)} className="flex min-h-16 min-w-0 flex-col justify-center text-left">
                     <p className="truncate text-sm font-medium">{order.orderId}</p>
                     <div className="mt-1 flex flex-wrap items-center gap-2">
                       <p className="text-xs text-black/45">
@@ -3552,14 +3552,14 @@ function Orders() {
                       )}
                     </div>
                   </button>
-                  <div className="col-span-2 min-w-0 border-t border-black/[.06] pt-2 lg:col-span-1 lg:border-0 lg:pt-0">
+                  <div className="col-span-2 flex min-h-12 min-w-0 flex-col justify-center border-t border-black/[.06] pt-2 lg:col-span-1 lg:min-h-16 lg:border-0 lg:pt-0">
                     <p className="truncate text-sm">{order.customerName}</p>
                     <p className="mt-1 truncate text-xs text-black/45">
                       {order.phone} · {order.district}
                     </p>
                   </div>
-                  <span className="text-right text-sm">{money(Number(order.total))}</span>
-                  <div className="min-w-0">
+                  <span className="col-span-2 flex min-h-10 items-center text-sm tabular-nums lg:col-span-1 lg:min-h-16 lg:justify-end lg:text-right">{money(Number(order.total))}</span>
+                  <div className="col-span-2 flex min-h-10 min-w-0 flex-col justify-center lg:col-span-1 lg:min-h-16">
                     <p className="text-xs">
                       {order.paymentMethod === "cod" ? "COD" : "BANK"}
                     </p>
@@ -3567,13 +3567,13 @@ function Orders() {
                       {order.paymentStatus}
                     </p>
                   </div>
-                  <span className="w-fit justify-self-end rounded-full border border-black/10 px-2.5 py-1 text-[10px] uppercase tracking-wider lg:justify-self-center">
+                  <span className="col-span-2 w-fit rounded-full border border-black/10 bg-white/30 px-3 py-1 text-center text-[10px] uppercase tracking-wider lg:col-span-1 lg:min-w-20 lg:justify-self-center">
                     {order.orderStatus}
                   </span>
                   <button
                     type="button"
                     onClick={() => void toggle(order.orderId)}
-                    className="min-h-9 justify-self-end px-2 text-xs underline"
+                    className="col-span-2 min-h-9 justify-self-end px-2 text-xs font-medium underline underline-offset-4 lg:col-span-1"
                   >
                     {isOpen ? "CLOSE" : "VIEW"}
                   </button>
