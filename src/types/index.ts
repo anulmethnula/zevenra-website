@@ -211,6 +211,8 @@ export type GuestTrackedOrder = {
   trackingUrl: string;
   courierSentDate: string;
   subtotal: number;
+  discountCode: string;
+  discountAmount: number;
   deliveryFee: number;
   total: number;
   items: Array<{
@@ -238,6 +240,7 @@ export type CheckoutData = {
   paymentMethod: PaymentMethod;
   paymentReference?: string;
   paymentReceiptUrl?: string;
+  discountCode?: string;
   items: CartItem[];
 };
 export type Order = {
@@ -269,6 +272,8 @@ export type Order = {
   source?: string;
   hasPreorder?: boolean;
   subtotal: number;
+  discountCode?: string;
+  discountAmount?: number;
   deliveryFee: number;
   total: number;
   orderStatus: string;
@@ -313,6 +318,8 @@ export type CustomerOrder = {
   paymentReceiptUrl?: string;
   paymentStatus?: string;
   subtotal: number;
+  discountCode?: string;
+  discountAmount?: number;
   deliveryFee: number;
   total: number;
   orderStatus:

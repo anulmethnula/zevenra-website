@@ -27,6 +27,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return payload;
 }
 export const api = {
+  validateDiscount: (data: { code: string; items: Array<{ productId: string; variantId: string; quantity: number }> }) =>
+    demo ? Promise.resolve<{ valid: boolean; code?: string; discountAmount?: number; message: string }>({valid:false,message:"Discount codes are unavailable in demo mode."}) : request<{ valid: boolean; code?: string; discountAmount?: number; message: string }>("/discount-validate", { method: "POST", body: JSON.stringify(data) }),
   listProducts: async () => (demo ? products : request<Product[]>("/products")),
   getProduct: async (slug: string) =>
     demo

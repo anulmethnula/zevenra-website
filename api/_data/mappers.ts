@@ -191,6 +191,8 @@ export function mapOrder(row: Record<string, unknown>) {
       ? `order:${text(row.order_id)}`
       : "",
     subtotal: number(row.subtotal),
+    discountCode: text(row.discount_code),
+    discountAmount: number(row.discount_amount),
     deliveryFee: number(row.delivery_fee),
     total: number(row.total),
     orderStatus: text(row.order_status),

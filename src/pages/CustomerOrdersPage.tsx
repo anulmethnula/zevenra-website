@@ -314,6 +314,7 @@ function OrdersView({
                   <dt>Subtotal</dt>
                   <dd>{money(order.subtotal)}</dd>
                 </div>
+                {Number(order.discountAmount || 0)>0&&<div><dt>Discount{order.discountCode?` (${order.discountCode})`:""}</dt><dd>-{money(Number(order.discountAmount))}</dd></div>}
                 <div>
                   <dt>
                     Delivery

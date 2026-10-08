@@ -1,0 +1,19 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { calculateDiscount, discountAdminSchema, discountCode, discountDeactivateSchema } from "../api/_data/discounts.ts";
+import { checkoutAmounts } from "../src/utils/checkoutAmounts.ts";
+import { orderSchema } from "../api/_shared.ts";
+
+const now=new Date("2026-10-08T10:00:00Z"),base={code:"welcome10",type:"percentage",value:10,minimum_subtotal:0,maximum_discount:null,active:true,starts_at:null,expires_at:null,usage_limit:null,usage_count:0};
+test("percentage discounts are calculated from server subtotal",()=>assert.deepEqual(calculateDiscount(base,1650,now),{code:"WELCOME10",type:"percentage",value:10,amount:165}));
+test("fixed discounts are capped at subtotal",()=>assert.equal(calculateDiscount({...base,type:"fixed",value:5000},1000,now)?.amount,1000));
+test("inactive, expired, and future codes are rejected",()=>{assert.equal(calculateDiscount({...base,active:false},1000,now),null);assert.equal(calculateDiscount({...base,expires_at:"2026-10-08T09:00:00Z"},1000,now),null);assert.equal(calculateDiscount({...base,starts_at:"2026-10-09T09:00:00Z"},1000,now),null);});
+test("minimum subtotal is enforced",()=>assert.equal(calculateDiscount({...base,minimum_subtotal:2000},1999,now),null));
+test("maximum percentage discount is enforced",()=>assert.equal(calculateDiscount({...base,value:50,maximum_discount:300},2000,now)?.amount,300));
+test("usage limit is enforced",()=>assert.equal(calculateDiscount({...base,usage_limit:4,usage_count:4},2000,now),null));
+test("codes normalize case and whitespace",()=>assert.equal(discountCode("  welcome10 "),"WELCOME10"));
+test("final total subtracts discount once and never falls below zero",()=>{assert.equal(checkoutAmounts(6500,399,true,650).total,6249);assert.equal(checkoutAmounts(100,0,true,500).total,0);});
+test("historical totals default to zero discount",()=>assert.equal(checkoutAmounts(1600,400,true).total,2000));
+test("admin schema is strict and validates percentage rules",()=>{const valid={code:"WELCOME10",type:"percentage",value:10,minimumSubtotal:0,maximumDiscount:null,active:true,startsAt:null,expiresAt:null,usageLimit:null};assert.equal(discountAdminSchema.safeParse(valid).success,true);assert.equal(discountAdminSchema.safeParse({...valid,internal:true}).success,false);assert.equal(discountAdminSchema.safeParse({...valid,value:101}).success,false);});
+test("admin deactivate schema rejects unknown fields",()=>assert.equal(discountDeactivateSchema.safeParse({id:"one",extra:true}).success,false));
+test("order input cannot forge subtotal or discount amount",()=>{const input={customerName:"Test User",phone:"0771234567",address1:"45 Test Road",city:"Colombo",district:"Colombo",paymentMethod:"cod",items:[{productId:"p1",variantId:"v1",quantity:1}]};assert.equal(orderSchema.safeParse({...input,subtotal:1}).success,false);assert.equal(orderSchema.safeParse({...input,discountAmount:9999}).success,false);});

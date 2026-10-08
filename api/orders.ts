@@ -59,6 +59,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         { error: message || "Choose a valid delivery area." },
         400,
       );
+    if (message === "DISCOUNT_INVALID")
+      return json(res, { error: "This discount code is no longer available. Remove it or apply it again." }, 409);
     if (/already submitted/i.test(message))
       return json(
         res,

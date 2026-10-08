@@ -81,6 +81,7 @@ export default function OrderPage() {
           </div>
         ))}
         <div className="flex justify-between gap-4 py-3 text-sm"><span>Subtotal</span><span>{money(order.subtotal)}</span></div>
+        {Number(order.discountAmount || 0)>0?<div className="flex justify-between gap-4 py-3 text-sm"><span>Discount{order.discountCode?` (${order.discountCode})`:""}</span><span>-{money(Number(order.discountAmount))}</span></div>:null}
         <div className="flex justify-between gap-4 py-3 text-sm">
           <span>
             Delivery

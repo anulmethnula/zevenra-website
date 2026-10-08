@@ -30,6 +30,7 @@ const required = [
   "courier_rate_cards",
   "courier_rate_import_rows",
   "courier_rates",
+  "discount_codes",
   "site_settings",
   "audit_logs",
   "schema_migrations",
@@ -51,7 +52,7 @@ try {
       "SELECT count(*)::int AS count FROM product_collections pc LEFT JOIN products p ON p.id=pc.product_id LEFT JOIN collections c ON c.id=pc.collection_id WHERE p.id IS NULL OR c.id IS NULL",
     negativeStock: "SELECT count(*)::int AS count FROM variants WHERE stock<0",
     invalidTotals:
-      "SELECT count(*)::int AS count FROM orders WHERE subtotal+delivery_fee<>total",
+      "SELECT count(*)::int AS count FROM orders WHERE subtotal-COALESCE(discount_amount,0)+delivery_fee<>total",
     invalidStockStates:
       "SELECT count(*)::int AS count FROM orders WHERE stock_state NOT IN ('reserved','fulfilled','restored','not_applicable')",
     excessiveReturns:

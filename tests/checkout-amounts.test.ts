@@ -5,10 +5,10 @@ import { paymentReadinessMessage,postalCodeError } from "../src/utils/checkoutVa
 import { orderSuccessCopy } from "../src/utils/orderSuccess.ts";
 import { cityDistrictMismatch } from "../src/utils/delivery.ts";
 
-test("LKR 1600 plus LKR 400 produces LKR 2000",()=>{assert.deepEqual(checkoutAmounts(1600,400,true),{ready:true,subtotal:1600,deliveryFee:400,total:2000});});
+test("LKR 1600 plus LKR 400 produces LKR 2000",()=>{assert.deepEqual(checkoutAmounts(1600,400,true),{ready:true,subtotal:1600,discountAmount:0,deliveryFee:400,total:2000});});
 test("LKR 1600 plus LKR 500 produces LKR 2100",()=>{assert.equal(checkoutAmounts(1600,500,true).total,2100);});
-test("free delivery keeps the transfer amount at the subtotal",()=>{assert.deepEqual(checkoutAmounts(1600,0,true),{ready:true,subtotal:1600,deliveryFee:0,total:1600});});
-test("an unresolved delivery quote has no final transfer amount",()=>{assert.deepEqual(checkoutAmounts(1600,0,false),{ready:false,subtotal:1600,deliveryFee:0,total:undefined});});
+test("free delivery keeps the transfer amount at the subtotal",()=>{assert.deepEqual(checkoutAmounts(1600,0,true),{ready:true,subtotal:1600,discountAmount:0,deliveryFee:0,total:1600});});
+test("an unresolved delivery quote has no final transfer amount",()=>{assert.deepEqual(checkoutAmounts(1600,0,false),{ready:false,subtotal:1600,discountAmount:0,deliveryFee:0,total:undefined});});
 test("recomputes immediately when cart or delivery values change",()=>{assert.equal(checkoutAmounts(1600,500,true).total,2100);assert.equal(checkoutAmounts(3200,0,true).total,3200);});
 test("postal validation distinguishes length, characters, valid, and empty values",()=>{assert.equal(postalCodeError("0150"),"Postal code must be exactly 5 digits.");assert.equal(postalCodeError("10A50"),"Postal code must contain numbers only.");assert.equal(postalCodeError("10250"),"");assert.equal(postalCodeError(""),"");});
 test("payment readiness explains the actual delivery blocker",()=>{assert.equal(paymentReadinessMessage({city:"",district:"",postalError:"",deliveryEnabled:true,quoteReady:false}),"Complete your delivery details to continue.");assert.equal(paymentReadinessMessage({city:"Colombo",district:"Colombo",postalError:"bad",deliveryEnabled:true,quoteReady:false}),"Fix the postal code above to continue.");assert.equal(paymentReadinessMessage({city:"Unknown",district:"Colombo",postalError:"",deliveryEnabled:true,quoteReady:false}),"Check your delivery address above to continue.");assert.equal(paymentReadinessMessage({city:"Colombo",district:"Colombo",postalError:"",deliveryEnabled:true,quoteReady:true}),"");});

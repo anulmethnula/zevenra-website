@@ -342,7 +342,7 @@ export async function findGuestOrder(orderId: string, phone: string) {
     phoneKey = normalizeSriLankanPhoneForLookup(phone);
   const row = (
     await query<Record<string, unknown>>(
-      `SELECT o.order_id,o.created_at,o.customer_name,o.address1,o.address2,o.city,o.district,o.postal_code,o.order_status,
+      `SELECT o.order_id,o.created_at,o.customer_name,o.address1,o.address2,o.city,o.district,o.postal_code,o.order_status,o.discount_code,o.discount_amount,
         o.payment_method,o.payment_status,o.delivery_zone_name,o.subtotal,o.delivery_fee,o.total,
         o.fulfilment_courier_name,o.tracking_number,o.tracking_url,o.courier_sent_date,
         COALESCE((SELECT jsonb_agg(jsonb_build_object(

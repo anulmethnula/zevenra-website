@@ -27,7 +27,7 @@ function request(body: unknown, headers: Record<string, string> = { origin }, ip
 const stored = {
   order_id: "ZEV-TEST-1", created_at: "2026-10-08T10:00:00.000Z", customer_name: "Guest Customer",
   address1: "45 Devala Road", address2: "Katubedda", city: "Moratuwa", district: "Polonnaruwa", postal_code: "01505", order_status: "confirmed", payment_method: "cod",
-  payment_status: "COD", delivery_zone_name: "Colombo", subtotal: 4000, delivery_fee: 450, total: 4450,
+  payment_status: "COD", delivery_zone_name: "Colombo", subtotal: 4000, discount_code: "WELCOME10", discount_amount: 400, delivery_fee: 450, total: 4050,
   fulfilment_courier_name: "Test Courier", tracking_number: "TRACK-123", tracking_url: "https://courier.example/track/TRACK-123", courier_sent_date: "2026-10-09T10:00:00.000Z",
   payment_receipt_public_id: "secret-receipt", admin_notes: "internal", customer_id: "internal-customer",
   items: [{ id: 44, product_id: "internal-product", variant_id: "internal-variant", sku: "SECRET-SKU", name: "Classic Fit", color: "Black", size: "M", quantity: 2, unitPrice: 2000, isPreorder: false, productSlug: "classic-fit", imageUrl: "https://res.cloudinary.com/demo/image/upload/classic-fit.jpg" }],
@@ -40,7 +40,7 @@ test("correct normalized ID and phone return only the safe customer order", asyn
     { res, state } = response();
   await handler(request({ orderId: stored.order_id, phone: "+94 77-000-0000" }, { origin }, "198.51.100.2"), res);
   assert.equal(state.status, 200);
-  assert.deepEqual(Object.keys(state.body as object).sort(), ["address1","address2","city","courierSentDate","createdAt","customerName","deliveryFee","deliveryZoneName","district","fulfilmentCourierName","items","orderId","orderStatus","paymentMethod","paymentStatus","postalCode","subtotal","total","trackingNumber","trackingUrl"].sort());
+  assert.deepEqual(Object.keys(state.body as object).sort(), ["address1","address2","city","courierSentDate","createdAt","customerName","deliveryFee","deliveryZoneName","discountAmount","discountCode","district","fulfilmentCourierName","items","orderId","orderStatus","paymentMethod","paymentStatus","postalCode","subtotal","total","trackingNumber","trackingUrl"].sort());
   const result = state.body as { items: Array<Record<string, unknown>> };
   assert.deepEqual(Object.keys(result.items[0]).sort(), ["color","imageUrl","isPreorder","name","productSlug","quantity","size","unitPrice"].sort());
   assert.equal((state.body as { address1: string }).address1, stored.address1);

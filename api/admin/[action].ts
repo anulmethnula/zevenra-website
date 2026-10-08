@@ -63,6 +63,7 @@ import {
   validSession,
 } from "../_shared.js";
 import { CourierRateFileError } from "../_data/courier-rate-parser.js";
+import { deactivateDiscount, discountDeactivateSchema, listDiscounts, saveDiscount } from "../_data/discounts.js";
 
 const readActions = new Set([
   "bootstrap",
@@ -84,6 +85,7 @@ const readActions = new Set([
   "listDeliveryRates",
   "listCourierRateCards",
   "previewCourierRateCard",
+  "listDiscounts",
 ]);
 const mutationActions = new Set([
   "saveProduct", "setProductStatus", "archiveProduct", "deleteProduct",
@@ -95,6 +97,7 @@ const mutationActions = new Set([
   "saveSettings", "saveDeliveryRates", "saveCourierConfig", "importCourierRateSheet",
   "validateCourierRateSheet", "confirmCourierRateSheet",
   "setCourierRateCardStatus", "previewDeliveryZoneTemplate", "applyDeliveryZoneTemplate",
+  "saveDiscount", "deactivateDiscount",
 ]);
 const allowed = new Set([...readActions, ...mutationActions]);
 
@@ -132,6 +135,12 @@ async function execute(action: string, payload: Record<string, unknown>) {
       return listCouriers();
     case "listDeliveryRates":
       return listDeliveryRates();
+    case "listDiscounts":
+      return listDiscounts();
+    case "saveDiscount":
+      return saveDiscount(payload);
+    case "deactivateDiscount":
+      return deactivateDiscount(discountDeactivateSchema.parse(payload).id);
     case "saveProduct":
       return saveProduct(payload);
     case "setProductStatus":

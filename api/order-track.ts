@@ -56,6 +56,8 @@ function safeOrder(row: Record<string, unknown>) {
     trackingUrl,
     courierSentDate: row.courier_sent_date instanceof Date ? row.courier_sent_date.toISOString() : text(row.courier_sent_date ?? row.courierSentDate),
     subtotal: number(row.subtotal),
+    discountCode: text(row.discount_code ?? row.discountCode),
+    discountAmount: number(row.discount_amount ?? row.discountAmount),
     deliveryFee: number(row.delivery_fee ?? row.deliveryFee),
     total: number(row.total),
     items: (Array.isArray(row.items) ? row.items : []).map((value) => {

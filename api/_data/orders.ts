@@ -3,6 +3,7 @@ import type { DatabaseClient } from "../_db.js";
 import { withTransaction } from "../_db.js";
 import { receiptAsset } from "../_receipt-asset.js";
 import { mapOrder } from "./mappers.js";
+import { validateDiscount } from "./discounts.js";
 
 export {
   createReturn,
@@ -34,6 +35,7 @@ type OrderInput = {
   paymentStatus?: string;
   paymentReference?: string;
   paymentReceiptUrl?: string;
+  discountCode?: string;
   source?: string;
   items: Array<{
     productId: string;
@@ -247,9 +249,13 @@ export async function createOrder(
   return withTransaction(async (client) => {
     const lines = await loadLines(client, input, options.trustProvidedPrice),
       subtotal = lines.reduce((sum, line) => sum + line.lineTotal, 0),
+      discount = input.discountCode ? await validateDiscount(client,input.discountCode,subtotal,true) : null,
       delivery = await deliverySnapshot(client, input, subtotal),
       asset = receiptAsset(input.paymentReceiptUrl),
       orderId = newOrderId();
+
+    if (input.discountCode && !discount) throw new Error("DISCOUNT_INVALID");
+    const discountAmount=discount?.amount||0,total=Math.max(0,subtotal-discountAmount+delivery.fee);
 
     if (
       input.paymentMethod === "bank" &&
@@ -277,7 +283,7 @@ export async function createOrder(
       hasPreorder = lines.some((line) => line.isPreorder);
 
     await client.query(
-      `INSERT INTO orders(order_id,customer_id,customer_name,phone,whatsapp,email,address1,address2,city,district,postal_code,delivery_notes,courier_provider_id,courier_name,delivery_pricing_mode,delivery_rate_plan,delivery_zone_name,payment_method,payment_status,payment_reference,payment_receipt_public_id,payment_receipt_resource_type,payment_receipt_format,subtotal,delivery_fee,total,stock_state,order_status,source,has_preorder) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,'pending',$28,$29)`,
+      `INSERT INTO orders(order_id,customer_id,customer_name,phone,whatsapp,email,address1,address2,city,district,postal_code,delivery_notes,courier_provider_id,courier_name,delivery_pricing_mode,delivery_rate_plan,delivery_zone_name,payment_method,payment_status,payment_reference,payment_receipt_public_id,payment_receipt_resource_type,payment_receipt_format,subtotal,discount_code,discount_amount,discount_type,discount_value,delivery_fee,total,stock_state,order_status,source,has_preorder) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,'pending',$32,$33)`,
       [
         orderId,
         input.customerId || null,
@@ -304,13 +310,18 @@ export async function createOrder(
         asset.resourceType,
         asset.format,
         subtotal,
+        discount?.code||"",
+        discountAmount,
+        discount?.type||"",
+        discount?.value||0,
         delivery.fee,
-        subtotal + delivery.fee,
+        total,
         stockState,
         input.source || "web",
         hasPreorder,
       ],
     );
+    if(discount) await client.query("UPDATE discount_codes SET usage_count=usage_count+1,updated_at=now() WHERE upper(btrim(code))=$1",[discount.code]);
 
     for (const line of lines)
       await client.query(
@@ -335,7 +346,7 @@ export async function createOrder(
       [
         orderId,
         JSON.stringify({
-          total: subtotal + delivery.fee,
+          total,
           deliveryZone: delivery.zoneName,
         }),
       ],

@@ -12,6 +12,8 @@ export type OrderPdfData = {
   postalCode?: string;
   deliveryZoneName?: string;
   subtotal: number;
+  discountCode?: string;
+  discountAmount?: number;
   deliveryFee: number;
   total: number;
   fulfilmentCourierName?: string;
@@ -20,7 +22,7 @@ export type OrderPdfData = {
 };
 
 const lkr = (value: number) =>
-  `LKR ${Number(value || 0).toLocaleString("en-LK", { maximumFractionDigits: 0 })}`;
+  `${value < 0 ? "-" : ""}LKR ${Math.abs(Number(value || 0)).toLocaleString("en-LK", { maximumFractionDigits: 0 })}`;
 
 export function deliveryAddressLines(order: Pick<OrderPdfData, "address1" | "address2" | "city" | "district" | "postalCode">) {
   const locality = [order.address2, order.city].map((value) => value?.trim()).filter(Boolean).join(", "),
@@ -123,7 +125,7 @@ export async function createOrderPdf(order: OrderPdfData) {
   });
 
   const tableEnd = (doc as typeof doc & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY,
-    totalsHeight = 31;
+    totalsHeight = Number(order.discountAmount || 0) > 0 ? 39 : 31;
   y = tableEnd + 8;
   if (y + totalsHeight > pageBottom) {
     doc.addPage();
@@ -143,6 +145,7 @@ export async function createOrderPdf(order: OrderPdfData) {
     y += strong ? 8 : 6;
   };
   totalLine("Subtotal", order.subtotal);
+  if (Number(order.discountAmount || 0) > 0) totalLine(`Discount${order.discountCode ? ` (${order.discountCode})` : ""}`, -Number(order.discountAmount));
   totalLine("Delivery", order.deliveryFee);
   doc.line(totalsLeft, y - 2, right, y - 2);
   y += 3;

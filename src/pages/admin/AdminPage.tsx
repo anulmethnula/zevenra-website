@@ -3798,6 +3798,7 @@ function Orders() {
                                 <span>Subtotal</span>
                                 <span>{money(Number(detail.subtotal))}</span>
                               </div>
+                              {Number(detail.discountAmount||0)>0&&<div className="flex justify-between"><span>Discount{detail.discountCode?` (${detail.discountCode})`:""}</span><span>-{money(Number(detail.discountAmount))}</span></div>}
                               <div className="flex justify-between">
                                 <span>Delivery</span>
                                 <span>
@@ -4412,6 +4413,7 @@ function ExplicitSettings({ focus }: { focus: string }) {
             onChange={(v) => change("defaultDescription", v)}
           />
         </Panel>
+        {focus !== "delivery" && <DiscountManager />}
       </div>
       <div className="sticky bottom-4 mt-6 bg-[#e9e5de]/95 p-3 backdrop-blur">
         <EditorActions
@@ -4424,6 +4426,10 @@ function ExplicitSettings({ focus }: { focus: string }) {
     </>
   );
 }
+
+type AdminDiscount={id:string;code:string;type:"percentage"|"fixed";value:number;minimumSubtotal:number;maximumDiscount:number|null;active:boolean;startsAt:string|null;expiresAt:string|null;usageLimit:number|null;usageCount:number};
+const emptyDiscount:Omit<AdminDiscount,"id"|"usageCount">={code:"",type:"percentage",value:10,minimumSubtotal:0,maximumDiscount:null,active:true,startsAt:null,expiresAt:null,usageLimit:null};
+function DiscountManager(){const [items,setItems]=useState<AdminDiscount[]>([]),[draft,setDraft]=useState<Partial<AdminDiscount>>(emptyDiscount),[busy,setBusy]=useState(false),[status,setStatus]=useState("");const load=useCallback(async()=>{try{setItems(await adminApi.get<AdminDiscount[]>("listDiscounts"));}catch(reason){setStatus(reason instanceof Error?reason.message:"Could not load discounts.");}},[]);useEffect(()=>{void load();},[load]);async function save(){setBusy(true);setStatus("");try{await adminApi.post("saveDiscount",{id:draft.id,code:String(draft.code||""),type:draft.type||"percentage",value:Number(draft.value),minimumSubtotal:Number(draft.minimumSubtotal||0),maximumDiscount:draft.type==="percentage"&&draft.maximumDiscount?Number(draft.maximumDiscount):null,active:draft.active!==false,startsAt:draft.startsAt||null,expiresAt:draft.expiresAt||null,usageLimit:draft.usageLimit?Number(draft.usageLimit):null});setDraft(emptyDiscount);setStatus("Discount saved.");await load();}catch(reason){setStatus(reason instanceof Error?reason.message:"Could not save discount.");}finally{setBusy(false);}}return <Panel title="Discounts"><div className="space-y-3">{items.map(item=><div key={item.id} className="flex flex-wrap items-center justify-between gap-3 border border-black/10 p-3"><span><b className="block text-sm">{item.code}</b><small className="text-black/50">{item.type==="percentage"?`${item.value}% off`:`${money(item.value)} off`} · Min {money(item.minimumSubtotal)} · Used {item.usageCount}{item.usageLimit?` / ${item.usageLimit}`:""}</small></span><button type="button" className="btn min-h-10" onClick={()=>setDraft(item)}>Edit</button></div>)}</div><div className="mt-5 grid gap-3 sm:grid-cols-2"><Field label="Code" value={draft.code||""} onChange={code=>setDraft(value=>({...value,code:code.toUpperCase()}))}/><label className="text-xs">Type<select className="field mt-2" value={draft.type} onChange={event=>setDraft(value=>({...value,type:event.target.value as AdminDiscount["type"]}))}><option value="percentage">Percentage</option><option value="fixed">Fixed LKR</option></select></label><Field label="Value" value={String(draft.value||"")} onChange={value=>setDraft(current=>({...current,value:Number(value)}))}/><Field label="Minimum subtotal" value={String(draft.minimumSubtotal||0)} onChange={value=>setDraft(current=>({...current,minimumSubtotal:Number(value)}))}/>{draft.type==="percentage"&&<Field label="Maximum discount (optional)" value={String(draft.maximumDiscount||"")} onChange={value=>setDraft(current=>({...current,maximumDiscount:value?Number(value):null}))}/>}<Field label="Usage limit (optional)" value={String(draft.usageLimit||"")} onChange={value=>setDraft(current=>({...current,usageLimit:value?Number(value):null}))}/><label className="text-xs">Starts at<input className="field mt-2" type="datetime-local" value={draft.startsAt?.slice(0,16)||""} onChange={event=>setDraft(current=>({...current,startsAt:event.target.value?new Date(event.target.value).toISOString():null}))}/></label><label className="text-xs">Expires at<input className="field mt-2" type="datetime-local" value={draft.expiresAt?.slice(0,16)||""} onChange={event=>setDraft(current=>({...current,expiresAt:event.target.value?new Date(event.target.value).toISOString():null}))}/></label><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={draft.active!==false} onChange={event=>setDraft(current=>({...current,active:event.target.checked}))}/> Active</label></div><button type="button" className="btn btn-dark mt-4 w-full" disabled={busy} onClick={()=>void save()}>{busy?"Saving…":draft.id?"Update discount":"Create discount"}</button>{status&&<p className="mt-3 text-xs" role="status">{status}</p>}</Panel>}
 function Panel({
   title,
   children,

@@ -384,6 +384,7 @@ export const orderSchema = z
     paymentMethod: z.enum(["cod", "bank"]),
     paymentReference: z.string().trim().max(100).optional(),
     paymentReceiptUrl: receiptUrlSchema.optional(),
+    discountCode: z.string().trim().max(40).optional(),
     items: z
       .array(
         z.object({
