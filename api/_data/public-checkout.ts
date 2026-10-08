@@ -1,6 +1,6 @@
 type SettingRow={key:string;value:unknown};
 type CourierRow={id:string;pricingMode:string;flatRate:number;active:boolean};
-type RateRow={courierProviderId?:string;fee:number;active:boolean;districts:string[];cities:string[];postalCodes:string[];fallback:boolean;sortOrder:number};
+type RateRow={id:string;name:string;courierProviderId?:string;fee:number;active:boolean;districts:string[];cities:string[];postalCodes:string[];fallback:boolean;sortOrder:number};
 const enabled=(value:unknown)=>value===true||String(value).toLowerCase()==="true";
 export function buildPublicCheckoutConfig(settings:SettingRow[],couriers:CourierRow[],rates:RateRow[]){
   const raw=Object.fromEntries(settings.map(row=>[row.key,row.value])),bankEnabled=enabled(raw.bankEnabled??raw.bankTransferEnabled),publicSettings:SettingRow[]=[
@@ -21,5 +21,11 @@ export function buildPublicCheckoutConfig(settings:SettingRow[],couriers:Courier
     {key:"branch",value:String(raw.branch??raw.bankBranch??"")},
     {key:"bankInstructions",value:String(raw.bankInstructions||"")},
   );
-  return {settings:publicSettings,couriers:couriers.filter(item=>item.active).map(({id,pricingMode,flatRate,active})=>({id,pricingMode,flatRate,active})),deliveryRates:rates.filter(rate=>rate.active).map(({courierProviderId,fee,active,districts,cities,postalCodes,fallback,sortOrder})=>({courierProviderId,fee,active,districts,cities,postalCodes,fallback,sortOrder}))};
+  return {
+    settings:publicSettings,
+    couriers:couriers.filter(item=>item.active).map(({id,pricingMode,flatRate,active})=>({id,pricingMode,flatRate,active})),
+    deliveryRates:rates
+      .filter(rate=>rate.active)
+      .map(({id,name,courierProviderId,fee,active,districts,cities,postalCodes,fallback,sortOrder})=>({id,name,courierProviderId,fee,active,districts,cities,postalCodes,fallback,sortOrder})),
+  };
 }
