@@ -33,6 +33,7 @@ import type {
   Order,
   PreorderRequest,
   PreorderStatus,
+  Product,
   SizeChart,
 } from "../../types";
 const sriLankaDistricts = [
@@ -63,6 +64,43 @@ const sriLankaDistricts = [
   "Vavuniya",
 ] as const;
 const adminPhone = /^[+\d][\d\s-]{8,14}$/;
+
+type HistoricalProductIdentity = {
+  productId?: string;
+  sku?: string;
+  productName?: string;
+  name?: string;
+};
+
+const normalizeProductName = (value: string) =>
+  value
+    .normalize("NFKC")
+    .toLocaleLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+
+function resolveCurrentProduct(
+  products: Product[],
+  item?: HistoricalProductIdentity,
+) {
+  if (!item) return undefined;
+  const byId = products.find((product) => product.id === item.productId);
+  if (byId) return byId;
+  if (item.sku) {
+    const bySku = products.find((product) =>
+      product.variants.some((variant) => variant.sku === item.sku),
+    );
+    if (bySku) return bySku;
+  }
+  const historicalName = normalizeProductName(
+    item.productName || item.name || "",
+  );
+  if (!historicalName) return undefined;
+  const nameMatches = products.filter(
+    (product) => normalizeProductName(product.name) === historicalName,
+  );
+  return nameMatches.length === 1 ? nameMatches[0] : undefined;
+}
 
 export default function AdminPage() {
   const section = useLocation().pathname.split("/")[2] || "overview";
@@ -2508,9 +2546,7 @@ function Preorders() {
         {visible.length ? (
           visible.map((item) => {
             const draft = draftFor(item),
-              product = store.data.products.find(
-                (p) => p.id === item.productId,
-              ),
+              product = resolveCurrentProduct(store.data.products, item),
               image = product?.media.find((media) => media.type === "image"),
               phone = waNumber(item.whatsapp || item.phone),
               finalPrice = Number(
@@ -2583,7 +2619,7 @@ function Preorders() {
                 <div className="preorder-admin-grid">
                   <section className="preorder-product-box">
                     {product ? (
-                      <Link to={`/admin/products/${item.productId}`} aria-label={`View ${item.productName}`}>
+                      <Link to={`/admin/products/${product.id}`} aria-label={`View ${item.productName}`}>
                         {image ? <img src={image.url} alt="" loading="lazy" /> : <div className="preorder-product-placeholder" />}
                       </Link>
                     ) : (
@@ -2591,7 +2627,7 @@ function Preorders() {
                     )}
                     <div>
                       <small>Requested item</small>
-                      <h3>{product ? <Link to={`/admin/products/${item.productId}`} className="hover:underline">{item.productName}</Link> : item.productName}</h3>
+                      <h3>{product ? <Link to={`/admin/products/${product.id}`} className="hover:underline">{item.productName}</Link> : item.productName}</h3>
                       <p>
                         {item.color} / {item.size} · Qty {item.quantity}
                       </p>
@@ -2600,7 +2636,7 @@ function Preorders() {
                         <b>{money(Number(item.requestedPrice))}</b>
                       </p>
                       <p>SKU: {item.sku || "—"}</p>
-                      {product ? <Link to={`/admin/products/${item.productId}`} className="mt-2 inline-block text-xs font-medium underline underline-offset-4">View product →</Link> : <p className="mt-2 text-xs font-medium text-amber-800">Product unavailable</p>}
+                      {product ? <Link to={`/admin/products/${product.id}`} className="mt-2 inline-block text-xs font-medium underline underline-offset-4">View product →</Link> : <p className="mt-2 text-xs font-medium text-amber-800">Product unavailable</p>}
                     </div>
                   </section>
                   <section className="preorder-customer-box">
@@ -3476,9 +3512,7 @@ function Orders() {
             const detail = details[order.orderId],
               isOpen = open === order.orderId,
               firstItem = order.items?.[0],
-              firstProduct = data.products.find(
-                (product) => product.id === firstItem?.productId,
-              ),
+              firstProduct = resolveCurrentProduct(data.products, firstItem),
               firstImage = firstProduct?.media.find(
                 (media) => media.type === "image",
               ),
@@ -3563,7 +3597,7 @@ function Orders() {
                             <p className="eyebrow text-black/45">Products</p>
                             <div className="mt-3 divide-y divide-black/10">
                               {(detail.items || []).map((item, index) => {
-                                const product = data.products.find((candidate) => candidate.id === item.productId),
+                                const product = resolveCurrentProduct(data.products, item),
                                   image = product?.media.find((media) => media.type === "image");
                                 return <div key={item.orderItemId || item.variantId || index} className="grid grid-cols-[56px_minmax(0,1fr)_auto] items-center gap-3 py-3 text-sm">
                                   {product ? <Link to={`/admin/products/${product.id}`} className="grid aspect-[4/5] place-items-center overflow-hidden bg-black/[.04]" aria-label={`View ${item.productName || item.name || "product"}`}>{image ? <img src={image.url} alt="" loading="lazy" className="h-full w-full object-contain" /> : <span className="text-[9px] text-black/35">No image</span>}</Link> : <div className="grid aspect-[4/5] place-items-center bg-black/[.04] text-[9px] text-black/35">Unavailable</div>}
