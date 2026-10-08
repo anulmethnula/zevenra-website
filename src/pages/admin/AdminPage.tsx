@@ -1379,10 +1379,6 @@ function DeliveryRates() {
     ),
     [busy, setBusy] = useState(false),
     [notice, setNotice] = useState<DeliveryNotice | null>(null),
-    [deliveryTab, setDeliveryTab] = useState<"couriers" | "zones">("couriers"),
-    [zoneSearch, setZoneSearch] = useState(""),
-    [zoneState, setZoneState] = useState("all"),
-    [zoneCourier, setZoneCourier] = useState("all"),
     [rateCards, setRateCards] = useState<Array<{courierProviderId:string;version:number;status:string;importedAt:string;total:number}>>([]),
     [editingCourier, setEditingCourier] = useState<string | null>(null),
     [editingZone, setEditingZone] = useState<string | null>(null);
@@ -1482,11 +1478,12 @@ function DeliveryRates() {
     });
   };
 
-  const addZone = (courier: CourierProvider) =>
+  const addZone = (courier: CourierProvider) => {
+    const id = crypto.randomUUID();
     setRates((items) => [
       ...items,
       {
-        id: crypto.randomUUID(),
+        id,
         courierProviderId: courier.id,
         name: "New delivery area",
         fee: courier.flatRate || 0,
@@ -1498,6 +1495,8 @@ function DeliveryRates() {
         sortOrder: items.length + 1,
       },
     ]);
+    setEditingZone(id);
+  };
 
   const setFallback = (courierId: string, rateId: string) =>
     setRates((items) =>
@@ -1513,10 +1512,10 @@ function DeliveryRates() {
     return false;
   };
 
-  async function submit() {
+  async function submit(nextDefaultId = defaultId) {
     setNotice(null);
 
-    const selected = couriers.find((item) => item.id === defaultId);
+    const selected = couriers.find((item) => item.id === nextDefaultId);
     if (!selected?.active)
       return fail("Choose an active default courier before saving.");
 
@@ -1566,7 +1565,7 @@ function DeliveryRates() {
 
     setBusy(true);
     try {
-      await s.saveCourierConfig(couriers, rates, defaultId);
+      await s.saveCourierConfig(couriers, rates, nextDefaultId);
       setNotice({
         tone: "success",
         message: "Delivery settings saved",
@@ -1584,6 +1583,12 @@ function DeliveryRates() {
     }
   }
 
+  const makeDefault = async (courier: CourierProvider) => {
+    if (!courier.active || courier.id === defaultId || busy) return;
+    setDefaultId(courier.id);
+    await submit(courier.id);
+  };
+
   const reset = () => {
     setCouriers(s.admin.couriers);
     setRates(s.admin.deliveryRates);
@@ -1596,14 +1601,6 @@ function DeliveryRates() {
     couriers: s.admin.couriers,
     rates: s.admin.deliveryRates,
     defaultId: s.data.settings.defaultCourierProviderId,
-  });
-  const visibleZones = rates.filter((rate) => {
-    const courier = couriers.find((item) => item.id === rate.courierProviderId),
-      needle = zoneSearch.trim().toLowerCase(),
-      haystack = [rate.name, courier?.name, ...rate.districts, ...rate.cities, ...rate.postalCodes].join(" ").toLowerCase();
-    return (!needle || haystack.includes(needle)) &&
-      (zoneState === "all" || (zoneState === "active") === rate.active) &&
-      (zoneCourier === "all" || zoneCourier === rate.courierProviderId);
   });
   const zoneBeingEdited = rates.find((rate) => rate.id === editingZone);
 
@@ -1656,12 +1653,7 @@ function DeliveryRates() {
         }
       />
 
-      <div className="mt-7 inline-flex rounded-xl border border-black/[.08] bg-white/55 p-1" role="tablist" aria-label="Delivery configuration">
-        <button type="button" role="tab" aria-selected={deliveryTab === "couriers"} className={deliveryTab === "couriers" ? "rounded-lg bg-black px-5 py-3 text-xs text-white" : "rounded-lg px-5 py-3 text-xs text-black/55"} onClick={() => setDeliveryTab("couriers")}>Courier Providers</button>
-        <button type="button" role="tab" aria-selected={deliveryTab === "zones"} className={deliveryTab === "zones" ? "rounded-lg bg-black px-5 py-3 text-xs text-white" : "rounded-lg px-5 py-3 text-xs text-black/55"} onClick={() => setDeliveryTab("zones")}>Delivery Zones</button>
-      </div>
-
-      {deliveryTab === "couriers" && <section className="mt-5 overflow-hidden rounded-2xl border border-black/[.07] bg-[#f8f6f1] shadow-[0_18px_60px_rgba(17,17,15,.05)]">
+      <section className="mt-7 overflow-hidden rounded-2xl border border-black/[.07] bg-[#f8f6f1] shadow-[0_18px_60px_rgba(17,17,15,.05)]">
         <div className="grid gap-6 p-5 sm:p-7 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-center">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[.18em] text-black/45">
@@ -1676,23 +1668,11 @@ function DeliveryRates() {
             </p>
           </div>
 
-          <label className="block text-xs font-medium">
-            Default courier
-            <select
-              className="field mt-2"
-              value={defaultId}
-              onChange={(event) => setDefaultId(event.target.value)}
-            >
-              <option value="">Choose courier</option>
-              {couriers
-                .filter((item) => item.active)
-                .map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name || "New courier"}
-                  </option>
-                ))}
-            </select>
-          </label>
+          <div className="rounded-xl border border-black/[.07] bg-white p-4 text-xs">
+            <p className="text-[9px] font-semibold uppercase tracking-[.14em] text-black/40">Current default</p>
+            <p className="mt-2 font-medium">{selected?.name || "No default courier"}</p>
+            <p className="mt-1 text-[10px] leading-5 text-black/45">Use Make default on an active courier below to change checkout.</p>
+          </div>
         </div>
 
         {selected?.active && (
@@ -1708,13 +1688,13 @@ function DeliveryRates() {
             </span>
           </div>
         )}
-      </section>}
+      </section>
 
-      {deliveryTab === "couriers" && !!couriers.length && <div className="mt-5 grid gap-3">
+      {!!couriers.length && <div className="mt-5 grid gap-3">
         {couriers.map((courier) => { const courierRates=rates.filter((rate)=>rate.courierProviderId===courier.id),activeCard=rateCards.find((card)=>card.courierProviderId===courier.id&&card.status==="active"); return <article key={courier.id} className="grid gap-4 rounded-2xl border border-black/[.07] bg-white p-5 shadow-[0_8px_30px_rgba(17,17,15,.03)] md:grid-cols-[minmax(0,1fr)_220px_auto] md:items-center">
-          <div><div className="flex flex-wrap items-center gap-2"><h3 className="text-base font-medium">{courier.name || "Unnamed courier"}</h3>{courier.id===defaultId&&<span className="admin-status admin-status--info">Default</span>}<span className={courier.active?"admin-status admin-status--success":"admin-status"}>{courier.active?"Active":"Inactive"}</span></div><p className="mt-2 text-xs text-black/45">{courier.pricingMode==="flat"?`${money(courier.flatRate)} nationwide`:`Zone pricing · ${courierRates.length} area${courierRates.length===1?"":"s"}`}</p></div>
+          <div><div className="flex flex-wrap items-center gap-2"><h3 className="text-base font-medium">{courier.name || "Unnamed courier"}</h3>{courier.id===defaultId&&<span className="admin-status admin-status--info">Default</span>}<span className={courier.active?"admin-status admin-status--success":"admin-status"}>{courier.active?"Active":"Inactive"}</span></div><p className="mt-2 text-xs text-black/45">{courier.pricingMode==="flat"?`Flat rate · ${money(courier.flatRate)} nationwide`:`Zone pricing · ${courierRates.length} area${courierRates.length===1?"":"s"}`}</p></div>
           <div className="text-xs text-black/45">{activeCard?<>Imported rate card v{activeCard.version}<span className="mt-1 block text-[10px]">{new Date(activeCard.importedAt).toLocaleDateString()} · {activeCard.total.toLocaleString()} rates</span></>:courier.pricingMode==="zone"?`${courierRates.filter((rate)=>rate.active).length} active delivery zones`:"Simple checkout pricing"}</div>
-          <div className="flex gap-2"><button type="button" className="btn" onClick={()=>setEditingCourier(courier.id)}>View</button><button type="button" className="btn btn-dark" onClick={()=>setEditingCourier(courier.id)}>Edit</button></div>
+          <div className="flex flex-wrap gap-2"><button type="button" className="btn" onClick={()=>setEditingCourier(courier.id)}>Manage</button>{courier.id!==defaultId&&<button type="button" className="btn btn-dark" disabled={busy||!courier.active} title={courier.active?"Make this the checkout courier":"Activate this courier before making it default"} onClick={()=>void makeDefault(courier)}>Make default</button>}</div>
         </article>;})}
       </div>}
 
@@ -1731,23 +1711,7 @@ function DeliveryRates() {
         </section>
       )}
 
-      {deliveryTab === "zones" && <section className="mt-5">
-        <div className="grid gap-3 rounded-2xl border border-black/[.07] bg-[#f8f6f1] p-4 md:grid-cols-[minmax(220px,1fr)_180px_220px]">
-          <input className="field bg-white" value={zoneSearch} onChange={(event) => setZoneSearch(event.target.value)} placeholder="Search zones or coverage" aria-label="Search delivery zones" />
-          <select className="field bg-white" value={zoneState} onChange={(event) => setZoneState(event.target.value)} aria-label="Filter zones by state"><option value="all">All states</option><option value="active">Active</option><option value="inactive">Inactive</option></select>
-          <select className="field bg-white" value={zoneCourier} onChange={(event) => setZoneCourier(event.target.value)} aria-label="Filter zones by courier"><option value="all">All couriers</option>{couriers.map((courier) => <option key={courier.id} value={courier.id}>{courier.name || "Unnamed courier"}</option>)}</select>
-        </div>
-        <div className="mt-4 grid gap-3">
-          {visibleZones.map((rate) => { const courier = couriers.find((item) => item.id === rate.courierProviderId); return <article key={rate.id} className="grid gap-4 rounded-2xl border border-black/[.07] bg-white p-5 shadow-[0_8px_30px_rgba(17,17,15,.03)] md:grid-cols-[minmax(0,1fr)_180px_auto] md:items-center">
-            <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h3 className="text-base font-medium">{rate.name || "Untitled zone"}</h3><span className={rate.active ? "admin-status admin-status--success" : "admin-status"}>{rate.active ? "Active" : "Inactive"}</span>{rate.fallback && <span className="admin-status admin-status--info">Fallback</span>}</div><p className="mt-2 text-xs text-black/45">{courier?.name || "No courier"} · {rate.districts.length} district{rate.districts.length === 1 ? "" : "s"} · {rate.cities.length} cities/areas · {rate.postalCodes.length} postal codes</p><div className="mt-3 flex flex-wrap gap-1.5">{rate.districts.slice(0,5).map((district) => <span key={district} className="rounded-full bg-black/[.045] px-2.5 py-1 text-[9px] text-black/55">{district}</span>)}{rate.districts.length > 5 && <span className="rounded-full bg-black/[.045] px-2.5 py-1 text-[9px] text-black/55">+{rate.districts.length-5}</span>}</div></div>
-            <div><p className="text-[9px] uppercase tracking-[.14em] text-black/35">Pricing</p><p className="mt-1 text-xl font-medium">{money(rate.fee)}</p></div>
-            <button type="button" className="btn" onClick={() => setEditingZone(rate.id)}>Edit</button>
-          </article>; })}
-          {!visibleZones.length && <Empty text="No delivery zones match these filters." />}
-        </div>
-      </section>}
-
-      {deliveryTab === "couriers" && editingCourier && <AdminDrawer title={couriers.find((courier)=>courier.id===editingCourier)?.name || "Courier details"} onClose={()=>setEditingCourier(null)}><div className="grid gap-5">
+      {editingCourier && <AdminDrawer title={couriers.find((courier)=>courier.id===editingCourier)?.name || "Courier details"} onClose={()=>setEditingCourier(null)}><div className="grid gap-5">
         {couriers.filter((courier)=>courier.id===editingCourier).map((courier, courierIndex) => {
           const courierRates = rates.filter(
               (rate) => rate.courierProviderId === courier.id,
@@ -1995,6 +1959,14 @@ function DeliveryRates() {
 
                             <button
                               type="button"
+                              className="btn"
+                              onClick={() => setEditingZone(rate.id)}
+                            >
+                              Edit details
+                            </button>
+
+                            <button
+                              type="button"
                               className="ml-auto min-h-10 px-2 text-xs text-red-800/75"
                               onClick={() =>
                                 setRates((items) =>
@@ -2070,7 +2042,7 @@ function DeliveryRates() {
       </div></AdminDrawer>}
 
       {zoneBeingEdited && <AdminDrawer title={zoneBeingEdited.name || "Delivery zone"} onClose={() => setEditingZone(null)}><div className="space-y-5">
-        <Panel title="Zone identity"><Field label="Zone name" value={zoneBeingEdited.name} onChange={(name) => updateRate(zoneBeingEdited.id,{name})}/><label className="block text-xs">Courier<select className="field mt-2" value={zoneBeingEdited.courierProviderId} onChange={(event) => updateRate(zoneBeingEdited.id,{courierProviderId:event.target.value})}>{couriers.map((courier) => <option key={courier.id} value={courier.id}>{courier.name || "Unnamed courier"}</option>)}</select></label></Panel>
+        <Panel title="Zone identity"><Field label="Zone name" value={zoneBeingEdited.name} onChange={(name) => updateRate(zoneBeingEdited.id,{name})}/><div className="text-xs">Courier<p className="field mt-2 flex items-center">{couriers.find((courier)=>courier.id===zoneBeingEdited.courierProviderId)?.name || "Unnamed courier"}</p></div></Panel>
         <Panel title="Price"><label className="block text-xs">Delivery fee (LKR)<input className="field mt-2" type="number" min="0" value={zoneBeingEdited.fee} onChange={(event) => updateRate(zoneBeingEdited.id,{fee:Number(event.target.value)})}/></label></Panel>
         <Panel title="District coverage"><DistrictPicker values={zoneBeingEdited.districts} onChange={(districts) => updateRate(zoneBeingEdited.id,{districts})}/></Panel>
         <Panel title="Cities / Areas"><textarea className="field min-h-28" value={zoneBeingEdited.cities.join("\n")} onChange={(event) => updateRate(zoneBeingEdited.id,{cities:event.target.value.split(/[,\n]/).map((value)=>value.trim()).filter(Boolean)})} placeholder="One city or area per line" /></Panel>
