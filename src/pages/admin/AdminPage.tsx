@@ -3474,7 +3474,15 @@ function Orders() {
         {visible.length ? (
           visible.map((order) => {
             const detail = details[order.orderId],
-              isOpen = open === order.orderId;
+              isOpen = open === order.orderId,
+              firstItem = order.items?.[0],
+              firstProduct = data.products.find(
+                (product) => product.id === firstItem?.productId,
+              ),
+              firstImage = firstProduct?.media.find(
+                (media) => media.type === "image",
+              ),
+              additionalItems = Math.max(0, (order.items?.length || 0) - 1);
             return (
               <article
                 key={order.orderId}
@@ -3484,24 +3492,30 @@ function Orders() {
                   <button
                     type="button"
                     onClick={() => void toggle(order.orderId)}
-                    className="min-w-0 text-left"
+                    className="flex min-w-0 items-center gap-3 text-left"
                   >
-                    <p className="text-sm font-medium">{order.orderId}</p>
-                    <div className="mt-1 flex flex-wrap items-center gap-2">
-                      <p className="text-xs text-black/45">
-                        {new Date(order.createdAt).toLocaleString("en-LK", {
-                          year: "numeric",
-                          month: "short",
-                          day: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
-                      {order.hasPreorder && (
-                        <span className="border border-[#96724f]/30 bg-[#96724f]/5 px-1.5 py-0.5 text-[8px] font-medium tracking-[.12em] text-[#765638]">
-                          PRE-ORDER
-                        </span>
-                      )}
+                    <span className="relative grid h-16 w-12 shrink-0 place-items-center overflow-visible bg-[#ebe8e1]">
+                      {firstImage ? <img src={firstImage.url} alt="" loading="lazy" className="h-16 w-12 object-contain" /> : <span className="px-1 text-center text-[8px] uppercase tracking-wide text-black/30">No image</span>}
+                      {additionalItems > 0 && <span className="absolute -right-2 -top-2 grid min-h-5 min-w-5 place-items-center rounded-full border border-white bg-black px-1 text-[9px] font-medium text-white">+{additionalItems}</span>}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{order.orderId}</p>
+                      <div className="mt-1 flex flex-wrap items-center gap-2">
+                        <p className="text-xs text-black/45">
+                          {new Date(order.createdAt).toLocaleString("en-LK", {
+                            year: "numeric",
+                            month: "short",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </p>
+                        {order.hasPreorder && (
+                          <span className="border border-[#96724f]/30 bg-[#96724f]/5 px-1.5 py-0.5 text-[8px] font-medium tracking-[.12em] text-[#765638]">
+                            PRE-ORDER
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </button>
                   <div className="min-w-0">
