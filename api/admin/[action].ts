@@ -50,6 +50,11 @@ import {
   validateCourierRateSheet,
 } from "../_data/courier-rate-cards.js";
 import {
+  applyDeliveryZoneTemplate,
+  DeliveryZoneTemplateError,
+  previewDeliveryZoneTemplate,
+} from "../_data/delivery-zone-template.js";
+import {
   authEnv,
   body,
   json,
@@ -89,7 +94,7 @@ const mutationActions = new Set([
   "updatePreorder", "createPreorderBatch", "convertPreorderToOrder", "createManualOrder",
   "saveSettings", "saveDeliveryRates", "saveCourierConfig", "importCourierRateSheet",
   "validateCourierRateSheet", "confirmCourierRateSheet",
-  "setCourierRateCardStatus",
+  "setCourierRateCardStatus", "previewDeliveryZoneTemplate", "applyDeliveryZoneTemplate",
 ]);
 const allowed = new Set([...readActions, ...mutationActions]);
 
@@ -201,6 +206,10 @@ async function execute(action: string, payload: Record<string, unknown>) {
       return previewCourierRateCard(String(payload.id || ""), Number(payload.page) || 1);
     case "setCourierRateCardStatus":
       return setCourierRateCardStatus(String(payload.id || ""), payload.active === true || String(payload.active) === "true");
+    case "previewDeliveryZoneTemplate":
+      return previewDeliveryZoneTemplate(payload);
+    case "applyDeliveryZoneTemplate":
+      return applyDeliveryZoneTemplate(payload);
     default:
       throw new Error("Unknown action");
   }
@@ -238,7 +247,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         : (body(req) as Record<string, unknown>);
     return json(res, await execute(action, payload));
   } catch (error) {
-    if (error instanceof CourierRateFileError)
+    if (error instanceof CourierRateFileError || error instanceof DeliveryZoneTemplateError)
       return json(res, { error: error.message }, 400);
     if (error instanceof Error && error.name === "ZodError")
       return json(

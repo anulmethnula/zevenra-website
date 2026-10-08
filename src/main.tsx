@@ -29,6 +29,7 @@ const Home = lazy(() => import("./pages/HomePage")),
   NotFound = lazy(() => import("./pages/NotFound")),
   Login = lazy(() => import("./pages/admin/LoginPage")),
   Admin = lazy(() => import("./pages/admin/AdminPage")),
+  DeliveryAdmin = lazy(() => import("./pages/admin/DeliveryAdminPage")),
   ProductEditor = lazy(() => import("./pages/admin/ProductEditor"));
 const fallback = (
   <div className="grid min-h-dvh place-content-center bg-paper">
@@ -98,7 +99,7 @@ const router = createBrowserRouter([
         element: <Navigate to="/admin/products" replace />,
       },
       { path: "/admin/homepage", element: <Admin /> },
-      { path: "/admin/delivery", element: <Admin /> },
+      { path: "/admin/delivery", element: <DeliveryAdmin /> },
       { path: "/admin/settings", element: <Admin /> },
     ],
   },
