@@ -3499,13 +3499,14 @@ function Orders() {
         </p>
       )}
       <div className="mt-5 overflow-hidden border border-black/10 bg-[#f6f3ed]">
-        <div className="hidden grid-cols-[1.15fr_1fr_.8fr_.8fr_.8fr_auto] gap-3 border-b border-black/10 px-4 py-3 text-[10px] uppercase tracking-[.14em] text-black/40 lg:grid">
+        <div className="hidden grid-cols-[64px_minmax(190px,1.1fr)_minmax(190px,1fr)_120px_145px_120px_70px] items-center gap-3 border-b border-black/10 px-4 py-3 text-[10px] uppercase tracking-[.14em] text-black/40 lg:grid">
+          <span className="text-center">Product</span>
           <span>Order / date</span>
           <span>Customer</span>
-          <span>Total</span>
+          <span className="text-right">Total</span>
           <span>Payment</span>
-          <span>Status</span>
-          <span />
+          <span className="text-center">Status</span>
+          <span className="text-right">Action</span>
         </div>
         {visible.length ? (
           visible.map((order) => {
@@ -3522,44 +3523,43 @@ function Orders() {
                 key={order.orderId}
                 className="border-b border-black/10 last:border-0"
               >
-                <div className="grid items-center gap-3 px-4 py-4 lg:grid-cols-[1.15fr_1fr_.8fr_.8fr_.8fr_auto]">
+                <div className="grid grid-cols-[64px_minmax(0,1fr)] items-center gap-3 px-4 py-2.5 lg:grid-cols-[64px_minmax(190px,1.1fr)_minmax(190px,1fr)_120px_145px_120px_70px]">
                   <button
                     type="button"
                     onClick={() => void toggle(order.orderId)}
-                    className="flex min-w-0 items-center gap-3 text-left"
+                    className="relative grid h-16 w-12 place-items-center justify-self-center bg-[#ebe8e1]"
+                    aria-label={`View order ${order.orderId}`}
                   >
-                    <span className="relative grid h-16 w-12 shrink-0 place-items-center overflow-visible bg-[#ebe8e1]">
-                      {firstImage ? <img src={firstImage.url} alt="" loading="lazy" className="h-16 w-12 object-contain" /> : <span className="px-1 text-center text-[8px] uppercase tracking-wide text-black/30">No image</span>}
-                      {additionalItems > 0 && <span className="absolute -right-2 -top-2 grid min-h-5 min-w-5 place-items-center rounded-full border border-white bg-black px-1 text-[9px] font-medium text-white">+{additionalItems}</span>}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{order.orderId}</p>
-                      <div className="mt-1 flex flex-wrap items-center gap-2">
-                        <p className="text-xs text-black/45">
-                          {new Date(order.createdAt).toLocaleString("en-LK", {
-                            year: "numeric",
-                            month: "short",
-                            day: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </p>
-                        {order.hasPreorder && (
-                          <span className="border border-[#96724f]/30 bg-[#96724f]/5 px-1.5 py-0.5 text-[8px] font-medium tracking-[.12em] text-[#765638]">
-                            PRE-ORDER
-                          </span>
-                        )}
-                      </div>
+                    {firstImage ? <img src={firstImage.url} alt="" loading="lazy" className="h-16 w-12 object-contain" /> : <span className="px-1 text-center text-[8px] uppercase tracking-wide text-black/30">No image</span>}
+                    {additionalItems > 0 && <span className="absolute -right-2 -top-2 grid min-h-5 min-w-5 place-items-center rounded-full border border-white bg-black px-1 text-[9px] font-medium text-white">+{additionalItems}</span>}
+                  </button>
+                  <button type="button" onClick={() => void toggle(order.orderId)} className="min-w-0 text-left">
+                    <p className="truncate text-sm font-medium">{order.orderId}</p>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <p className="text-xs text-black/45">
+                        {new Date(order.createdAt).toLocaleString("en-LK", {
+                          year: "numeric",
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </p>
+                      {order.hasPreorder && (
+                        <span className="border border-[#96724f]/30 bg-[#96724f]/5 px-1.5 py-0.5 text-[8px] font-medium tracking-[.12em] text-[#765638]">
+                          PRE-ORDER
+                        </span>
+                      )}
                     </div>
                   </button>
-                  <div className="min-w-0">
+                  <div className="col-span-2 min-w-0 border-t border-black/[.06] pt-2 lg:col-span-1 lg:border-0 lg:pt-0">
                     <p className="truncate text-sm">{order.customerName}</p>
                     <p className="mt-1 truncate text-xs text-black/45">
                       {order.phone} · {order.district}
                     </p>
                   </div>
-                  <span className="text-sm">{money(Number(order.total))}</span>
-                  <div>
+                  <span className="text-right text-sm">{money(Number(order.total))}</span>
+                  <div className="min-w-0">
                     <p className="text-xs">
                       {order.paymentMethod === "cod" ? "COD" : "BANK"}
                     </p>
@@ -3567,13 +3567,13 @@ function Orders() {
                       {order.paymentStatus}
                     </p>
                   </div>
-                  <span className="w-fit rounded-full border border-black/10 px-2.5 py-1 text-[10px] uppercase tracking-wider">
+                  <span className="w-fit justify-self-end rounded-full border border-black/10 px-2.5 py-1 text-[10px] uppercase tracking-wider lg:justify-self-center">
                     {order.orderStatus}
                   </span>
                   <button
                     type="button"
                     onClick={() => void toggle(order.orderId)}
-                    className="min-h-11 px-2 text-xs underline"
+                    className="min-h-9 justify-self-end px-2 text-xs underline"
                   >
                     {isOpen ? "CLOSE" : "VIEW"}
                   </button>
