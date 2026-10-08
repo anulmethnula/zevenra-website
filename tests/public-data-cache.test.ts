@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { fetchPublic,getCachedPublic,invalidatePublic,revalidatePublic } from "../src/services/publicDataCache.ts";
-import { shopSearchPolicy } from "../src/services/shopSearchPolicy.ts";
+import { serializeShopQuery,shopSearchPolicy } from "../src/services/shopSearchPolicy.ts";
 
 class SessionStorageMock {
   private values=new Map<string,string>();
@@ -89,4 +89,30 @@ test("one-word searches use the complete query string as their cache key",async(
   await fetchPublic(first,{ttlMs:25_000});await fetchPublic(first,{ttlMs:25_000});await fetchPublic(second,{ttlMs:25_000});
   assert.deepEqual(urls,[`/api${first}`,`/api${second}`]);
   invalidatePublic();
+});
+
+test("no-store search bypasses cached empty data and replaces it with the fresh response",async()=>{
+  const path="/products?page=1&q=classic";let requests=0;
+  globalThis.fetch=async()=>new Response(JSON.stringify(++requests===1?{items:[],total:0}:{items:[{slug:"the-classic-fit"}],total:1}),{status:200});
+  await fetchPublic(path);const fresh=await fetchPublic<{items:Array<{slug:string}>;total:number}>(path,{noStore:true});
+  assert.equal(fresh.items[0]?.slug,"the-classic-fit");assert.equal(requests,2);invalidatePublic();
+});
+
+test("no-store search bypasses an older in-flight request and cannot be overwritten",async()=>{
+  const resolvers:Array<(response:Response)=>void>=[];const path="/products?page=1&q=porcelain";
+  globalThis.fetch=(_input,init)=>{assert.equal(init?.cache,"no-store");return new Promise<Response>(resolve=>resolvers.push(resolve));};
+  const old=fetchPublic<{total:number}>(path,{noStore:true});const fresh=fetchPublic<{total:number}>(path,{noStore:true});
+  assert.equal(resolvers.length,2);resolvers[1](new Response(JSON.stringify({total:1}),{status:200}));assert.equal((await fresh).total,1);
+  resolvers[0](new Response(JSON.stringify({total:0}),{status:200}));assert.equal((await old).total,0);assert.equal(getCachedPublic(path),undefined);invalidatePublic();
+});
+
+test("ordinary browsing retains memory caching and default fetch cache mode",async()=>{
+  const calls:Array<RequestInit|undefined>=[];globalThis.fetch=async(_input,init)=>{calls.push(init);return new Response(JSON.stringify({items:[],total:0}),{status:200});};
+  const path="/products?page=1&pageSize=24&sort=newest";await fetchPublic(path);await fetchPublic(path);
+  assert.equal(calls.length,1);assert.equal(calls[0],undefined);invalidatePublic();
+});
+
+test("shop queries encode exact-name spaces as percent escapes, not plus signs",()=>{
+  const query=new URLSearchParams({page:"1",pageSize:"24",sort:"newest",q:"PORCELAIN BLOOM TWIST TOP"});
+  assert.equal(serializeShopQuery(query),"page=1&pageSize=24&sort=newest&q=PORCELAIN%20BLOOM%20TWIST%20TOP");
 });

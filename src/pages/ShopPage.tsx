@@ -6,6 +6,7 @@ import { ProductCard } from "../components/ProductCard";
 import { Seo } from "../components/Seo";
 import { useStore } from "../features/store/StoreContext";
 import { useShopProducts } from "../hooks/usePublicData";
+import { serializeShopQuery } from "../services/shopSearchPolicy";
 
 export default function ShopPage(){
   const {slug}=useParams(),location=useLocation(),navigate=useNavigate(),[params,setParams]=useSearchParams(),{data}=useStore(),[filtersOpen,setFiltersOpen]=useState(false),[search,setSearch]=useState(params.get("q")||"");
@@ -13,7 +14,7 @@ export default function ShopPage(){
   const rootCategory=routeCategory?.parentId?categories.find(item=>item.id===routeCategory.parentId):routeCategory,subcategories=rootCategory?categories.filter(item=>item.parentId===rootCategory.id).sort((a,b)=>a.sortOrder-b.sortOrder):[];
   const value=(key:string,fallback="all")=>params.get(key)||fallback,cat=value("category",routeCategory?.slug||"all"),collection=value("collection",routeCollection?.slug||"all"),size=value("size"),color=value("color"),sort=value("sort","newest"),available=params.get("available")==="true",page=Math.max(1,Number(params.get("page"))||1),maxPrice=Number(params.get("maxPrice"))||0;
   useEffect(()=>setSearch(params.get("q")||""),[params]);
-  const apiQuery=useMemo(()=>{const query=new URLSearchParams({page:String(page),pageSize:"24",sort});const q=params.get("q")?.trim();if(q)query.set("q",q);if(cat!=="all")query.set("category",cat);if(collection!=="all")query.set("collection",collection);if(size!=="all")query.set("size",size);if(color!=="all")query.set("color",color);if(available)query.set("available","true");if(maxPrice)query.set("maxPrice",String(maxPrice));if(params.get("new")==="true")query.set("new","true");return query.toString();},[available,cat,collection,color,maxPrice,page,params,size,sort]);
+  const apiQuery=useMemo(()=>{const query=new URLSearchParams({page:String(page),pageSize:"24",sort});const q=params.get("q")?.trim();if(q)query.set("q",q);if(cat!=="all")query.set("category",cat);if(collection!=="all")query.set("collection",collection);if(size!=="all")query.set("size",size);if(color!=="all")query.set("color",color);if(available)query.set("available","true");if(maxPrice)query.set("maxPrice",String(maxPrice));if(params.get("new")==="true")query.set("new","true");return serializeShopQuery(query);},[available,cat,collection,color,maxPrice,page,params,size,sort]);
   const result=useShopProducts(apiQuery),payload=result.data,priceCeiling=Math.max(1000,Math.ceil((payload?.filters.maxPrice||1000)/1000)*1000),title=routeCollection?.name||routeCategory?.name||(params.get("q")?"Search":"Shop");
   const update=(key:string,next:string|boolean)=>{const query=new URLSearchParams(params);if(next==="all"||next===""||next===false)query.delete(key);else query.set(key,String(next));if(key!=="page")query.delete("page");setParams(query);};
   function submitSearch(event:FormEvent){event.preventDefault();const q=search.trim().replace(/\s+/g," ");navigate(q?`/shop?q=${encodeURIComponent(q)}`:"/shop");}
