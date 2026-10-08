@@ -23,6 +23,14 @@ function safeOrder(row: Record<string, unknown>) {
     number = (value: unknown) => Number(value) || 0,
     bool = (value: unknown) => value === true || String(value).toLowerCase() === "true";
   const rawTrackingUrl = text(row.tracking_url ?? row.trackingUrl);
+  const safeHttpsUrl = (value: unknown) => {
+    try {
+      const parsed = new URL(text(value));
+      return parsed.protocol === "https:" ? parsed.toString() : "";
+    } catch {
+      return "";
+    }
+  };
   let trackingUrl = "";
   try {
     const parsed = new URL(rawTrackingUrl);
@@ -34,8 +42,11 @@ function safeOrder(row: Record<string, unknown>) {
     orderId: text(row.order_id ?? row.orderId),
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : text(row.created_at ?? row.createdAt),
     customerName: text(row.customer_name ?? row.customerName),
+    address1: text(row.address1),
+    address2: text(row.address2),
     city: text(row.city),
     district: text(row.district),
+    postalCode: text(row.postal_code ?? row.postalCode),
     orderStatus: text(row.order_status ?? row.orderStatus),
     paymentMethod: text(row.payment_method ?? row.paymentMethod),
     paymentStatus: text(row.payment_status ?? row.paymentStatus),
@@ -49,6 +60,8 @@ function safeOrder(row: Record<string, unknown>) {
     total: number(row.total),
     items: (Array.isArray(row.items) ? row.items : []).map((value) => {
       const item = value as Record<string, unknown>;
+      const productSlug = text(item.productSlug ?? item.product_slug).trim(),
+        imageUrl = safeHttpsUrl(item.imageUrl ?? item.image_url);
       return {
         name: text(item.name ?? item.product_name ?? item.productName),
         color: text(item.color),
@@ -56,6 +69,8 @@ function safeOrder(row: Record<string, unknown>) {
         quantity: number(item.quantity),
         unitPrice: number(item.unitPrice ?? item.unit_price),
         isPreorder: bool(item.isPreorder ?? item.is_preorder),
+        ...(productSlug ? { productSlug } : {}),
+        ...(imageUrl ? { imageUrl } : {}),
       };
     }),
   };

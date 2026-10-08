@@ -197,8 +197,11 @@ export type GuestTrackedOrder = {
   orderId: string;
   createdAt: string;
   customerName: string;
+  address1: string;
+  address2: string;
   city: string;
   district: string;
+  postalCode: string;
   orderStatus: string;
   paymentMethod: string;
   paymentStatus: string;
@@ -217,6 +220,8 @@ export type GuestTrackedOrder = {
     quantity: number;
     unitPrice: number;
     isPreorder: boolean;
+    productSlug?: string;
+    imageUrl?: string;
   }>;
 };
 export type CheckoutData = {

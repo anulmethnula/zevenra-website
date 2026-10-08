@@ -51,7 +51,7 @@ export default function OrderPage() {
     message = `Hello ZEVENRA, I have submitted order ${order.orderId}.\n\n${lines}\nSubtotal: ${money(order.subtotal)}\nDelivery: ${deliveryLabel}\nTotal: ${money(order.total)}\nName: ${order.customerName}\nCity: ${order.city}\nPayment: ${order.paymentMethod === "cod" ? "Cash on delivery" : "Bank transfer"}`,
     success=orderSuccessCopy(order.paymentMethod,money(order.total));
   async function copyOrderId() { try { await navigator.clipboard.writeText(confirmedOrder.orderId); setActionMessage("Order ID copied."); } catch { setActionMessage("Could not copy the Order ID."); } }
-  async function pdf() { setPdfBusy(true); setActionMessage(""); try { await downloadOrderPdf(confirmedOrder); } catch { setActionMessage("We couldn't create the PDF. Please try again."); } finally { setPdfBusy(false); } }
+  async function pdf() { setPdfBusy(true); setActionMessage(""); try { await downloadOrderPdf(confirmedOrder); } catch { setActionMessage("We couldn't prepare the PDF. Please try again."); } finally { setPdfBusy(false); } }
   return (
     <main className="container py-8 sm:py-12">
       <Seo title={`Order ${order.orderId}`} />
@@ -98,7 +98,7 @@ export default function OrderPage() {
       <section className="mt-5 border border-black/10 bg-white/25 p-5 text-left sm:p-7"><h2 className="eyebrow text-bronze">Delivery to</h2><p className="mt-3 text-sm font-medium">{order.customerName}</p><p className="mt-1 text-xs text-ink/55">{[order.city,order.district].filter(Boolean).join(" · ")}</p></section>
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
         <button type="button" className="btn justify-center" onClick={() => void copyOrderId()}><Copy size={15}/>Copy Order ID</button>
-        <button type="button" className="btn justify-center" disabled={pdfBusy} onClick={() => void pdf()}><Download size={15}/>{pdfBusy ? "Creating PDF…" : "Download Order PDF"}</button>
+        <button type="button" className="btn min-h-12 justify-center" disabled={pdfBusy} onClick={() => void pdf()}><Download size={15}/>{pdfBusy ? "PREPARING PDF…" : "DOWNLOAD ORDER PDF"}</button>
         <Link className="btn btn-dark justify-center" to="/shop"><ShoppingBag size={15}/>Continue Shopping</Link>
         <Link className="btn justify-center" to={`/track-order?orderId=${encodeURIComponent(order.orderId)}`}>Track Order</Link>
         {user && (

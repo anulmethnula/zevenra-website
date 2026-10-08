@@ -342,13 +342,15 @@ export async function findGuestOrder(orderId: string, phone: string) {
     phoneKey = normalizeSriLankanPhoneForLookup(phone);
   const row = (
     await query<Record<string, unknown>>(
-      `SELECT o.order_id,o.created_at,o.customer_name,o.city,o.district,o.order_status,
+      `SELECT o.order_id,o.created_at,o.customer_name,o.address1,o.address2,o.city,o.district,o.postal_code,o.order_status,
         o.payment_method,o.payment_status,o.delivery_zone_name,o.subtotal,o.delivery_fee,o.total,
         o.fulfilment_courier_name,o.tracking_number,o.tracking_url,o.courier_sent_date,
         COALESCE((SELECT jsonb_agg(jsonb_build_object(
           'name',oi.product_name,'color',oi.color,'size',oi.size,'quantity',oi.quantity,
-          'unitPrice',oi.unit_price,'isPreorder',oi.is_preorder
-        ) ORDER BY oi.id) FROM order_items oi WHERE oi.order_id=o.order_id),'[]') AS items
+          'unitPrice',oi.unit_price,'isPreorder',oi.is_preorder,
+          'productSlug',p.slug,
+          'imageUrl',(SELECT media.value->>'url' FROM jsonb_array_elements(COALESCE(p.media,'[]'::jsonb)) WITH ORDINALITY media(value,ordinality) WHERE media.value->>'type'='image' ORDER BY media.ordinality LIMIT 1)
+        ) ORDER BY oi.id) FROM order_items oi LEFT JOIN products p ON p.id=oi.product_id AND p.status='published' WHERE oi.order_id=o.order_id),'[]') AS items
        FROM orders o
        WHERE upper(o.order_id)=$1
          AND CASE

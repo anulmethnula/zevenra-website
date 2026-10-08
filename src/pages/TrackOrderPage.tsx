@@ -1,11 +1,12 @@
 import { useState, type FormEvent } from "react";
-import { Copy, Download, ExternalLink, PackageSearch, Trash2 } from "lucide-react";
+import { Copy, Download, ExternalLink, ImageIcon, PackageSearch, Trash2 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Seo } from "../components/Seo";
 import { money } from "../config/site";
 import { api } from "../services/api";
 import type { GuestTrackedOrder } from "../types";
 import { getRecentGuestOrders, orderIdFromSearch, rememberGuestOrder, removeRecentGuestOrder } from "../utils/guestOrders";
-import { downloadOrderPdf } from "../utils/orderPdf";
+import { deliveryAddressLines, downloadOrderPdf } from "../utils/orderPdf";
 import { orderProgress, safeHttpsUrl } from "../utils/orderTracking";
 
 const failure = "We couldn't find an order with those details. Check your Order ID and mobile number.";
@@ -45,19 +46,33 @@ function OrderResult({ order }: { order: GuestTrackedOrder }) {
   const [pdfBusy, setPdfBusy] = useState(false), [message, setMessage] = useState(""),
     cancelled = order.orderStatus.toLowerCase() === "cancelled",
     currentIndex = orderProgress.findIndex(([status]) => status === order.orderStatus.toLowerCase()),
-    trackingUrl = safeHttpsUrl(order.trackingUrl);
-  async function pdf() { setPdfBusy(true); setMessage(""); try { await downloadOrderPdf(order); } catch { setMessage("We couldn't create the PDF. Please try again."); } finally { setPdfBusy(false); } }
+    trackingUrl = safeHttpsUrl(order.trackingUrl),
+    address = deliveryAddressLines(order);
+  async function pdf() { setPdfBusy(true); setMessage(""); try { await downloadOrderPdf(order); } catch { setMessage("We couldn't prepare the PDF. Please try again."); } finally { setPdfBusy(false); } }
   async function copyTracking() { try { await navigator.clipboard.writeText(order.trackingNumber); setMessage("Tracking number copied."); } catch { setMessage("Could not copy the tracking number."); } }
-  return <section aria-live="polite" className="mt-8 border border-line bg-white/35 p-5 sm:p-7">
-    <div className="flex flex-wrap items-start justify-between gap-4 border-b border-line pb-5"><div><p className="eyebrow text-bronze">Order #{order.orderId}</p><h2 className="mt-2 text-2xl font-semibold">{cancelled ? "Order cancelled" : order.orderStatus || "Pending"}</h2><p className="mt-1 text-xs text-ink/50">Placed {new Date(order.createdAt).toLocaleString("en-LK")}</p></div><div className="flex items-center gap-2 border border-bronze/30 px-3 py-2 text-xs"><PackageSearch size={16} /><span>Payment: <b>{order.paymentStatus}</b></span></div></div>
-    {cancelled ? <div className="mt-5 border border-red-900/20 bg-red-950/[.05] p-4 text-sm text-red-900"><b>Order cancelled</b><p className="mt-1 text-xs leading-5">This order will not continue through fulfilment.</p></div> : <ol className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">{orderProgress.map(([status, label], index) => <li key={status} className={`border px-2 py-3 text-center text-[10px] ${index <= currentIndex ? "border-bronze bg-bronze/[.08] text-bronze" : "border-line text-ink/35"}`}><span className="mx-auto mb-2 block h-1.5 w-1.5 rounded-full bg-current" />{label}</li>)}</ol>}
-    <div className="mt-6 grid gap-3 text-sm sm:grid-cols-2"><Detail label="Customer" value={order.customerName} /><Detail label="Payment method" value={order.paymentMethod === "cod" ? "Cash on delivery" : "Bank transfer"} /><Detail label="Delivery area" value={order.deliveryZoneName || [order.city, order.district].filter(Boolean).join(", ")} />{order.fulfilmentCourierName ? <Detail label="Courier" value={order.fulfilmentCourierName} /> : null}{order.courierSentDate ? <Detail label="Sent date" value={new Date(order.courierSentDate).toLocaleDateString("en-LK")} /> : null}</div>
-    {order.trackingNumber ? <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border border-line p-4"><div><p className="eyebrow text-ink/40">Tracking number</p><b className="mt-1 block text-sm">{order.trackingNumber}</b></div><div className="flex flex-wrap gap-2"><button type="button" className="btn" onClick={() => void copyTracking()}><Copy size={14} /> Copy</button>{trackingUrl ? <a className="btn btn-dark" href={trackingUrl} target="_blank" rel="noreferrer">Track with courier <ExternalLink size={14} /></a> : null}</div></div> : null}
-    <div className="mt-6 divide-y divide-line">{order.items.map((item, index) => <div key={`${item.name}-${item.color}-${item.size}-${index}`} className="flex items-start justify-between gap-5 py-4 text-sm"><div><b>{item.name}</b><p className="mt-1 text-xs text-ink/50">{[item.color,item.size].filter(Boolean).join(" · ")} · Qty {item.quantity}{item.isPreorder ? " · Pre-order" : ""}</p></div><span className="shrink-0">{money(item.unitPrice * item.quantity)}</span></div>)}</div>
-    <div className="ml-auto mt-4 max-w-sm space-y-2 border-t border-line pt-4 text-sm"><Row label="Subtotal" value={money(order.subtotal)} /><Row label="Delivery" value={order.deliveryFee ? money(order.deliveryFee) : "Free"} /><Row label="Total" value={money(order.total)} strong /></div>
-    <div className="mt-6 flex flex-wrap justify-end gap-3"><button type="button" className="btn" disabled={pdfBusy} onClick={() => void pdf()}><Download size={14} />{pdfBusy ? "CREATING PDF…" : "DOWNLOAD ORDER PDF"}</button></div>{message ? <p className="mt-3 text-right text-xs text-ink/55" role="status">{message}</p> : null}
+  return <section aria-live="polite" className="mt-8 border border-line bg-white/35 p-4 sm:p-7">
+    <div className="flex flex-wrap items-start justify-between gap-4 border-b border-line pb-5"><div className="min-w-0"><p className="eyebrow break-all text-bronze">Order #{order.orderId}</p><h2 className="mt-2 text-2xl font-semibold">{cancelled ? "Order cancelled" : order.orderStatus || "Pending"}</h2><p className="mt-1 text-xs text-ink/50">Placed {new Date(order.createdAt).toLocaleString("en-LK")}</p></div><div className="flex items-center gap-2 border border-bronze/30 px-3 py-2 text-xs"><PackageSearch size={16} /><span>Payment: <b>{order.paymentStatus}</b></span></div></div>
+    {cancelled ? <div className="mt-5 border border-red-900/20 bg-red-950/[.05] p-4 text-sm text-red-900"><b>Order cancelled</b><p className="mt-1 text-xs leading-5">This order will not continue through fulfilment.</p></div> : <ol className="mt-5 grid grid-cols-2 gap-2 min-[390px]:grid-cols-3 lg:grid-cols-6">{orderProgress.map(([status, label], index) => <li key={status} className={`border px-1 py-3 text-center text-[9px] sm:px-2 sm:text-[10px] ${index <= currentIndex ? "border-bronze bg-bronze/[.08] text-bronze" : "border-line text-ink/35"}`}><span className="mx-auto mb-2 block h-1.5 w-1.5 rounded-full bg-current" />{label}</li>)}</ol>}
+    <div className="mt-7 grid gap-7 border-t border-line pt-6 sm:grid-cols-2">
+      <div className="space-y-6"><Detail label="Customer" value={order.customerName} /><div><p className="eyebrow text-ink/40">Delivery address</p><div className="mt-2 break-words text-sm leading-6">{address.length ? address.map((line) => <p key={line}>{line}</p>) : <p>—</p>}</div></div></div>
+      <div className="space-y-6"><Detail label="Payment method" value={order.paymentMethod === "cod" ? "Cash on delivery" : "Bank transfer"} /><Detail label="Delivery area" value={order.deliveryZoneName || [order.city, order.district].filter(Boolean).join(", ")} />{order.fulfilmentCourierName ? <Detail label="Courier" value={order.fulfilmentCourierName} /> : null}{order.trackingNumber ? <div><p className="eyebrow text-ink/40">Tracking number</p><div className="mt-2 flex flex-wrap items-center gap-2"><b className="break-all text-sm">{order.trackingNumber}</b><button type="button" className="btn min-h-10 px-3" onClick={() => void copyTracking()}><Copy size={13} /> Copy</button></div>{trackingUrl ? <a className="mt-3 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-bronze underline-offset-4 hover:underline" href={trackingUrl} target="_blank" rel="noreferrer">Track with courier <ExternalLink size={13} /></a> : null}</div> : null}</div>
+    </div>
+    <div className="mt-8"><h3 className="eyebrow text-bronze">Products</h3><div className="mt-3 divide-y divide-line border-y border-line">{order.items.map((item, index) => <ProductRow key={`${item.name}-${item.color}-${item.size}-${index}`} item={item} />)}</div></div>
+    <div className="ml-auto mt-7 max-w-sm"><h3 className="eyebrow mb-4 text-bronze">Order totals</h3><div className="space-y-3 border-t border-line pt-4 text-sm"><Row label="Subtotal" value={money(order.subtotal)} /><Row label="Delivery" value={order.deliveryFee ? money(order.deliveryFee) : "Free"} /><Row label="Total" value={money(order.total)} strong /></div></div>
+    <div className="mt-7 flex justify-stretch sm:justify-end"><button type="button" className="btn min-h-12 w-full justify-center sm:w-auto" disabled={pdfBusy} onClick={() => void pdf()}><Download size={14} />{pdfBusy ? "PREPARING PDF…" : "DOWNLOAD ORDER PDF"}</button></div>{message ? <p className="mt-3 text-right text-xs text-ink/55" role="status">{message}</p> : null}
   </section>;
 }
 
-function Detail({ label, value }: { label: string; value: string }) { return <div><p className="eyebrow text-ink/40">{label}</p><p className="mt-1">{value || "—"}</p></div>; }
-function Row({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) { return <div className="flex justify-between gap-4"><span className="text-ink/55">{label}</span>{strong ? <strong>{value}</strong> : <span>{value}</span>}</div>; }
+function ProductRow({ item }: { item: GuestTrackedOrder["items"][number] }) {
+  const [imageFailed, setImageFailed] = useState(false),
+    image = item.imageUrl && !imageFailed ? <img src={item.imageUrl} alt="" width="72" height="90" loading="lazy" decoding="async" className="h-[90px] w-[72px] object-cover" onError={() => setImageFailed(true)} /> : <span className="grid h-[90px] w-[72px] place-items-center bg-black/[.04] text-ink/25"><ImageIcon size={20} aria-hidden="true" /></span>,
+    imageBlock = item.productSlug ? <Link to={`/product/${encodeURIComponent(item.productSlug)}`} aria-label={`View ${item.name}`}>{image}</Link> : image;
+  return <div className="grid grid-cols-[72px_minmax(0,1fr)] gap-4 py-5 sm:grid-cols-[72px_minmax(0,1fr)_auto] sm:gap-5">
+    {imageBlock}
+    <div className="min-w-0"><b className="block break-words text-sm leading-5">{item.name}</b><p className="mt-2 text-xs leading-5 text-ink/50">{[item.color, item.size].filter(Boolean).join(" · ") || "Standard"}</p><p className="text-xs leading-5 text-ink/50">Qty {item.quantity}{item.isPreorder ? " · Pre-order" : ""}</p>{item.productSlug ? <Link className="mt-2 inline-block text-[10px] font-semibold uppercase tracking-wider text-bronze underline-offset-4 hover:underline" to={`/product/${encodeURIComponent(item.productSlug)}`}>View product →</Link> : null}</div>
+    <span className="col-start-2 text-sm font-medium sm:col-start-3 sm:row-start-1 sm:text-right">{money(item.unitPrice * item.quantity)}</span>
+  </div>;
+}
+
+function Detail({ label, value }: { label: string; value: string }) { return <div><p className="eyebrow text-ink/40">{label}</p><p className="mt-2 break-words text-sm leading-6">{value || "—"}</p></div>; }
+function Row({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) { return <div className="flex justify-between gap-4"><span className="text-ink/55">{label}</span>{strong ? <strong className="text-base">{value}</strong> : <span>{value}</span>}</div>; }

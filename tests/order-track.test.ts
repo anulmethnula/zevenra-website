@@ -26,11 +26,11 @@ function request(body: unknown, headers: Record<string, string> = { origin }, ip
 
 const stored = {
   order_id: "ZEV-TEST-1", created_at: "2026-10-08T10:00:00.000Z", customer_name: "Guest Customer",
-  city: "Colombo", district: "Colombo", order_status: "confirmed", payment_method: "cod",
+  address1: "45 Devala Road", address2: "Katubedda", city: "Moratuwa", district: "Polonnaruwa", postal_code: "01505", order_status: "confirmed", payment_method: "cod",
   payment_status: "COD", delivery_zone_name: "Colombo", subtotal: 4000, delivery_fee: 450, total: 4450,
   fulfilment_courier_name: "Test Courier", tracking_number: "TRACK-123", tracking_url: "https://courier.example/track/TRACK-123", courier_sent_date: "2026-10-09T10:00:00.000Z",
   payment_receipt_public_id: "secret-receipt", admin_notes: "internal", customer_id: "internal-customer",
-  items: [{ id: 44, product_id: "internal-product", variant_id: "internal-variant", sku: "SECRET-SKU", name: "Classic Fit", color: "Black", size: "M", quantity: 2, unitPrice: 2000, isPreorder: false }],
+  items: [{ id: 44, product_id: "internal-product", variant_id: "internal-variant", sku: "SECRET-SKU", name: "Classic Fit", color: "Black", size: "M", quantity: 2, unitPrice: 2000, isPreorder: false, productSlug: "classic-fit", imageUrl: "https://res.cloudinary.com/demo/image/upload/classic-fit.jpg" }],
 };
 
 test.before(() => { process.env.ALLOWED_ORIGIN = origin; });
@@ -40,13 +40,37 @@ test("correct normalized ID and phone return only the safe customer order", asyn
     { res, state } = response();
   await handler(request({ orderId: stored.order_id, phone: "+94 77-000-0000" }, { origin }, "198.51.100.2"), res);
   assert.equal(state.status, 200);
-  assert.deepEqual(Object.keys(state.body as object).sort(), ["city","courierSentDate","createdAt","customerName","deliveryFee","deliveryZoneName","district","fulfilmentCourierName","items","orderId","orderStatus","paymentMethod","paymentStatus","subtotal","total","trackingNumber","trackingUrl"].sort());
+  assert.deepEqual(Object.keys(state.body as object).sort(), ["address1","address2","city","courierSentDate","createdAt","customerName","deliveryFee","deliveryZoneName","district","fulfilmentCourierName","items","orderId","orderStatus","paymentMethod","paymentStatus","postalCode","subtotal","total","trackingNumber","trackingUrl"].sort());
   const result = state.body as { items: Array<Record<string, unknown>> };
-  assert.deepEqual(Object.keys(result.items[0]).sort(), ["color","isPreorder","name","quantity","size","unitPrice"].sort());
+  assert.deepEqual(Object.keys(result.items[0]).sort(), ["color","imageUrl","isPreorder","name","productSlug","quantity","size","unitPrice"].sort());
+  assert.equal((state.body as { address1: string }).address1, stored.address1);
+  assert.equal(result.items[0].productSlug, "classic-fit");
   assert.equal(JSON.stringify(state.body).includes("secret-receipt"), false);
   assert.equal(JSON.stringify(state.body).includes("internal"), false);
   assert.equal(JSON.stringify(state.body).includes("SECRET-SKU"), false);
+  assert.equal("phone" in (state.body as object), false);
+  assert.equal("email" in (state.body as object), false);
   assert.equal((state.body as { trackingUrl: string }).trackingUrl, stored.tracking_url);
+});
+
+test("missing current products preserve historical lines without product presentation fields", async () => {
+  const historicalItem = { ...stored.items[0], productSlug: null, imageUrl: null },
+    handler = createOrderTrackHandler(async () => ({ ...stored, items: [historicalItem] })),
+    result = response();
+  await handler(request({ orderId: stored.order_id, phone: "0770000000" }, { origin }, "198.51.100.19"), result.res);
+  const item = (result.state.body as { items: Array<Record<string, unknown>> }).items[0];
+  assert.equal(item.name, historicalItem.name);
+  assert.equal("productSlug" in item, false);
+  assert.equal("imageUrl" in item, false);
+  assert.equal("productId" in item, false);
+  assert.equal("variantId" in item, false);
+});
+
+test("unsafe product image URLs are omitted", async () => {
+  const handler = createOrderTrackHandler(async () => ({ ...stored, items: [{ ...stored.items[0], imageUrl: "http://images.example/item.jpg" }] })),
+    result = response();
+  await handler(request({ orderId: stored.order_id, phone: "0770000000" }, { origin }, "198.51.100.20"), result.res);
+  assert.equal("imageUrl" in (result.state.body as { items: Array<Record<string, unknown>> }).items[0], false);
 });
 
 test("lookup normalization accepts copied IDs and Sri Lankan phone formats", async () => {
@@ -133,10 +157,10 @@ test("recent guest orders keep five unique IDs without personal data and query I
   assert.equal(orderIdFromSearch("?orderId=ZEV-TEST-1"), "ZEV-TEST-1");
 });
 
-test("PDF helper builds multiple order lines", async () => {
-  const doc = await createOrderPdf({
-    orderId: "ZEV-PDF-TEST", createdAt: "2026-10-08T10:00:00.000Z", orderStatus: "confirmed", paymentMethod: "cod", paymentStatus: "COD", customerName: "Test Customer", city: "Colombo", district: "Colombo", deliveryZoneName: "Colombo", subtotal: 8000, deliveryFee: 450, total: 8450,
-    items: Array.from({ length: 30 }, (_, index) => ({ name: `Test product with a safely wrapping long name ${index + 1}`, color: "Black", size: "M", quantity: 1, unitPrice: 250 })),
-  });
-  assert.ok(doc.getNumberOfPages() > 1);
+test("PDF helper handles single, long, and multi-page orders", async () => {
+  const base = { orderId: "ZEV-PDF-TEST", createdAt: "2026-10-08T10:00:00.000Z", orderStatus: "confirmed", paymentMethod: "cod", paymentStatus: "COD", customerName: "Test Customer", address1: "A very long delivery address that should wrap cleanly without touching the next section or leaving the printable area", address2: "Apartment 12, Building Seven", city: "Colombo", district: "Colombo", postalCode: "00100", deliveryZoneName: "Colombo", subtotal: 8000, deliveryFee: 450, total: 8450 };
+  const single = await createOrderPdf({ ...base, items: [{ name: "A single product with an intentionally long descriptive product name that must wrap", color: "Black", size: "M", quantity: 1, unitPrice: 8000 }] });
+  assert.equal(single.getNumberOfPages(), 1);
+  const many = await createOrderPdf({ ...base, items: Array.from({ length: 45 }, (_, index) => ({ name: `Test product with a safely wrapping long name ${index + 1}`, color: "Black / limited seasonal colour", size: "M", quantity: 1, unitPrice: 250 })) });
+  assert.ok(many.getNumberOfPages() > 1);
 });
