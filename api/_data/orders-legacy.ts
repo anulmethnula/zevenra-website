@@ -3,6 +3,10 @@ import type { DatabaseClient } from "../_db.js";
 import { query, withTransaction } from "../_db.js";
 import { sriLankaDistricts } from "../_shared.js";
 import { receiptAsset } from "../_receipt-asset.js";
+import {
+  normalizeOrderIdForLookup,
+  normalizeSriLankanPhoneForLookup,
+} from "../_order-track-normalization.js";
 import { mapOrder } from "./mappers.js";
 
 type OrderInput = {
@@ -334,19 +338,26 @@ export async function getOrder(orderId: string) {
 }
 
 export async function findGuestOrder(orderId: string, phone: string) {
-  const phoneKey = phone.replace(/\D/g, "");
+  const orderKey = normalizeOrderIdForLookup(orderId),
+    phoneKey = normalizeSriLankanPhoneForLookup(phone);
   const row = (
     await query<Record<string, unknown>>(
       `SELECT o.order_id,o.created_at,o.customer_name,o.city,o.district,o.order_status,
         o.payment_method,o.payment_status,o.delivery_zone_name,o.subtotal,o.delivery_fee,o.total,
+        o.fulfilment_courier_name,o.tracking_number,o.tracking_url,o.courier_sent_date,
         COALESCE((SELECT jsonb_agg(jsonb_build_object(
           'name',oi.product_name,'color',oi.color,'size',oi.size,'quantity',oi.quantity,
           'unitPrice',oi.unit_price,'isPreorder',oi.is_preorder
         ) ORDER BY oi.id) FROM order_items oi WHERE oi.order_id=o.order_id),'[]') AS items
        FROM orders o
-       WHERE o.order_id=$1 AND regexp_replace(o.phone,'\\D','','g')=$2
+       WHERE upper(o.order_id)=$1
+         AND CASE
+           WHEN regexp_replace(o.phone,'\\D','','g') LIKE '0094%' THEN substring(regexp_replace(o.phone,'\\D','','g') from 3)
+           WHEN regexp_replace(o.phone,'\\D','','g') LIKE '0%' THEN '94' || substring(regexp_replace(o.phone,'\\D','','g') from 2)
+           ELSE regexp_replace(o.phone,'\\D','','g')
+         END=$2
        LIMIT 1`,
-      [orderId, phoneKey],
+      [orderKey, phoneKey],
     )
   ).rows[0];
   return row || null;

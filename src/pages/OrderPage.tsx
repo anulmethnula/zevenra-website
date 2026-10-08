@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { Check,MessageCircle,ShoppingBag } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, Copy, Download, MessageCircle, ShoppingBag } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { Seo } from "../components/Seo";
 import { money } from "../config/site";
@@ -8,11 +8,14 @@ import { useCustomerAuth } from "../features/account/CustomerAuthContext";
 import type { Order } from "../types";
 import { normalizeWhatsappDigits } from "../utils/contact";
 import { orderSuccessCopy } from "../utils/orderSuccess";
+import { downloadOrderPdf } from "../utils/orderPdf";
 
 export default function OrderPage() {
   const { orderId } = useParams(),
     { data } = useStore(),
-    { user } = useCustomerAuth();
+    { user } = useCustomerAuth(),
+    [pdfBusy, setPdfBusy] = useState(false),
+    [actionMessage, setActionMessage] = useState("");
   useEffect(()=>{window.scrollTo({top:0,left:0,behavior:"auto"});},[orderId]);
   let order: Order | undefined;
   try {
@@ -34,7 +37,8 @@ export default function OrderPage() {
         </Link>
       </div>
     );
-  const whatsapp = normalizeWhatsappDigits(data.settings.whatsapp),
+  const confirmedOrder = order,
+    whatsapp = normalizeWhatsappDigits(data.settings.whatsapp),
     lines = order.items
       .map(
         (item) =>
@@ -46,6 +50,8 @@ export default function OrderPage() {
       : money(order.deliveryFee),
     message = `Hello ZEVENRA, I have submitted order ${order.orderId}.\n\n${lines}\nSubtotal: ${money(order.subtotal)}\nDelivery: ${deliveryLabel}\nTotal: ${money(order.total)}\nName: ${order.customerName}\nCity: ${order.city}\nPayment: ${order.paymentMethod === "cod" ? "Cash on delivery" : "Bank transfer"}`,
     success=orderSuccessCopy(order.paymentMethod,money(order.total));
+  async function copyOrderId() { try { await navigator.clipboard.writeText(confirmedOrder.orderId); setActionMessage("Order ID copied."); } catch { setActionMessage("Could not copy the Order ID."); } }
+  async function pdf() { setPdfBusy(true); setActionMessage(""); try { await downloadOrderPdf(confirmedOrder); } catch { setActionMessage("We couldn't create the PDF. Please try again."); } finally { setPdfBusy(false); } }
   return (
     <main className="container py-8 sm:py-12">
       <Seo title={`Order ${order.orderId}`} />
@@ -91,8 +97,10 @@ export default function OrderPage() {
       </div></section>
       <section className="mt-5 border border-black/10 bg-white/25 p-5 text-left sm:p-7"><h2 className="eyebrow text-bronze">Delivery to</h2><p className="mt-3 text-sm font-medium">{order.customerName}</p><p className="mt-1 text-xs text-ink/55">{[order.city,order.district].filter(Boolean).join(" · ")}</p></section>
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
+        <button type="button" className="btn justify-center" onClick={() => void copyOrderId()}><Copy size={15}/>Copy Order ID</button>
+        <button type="button" className="btn justify-center" disabled={pdfBusy} onClick={() => void pdf()}><Download size={15}/>{pdfBusy ? "Creating PDF…" : "Download Order PDF"}</button>
         <Link className="btn btn-dark justify-center" to="/shop"><ShoppingBag size={15}/>Continue Shopping</Link>
-        <Link className="btn justify-center" to="/track-order">Track Order</Link>
+        <Link className="btn justify-center" to={`/track-order?orderId=${encodeURIComponent(order.orderId)}`}>Track Order</Link>
         {user && (
           <Link className="btn justify-center" to="/account/orders">
             View My Orders
@@ -109,8 +117,9 @@ export default function OrderPage() {
           </a>
         )}
       </div>
+      {actionMessage ? <p className="mt-3 text-center text-xs text-ink/55" role="status">{actionMessage}</p> : null}
       <p className="mt-5 text-center text-xs leading-5 text-ink/45">
-        Save your Order ID. You can track this order later using your mobile number.
+        Keep your Order ID. You can track this order anytime using your Order ID and the mobile number used at checkout.
         {order.paymentMethod === "bank" && whatsapp.length >= 8
           ? " Your receipt is saved securely with the order; you do not need to resend the file unless ZEVENRA asks you to."
           : ""}

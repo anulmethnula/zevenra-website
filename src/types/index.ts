@@ -203,6 +203,10 @@ export type GuestTrackedOrder = {
   paymentMethod: string;
   paymentStatus: string;
   deliveryZoneName: string;
+  fulfilmentCourierName: string;
+  trackingNumber: string;
+  trackingUrl: string;
+  courierSentDate: string;
   subtotal: number;
   deliveryFee: number;
   total: number;

@@ -2,6 +2,10 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { z } from "zod";
 import { findGuestOrder } from "./_data/orders.js";
 import {
+  normalizeOrderIdForLookup,
+  normalizeSriLankanPhoneForLookup,
+} from "./_order-track-normalization.js";
+import {
   body,
   json,
   methodNotAllowed,
@@ -18,6 +22,14 @@ function safeOrder(row: Record<string, unknown>) {
   const text = (value: unknown) => String(value ?? ""),
     number = (value: unknown) => Number(value) || 0,
     bool = (value: unknown) => value === true || String(value).toLowerCase() === "true";
+  const rawTrackingUrl = text(row.tracking_url ?? row.trackingUrl);
+  let trackingUrl = "";
+  try {
+    const parsed = new URL(rawTrackingUrl);
+    if (parsed.protocol === "https:") trackingUrl = parsed.toString();
+  } catch {
+    trackingUrl = "";
+  }
   return {
     orderId: text(row.order_id ?? row.orderId),
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : text(row.created_at ?? row.createdAt),
@@ -28,6 +40,10 @@ function safeOrder(row: Record<string, unknown>) {
     paymentMethod: text(row.payment_method ?? row.paymentMethod),
     paymentStatus: text(row.payment_status ?? row.paymentStatus),
     deliveryZoneName: text(row.delivery_zone_name ?? row.deliveryZoneName),
+    fulfilmentCourierName: text(row.fulfilment_courier_name ?? row.fulfilmentCourierName),
+    trackingNumber: text(row.tracking_number ?? row.trackingNumber),
+    trackingUrl,
+    courierSentDate: row.courier_sent_date instanceof Date ? row.courier_sent_date.toISOString() : text(row.courier_sent_date ?? row.courierSentDate),
     subtotal: number(row.subtotal),
     deliveryFee: number(row.delivery_fee ?? row.deliveryFee),
     total: number(row.total),
@@ -57,7 +73,11 @@ export function createOrderTrackHandler(findOrder: FindOrder = findGuestOrder) {
       if (!validOrigin(req, originEnv()))
         return json(res, { error: "Invalid request origin" }, 403);
       const input = orderTrackSchema.parse(body(req)),
-        row = await findOrder(input.orderId, input.phone);
+        orderId = normalizeOrderIdForLookup(input.orderId),
+        phone = normalizeSriLankanPhoneForLookup(input.phone);
+      if (!orderId || !/^947\d{8}$/.test(phone))
+        return json(res, { error: "Please enter a valid Order ID and mobile number." }, 400);
+      const row = await findOrder(orderId, phone);
       return row
         ? json(res, safeOrder(row))
         : json(res, { error: notFound }, 404);

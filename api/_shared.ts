@@ -294,7 +294,7 @@ export const phoneSchema = z
 export const orderTrackSchema = z
   .object({
     orderId: z.string().trim().min(1).max(80),
-    phone: phoneSchema,
+    phone: z.string().trim().min(1).max(30),
   })
   .strict();
 const optionalPhoneSchema = z
