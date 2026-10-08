@@ -229,3 +229,9 @@ export function deliveryQuote(
   const zone = findDeliveryZone(zones, address, courier.id);
   return zone ? { fee: zone.fee, zone } : undefined;
 }
+
+export function cityDistrictMismatch(zones:PublicDeliveryRate[],address:{district:string;city:string},courierProviderId?:string){
+  const city=normalize(address.city),district=normalize(address.district);
+  if(!city||!district)return false;
+  return zones.some(zone=>zone.active&&!zone.fallback&&(!courierProviderId||zone.courierProviderId===courierProviderId)&&zone.cities.some(value=>normalize(value)===city)&&zone.districts.length>0&&!zone.districts.some(value=>normalize(value)===district));
+}

@@ -1,4 +1,5 @@
-import { Check } from "lucide-react";
+import { useEffect } from "react";
+import { Check,MessageCircle,ShoppingBag } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { Seo } from "../components/Seo";
 import { money } from "../config/site";
@@ -6,11 +7,13 @@ import { useStore } from "../features/store/StoreContext";
 import { useCustomerAuth } from "../features/account/CustomerAuthContext";
 import type { Order } from "../types";
 import { normalizeWhatsappDigits } from "../utils/contact";
+import { orderSuccessCopy } from "../utils/orderSuccess";
 
 export default function OrderPage() {
   const { orderId } = useParams(),
     { data } = useStore(),
     { user } = useCustomerAuth();
+  useEffect(()=>{window.scrollTo({top:0,left:0,behavior:"auto"});},[orderId]);
   let order: Order | undefined;
   try {
     order = JSON.parse(
@@ -41,29 +44,24 @@ export default function OrderPage() {
     deliveryLabel = order.deliveryZoneName
       ? `${order.deliveryZoneName} — ${money(order.deliveryFee)}`
       : money(order.deliveryFee),
-    message = `Hello ZEVENRA, I have submitted order ${order.orderId}.\n\n${lines}\nSubtotal: ${money(order.subtotal)}\nDelivery: ${deliveryLabel}\nTotal: ${money(order.total)}\nName: ${order.customerName}\nCity: ${order.city}\nPayment: ${order.paymentMethod === "cod" ? "Cash on delivery" : "Bank transfer"}`;
+    message = `Hello ZEVENRA, I have submitted order ${order.orderId}.\n\n${lines}\nSubtotal: ${money(order.subtotal)}\nDelivery: ${deliveryLabel}\nTotal: ${money(order.total)}\nName: ${order.customerName}\nCity: ${order.city}\nPayment: ${order.paymentMethod === "cod" ? "Cash on delivery" : "Bank transfer"}`,
+    success=orderSuccessCopy(order.paymentMethod,money(order.total));
   return (
-    <main className="container py-16 text-center">
+    <main className="container py-8 sm:py-12">
       <Seo title={`Order ${order.orderId}`} />
-      <span className="mx-auto grid h-16 w-16 place-items-center rounded-full border border-bronze text-bronze">
-        <Check size={28} />
-      </span>
-      <p className="eyebrow mt-7 text-bronze">Order request received</p>
-      <h1 className="display mt-3 text-4xl sm:text-6xl">#{order.orderId}</h1>
-      <p className="mx-auto mt-5 max-w-lg text-sm leading-7 text-ink/60">
-        Your order has been received and its stock is reserved. ZEVENRA will
-        review the order and payment details before fulfilment.
-      </p>
-      {order.paymentMethod === "bank" && (
-        <p className="mx-auto mt-4 max-w-lg border border-emerald-900/15 bg-emerald-950/[.05] px-4 py-3 text-xs text-emerald-950">
-          Your bank receipt was attached to this order for verification.
-        </p>
-      )}
-      <div className="mx-auto mt-9 max-w-xl border-y hairline py-6 text-left">
+      <div className="mx-auto max-w-3xl">
+      <section className="border border-emerald-950/15 bg-emerald-950/[.045] p-6 text-center sm:p-9">
+        <span className="mx-auto grid h-16 w-16 place-items-center rounded-full border border-emerald-900/30 text-emerald-900"><Check size={30} strokeWidth={1.7}/></span>
+        <p className="mt-5 text-[10px] font-semibold uppercase tracking-[.2em] text-emerald-900">Order submitted successfully</p>
+        <h1 className="display mt-3 text-3xl sm:text-5xl">Thank you. We received your order.</h1>
+        <p className="eyebrow mt-6 text-ink/45">Order ID</p><strong className="mt-1 block text-lg tracking-[.08em]">#{order.orderId}</strong>
+        <div className="mx-auto mt-6 max-w-xl border-t border-emerald-950/10 pt-5"><h2 className="text-sm font-semibold">{success.title}</h2><p className="mt-2 text-xs leading-6 text-ink/60">{success.detail}</p></div>
+      </section>
+      <section className="mt-5 border border-black/10 bg-white/25 p-5 sm:p-7"><h2 className="eyebrow text-bronze">Order summary</h2><div className="mt-4 divide-y divide-black/10 text-left">
         {order.items.map((item) => (
           <div
             key={item.variantId}
-            className="flex justify-between gap-5 py-2 text-sm"
+            className="flex justify-between gap-5 py-3 text-sm"
           >
             <span>
               {item.name} · {item.color}/{item.size} × {item.quantity}
@@ -76,7 +74,8 @@ export default function OrderPage() {
             <span>{money(item.unitPrice * item.quantity)}</span>
           </div>
         ))}
-        <div className="mt-4 flex justify-between border-t hairline pt-4 text-sm">
+        <div className="flex justify-between gap-4 py-3 text-sm"><span>Subtotal</span><span>{money(order.subtotal)}</span></div>
+        <div className="flex justify-between gap-4 py-3 text-sm">
           <span>
             Delivery
             {order.deliveryZoneName ? `: ${order.deliveryZoneName}` : ""}
@@ -85,36 +84,37 @@ export default function OrderPage() {
             {order.deliveryFee ? money(order.deliveryFee) : "Complimentary"}
           </span>
         </div>
-        <div className="mt-3 flex justify-between">
+        <div className="flex justify-between gap-4 py-3 text-base">
           <span>Total</span>
           <b>{money(order.total)}</b>
         </div>
-      </div>
-      <div className="mt-8 flex flex-wrap justify-center gap-3">
+      </div></section>
+      <section className="mt-5 border border-black/10 bg-white/25 p-5 text-left sm:p-7"><h2 className="eyebrow text-bronze">Delivery to</h2><p className="mt-3 text-sm font-medium">{order.customerName}</p><p className="mt-1 text-xs text-ink/55">{[order.city,order.district].filter(Boolean).join(" · ")}</p></section>
+      <div className="mt-5 grid gap-3 sm:grid-cols-2">
+        <Link className="btn btn-dark justify-center" to="/shop"><ShoppingBag size={15}/>Continue Shopping</Link>
         {user && (
-          <Link className="btn btn-dark" to="/account/orders">
+          <Link className="btn justify-center" to="/account/orders">
             View My Orders
           </Link>
         )}
         {whatsapp.length >= 8 && (
           <a
-            className={user ? "btn" : "btn btn-dark"}
+            className="btn justify-center sm:col-span-2"
             href={`https://wa.me/${whatsapp}?text=${encodeURIComponent(message)}`}
             target="_blank"
             rel="noreferrer"
           >
-            {order.paymentMethod === "bank"
-              ? "Contact on WhatsApp"
-              : "Continue on WhatsApp"}
+            <MessageCircle size={15}/>Contact on WhatsApp
           </a>
         )}
       </div>
-      <p className="mx-auto mt-5 max-w-xl text-xs leading-5 text-ink/45">
+      <p className="mt-5 text-center text-xs leading-5 text-ink/45">
         Keep your order ID for reference.
         {order.paymentMethod === "bank" && whatsapp.length >= 8
           ? " Your receipt is saved securely with the order; you do not need to resend the file unless ZEVENRA asks you to."
           : ""}
       </p>
+      </div>
     </main>
   );
 }
