@@ -6,7 +6,6 @@ import { sriLankaDistricts } from "../_shared.js";
 
 const MAX_FILE_BYTES = 3 * 1024 * 1024;
 const MAX_ROWS = 50_000;
-const REQUIRED_SCORE = 2;
 
 type Field =
   | "zoneCode"
@@ -46,9 +45,8 @@ function fieldForHeader(value: unknown): Field | "" {
   const key = headerKey(value);
   if (!key) return "";
   if (/^zone code$|^code$/.test(key)) return "zoneCode";
-  if (/^zone$|zone name|area name|delivery area|shipping zone/.test(key))
-    return "zoneName";
-  if (/^fee$|delivery fee|shipping fee|rate|charge/.test(key)) return "fee";
+  if (/^zone$|zone name|area name|delivery area|shipping zone/.test(key)) return "zoneName";
+  if (/^fee$|delivery fee|shipping fee|^rate$|^charge$/.test(key)) return "fee";
   if (/district/.test(key)) return "district";
   if (/city|area/.test(key)) return "city";
   if (/postal|postcode|zip/.test(key)) return "postalCode";
@@ -61,8 +59,7 @@ const boolValue = (value: unknown, fallback: boolean) => {
   const raw = text(value).toLowerCase();
   if (!raw) return fallback;
   if (["yes", "y", "true", "1", "active", "enabled"].includes(raw)) return true;
-  if (["no", "n", "false", "0", "inactive", "disabled"].includes(raw))
-    return false;
+  if (["no", "n", "false", "0", "inactive", "disabled"].includes(raw)) return false;
   throw new DeliveryZoneTemplateError(`Invalid Yes/No value "${text(value)}".`);
 };
 
@@ -101,7 +98,7 @@ function canonicalPostal(value: unknown, rowNumber: number) {
 async function matrixFromFile(fileName: string, base64: string) {
   const extension = fileName.toLowerCase().split(".").pop();
   if (!extension || !["xlsx", "csv"].includes(extension))
-    throw new DeliveryZoneTemplateError("Choose an .xlsx or .csv delivery template.");
+    throw new DeliveryZoneTemplateError("Choose an .xlsx or .csv ZEVENRA delivery template.");
   const buffer = Buffer.from(base64, "base64");
   if (!buffer.length || buffer.length > MAX_FILE_BYTES)
     throw new DeliveryZoneTemplateError("Delivery template must be between 1 byte and 3 MB.");
@@ -114,7 +111,7 @@ async function matrixFromFile(fileName: string, base64: string) {
     }) as unknown[][];
   } catch {
     throw new DeliveryZoneTemplateError(
-      "The delivery template could not be read. Check that the file is a valid .xlsx or .csv file.",
+      "The delivery template could not be read. Download the ZEVENRA template and try again.",
     );
   }
 }
@@ -126,21 +123,17 @@ async function parseTemplate(fileName: string, base64: string) {
 
   let headerIndex = -1;
   let bestScore = 0;
-  let bestFields: Field[] = [];
   for (let index = 0; index < Math.min(20, matrix.length); index += 1) {
-    const fields = matrix[index].map(fieldForHeader).filter(Boolean) as Field[];
-    const unique = new Set(fields);
-    const hasCore = unique.has("zoneName") && unique.has("fee");
-    const score = hasCore ? unique.size : 0;
+    const fields = new Set(matrix[index].map(fieldForHeader).filter(Boolean));
+    const score = fields.has("zoneName") && fields.has("fee") ? fields.size : 0;
     if (score > bestScore) {
       bestScore = score;
       headerIndex = index;
-      bestFields = fields;
     }
   }
-  if (headerIndex < 0 || bestScore < REQUIRED_SCORE)
+  if (headerIndex < 0)
     throw new DeliveryZoneTemplateError(
-      'Could not detect the template headers. Include at least "Zone Name" and "Fee".',
+      'This is not a ZEVENRA delivery-area template. Click "Download template" and use columns such as "Zone Name" and "Fee".',
     );
 
   const headers = matrix[headerIndex].map((cell) => text(cell));
@@ -156,13 +149,10 @@ async function parseTemplate(fileName: string, base64: string) {
     .slice(headerIndex + 1)
     .map((row, offset) => ({ row, rowNumber: headerIndex + offset + 2 }))
     .filter(({ row }) => row.some((cell) => text(cell)));
-
   if (!dataRows.length)
-    throw new DeliveryZoneTemplateError("No delivery rows were found below the header.");
+    throw new DeliveryZoneTemplateError("No delivery areas were found below the header.");
   if (dataRows.length > MAX_ROWS)
-    throw new DeliveryZoneTemplateError(
-      `Delivery templates are limited to ${MAX_ROWS.toLocaleString()} rows.`,
-    );
+    throw new DeliveryZoneTemplateError(`Delivery templates are limited to ${MAX_ROWS.toLocaleString()} rows.`);
 
   type MutableZone = {
     zoneCode: string;
@@ -184,13 +174,10 @@ async function parseTemplate(fileName: string, base64: string) {
       return index === undefined ? "" : row[index];
     };
     const zoneName = text(value("zoneName"));
-    if (!zoneName)
-      throw new DeliveryZoneTemplateError(`Row ${rowNumber}: zone name is required.`);
+    if (!zoneName) throw new DeliveryZoneTemplateError(`Row ${rowNumber}: zone name is required.`);
     const fee = moneyValue(value("fee"));
     if (!Number.isFinite(fee) || fee < 0)
-      throw new DeliveryZoneTemplateError(
-        `Row ${rowNumber}: delivery fee must be zero or more.`,
-      );
+      throw new DeliveryZoneTemplateError(`Row ${rowNumber}: delivery fee must be zero or more.`);
 
     const zoneCode = text(value("zoneCode"));
     const key = (zoneCode || zoneName).toLowerCase();
@@ -217,21 +204,13 @@ async function parseTemplate(fileName: string, base64: string) {
       groups.set(key, group);
     } else {
       if (group.zoneName.toLowerCase() !== zoneName.toLowerCase())
-        throw new DeliveryZoneTemplateError(
-          `Row ${rowNumber}: zone code "${zoneCode}" is used by more than one zone name.`,
-        );
+        throw new DeliveryZoneTemplateError(`Row ${rowNumber}: one zone code is used for different zone names.`);
       if (group.fee !== fee)
-        throw new DeliveryZoneTemplateError(
-          `Row ${rowNumber}: "${zoneName}" has conflicting delivery fees.`,
-        );
-      if (group.fallback !== fallback && text(value("fallback")))
-        throw new DeliveryZoneTemplateError(
-          `Row ${rowNumber}: "${zoneName}" has conflicting fallback values.`,
-        );
-      if (group.active !== active && text(value("active")))
-        throw new DeliveryZoneTemplateError(
-          `Row ${rowNumber}: "${zoneName}" has conflicting active values.`,
-        );
+        throw new DeliveryZoneTemplateError(`Row ${rowNumber}: "${zoneName}" has conflicting delivery fees.`);
+      if (text(value("fallback")) && group.fallback !== fallback)
+        throw new DeliveryZoneTemplateError(`Row ${rowNumber}: "${zoneName}" has conflicting fallback values.`);
+      if (text(value("active")) && group.active !== active)
+        throw new DeliveryZoneTemplateError(`Row ${rowNumber}: "${zoneName}" has conflicting active values.`);
     }
 
     if (district) group.districts.add(district);
@@ -246,44 +225,25 @@ async function parseTemplate(fileName: string, base64: string) {
     cities: [...zone.cities],
     postalCodes: [...zone.postalCodes],
   }));
-
   const activeZones = zones.filter((zone) => zone.active);
+  if (!activeZones.length) throw new DeliveryZoneTemplateError("Template needs at least one active delivery area.");
   let fallbacks = activeZones.filter((zone) => zone.fallback);
-  if (!fallbacks.length && activeZones.length) {
+  if (!fallbacks.length) {
     const safest = [...activeZones].sort((a, b) => b.fee - a.fee)[0];
     safest.fallback = true;
     fallbacks = [safest];
   }
   if (fallbacks.length !== 1)
-    throw new DeliveryZoneTemplateError(
-      "Template must have exactly one active fallback zone.",
-    );
+    throw new DeliveryZoneTemplateError("Template must have only one active fallback area.");
 
-  const emptyMappedZone = activeZones.find(
-    (zone) =>
-      !zone.fallback &&
-      !zone.districts.length &&
-      !zone.cities.length &&
-      !zone.postalCodes.length,
-  );
-  if (emptyMappedZone)
-    throw new DeliveryZoneTemplateError(
-      `"${emptyMappedZone.zoneName}" needs at least one district, city/area, or postal code.`,
-    );
-
-  return {
-    headerRowNumber: headerIndex + 1,
-    totalRows: dataRows.length,
-    detectedHeaders: bestFields,
-    zones,
-  };
+  return { headerRowNumber: headerIndex + 1, totalRows: dataRows.length, zones };
 }
 
 export async function previewDeliveryZoneTemplate(input: Record<string, unknown>) {
   const fileName = text(input.fileName);
   const base64 = text(input.base64);
   if (!fileName || !base64)
-    throw new DeliveryZoneTemplateError("Choose a delivery template first.");
+    throw new DeliveryZoneTemplateError("Choose a ZEVENRA delivery template first.");
   const parsed = await parseTemplate(fileName, base64);
   return {
     headerRowNumber: parsed.headerRowNumber,
@@ -310,18 +270,13 @@ export async function applyDeliveryZoneTemplate(input: Record<string, unknown>) 
   const parsed = await parseTemplate(fileName, base64);
 
   await withTransaction(async (client) => {
-    const courier = await client.query<{ id: string; name: string }>(
-      "SELECT id,name FROM courier_providers WHERE id=$1 FOR UPDATE",
+    const courier = await client.query<{ id: string }>(
+      "SELECT id FROM courier_providers WHERE id=$1 FOR UPDATE",
       [courierProviderId],
     );
-    if (!courier.rowCount)
-      throw new DeliveryZoneTemplateError("Courier provider was not found.");
+    if (!courier.rowCount) throw new DeliveryZoneTemplateError("Courier provider was not found.");
 
-    await client.query(
-      "DELETE FROM delivery_rates WHERE courier_provider_id=$1",
-      [courierProviderId],
-    );
-
+    await client.query("DELETE FROM delivery_rates WHERE courier_provider_id=$1", [courierProviderId]);
     for (const zone of parsed.zones) {
       await client.query(
         `INSERT INTO delivery_rates(
@@ -341,28 +296,15 @@ export async function applyDeliveryZoneTemplate(input: Record<string, unknown>) 
         ],
       );
     }
-
     await client.query(
       "UPDATE courier_providers SET pricing_mode='zone',updated_at=now() WHERE id=$1",
       [courierProviderId],
     );
     await client.query(
       "INSERT INTO audit_logs(actor,action,entity_type,entity_id,details) VALUES('owner','delivery_template_applied','courier',$1,$2::jsonb)",
-      [
-        courierProviderId,
-        JSON.stringify({
-          fileName,
-          zones: parsed.zones.length,
-          rows: parsed.totalRows,
-        }),
-      ],
+      [courierProviderId, JSON.stringify({ fileName, zones: parsed.zones.length })],
     );
   });
 
-  return {
-    courierProviderId,
-    headerRowNumber: parsed.headerRowNumber,
-    totalRows: parsed.totalRows,
-    zones: parsed.zones.length,
-  };
+  return { applied: true, courierProviderId, zones: parsed.zones.length };
 }
