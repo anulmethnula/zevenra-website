@@ -24,7 +24,7 @@ export async function importCourierRateSheet(input: Record<string, unknown>) {
     await client.query(`INSERT INTO courier_rate_import_rows(rate_card_id,row_number,raw_data)
       SELECT $1,x.row_number,x.raw::jsonb FROM jsonb_to_recordset($2::jsonb) AS x(row_number int,raw jsonb)`, [id,JSON.stringify(normalizeCourierRateImportRows(parsed.rows))]);
     const suggestions = Object.fromEntries(parsed.headers.map((header) => [header,suggestedCourierRateField(header)]).filter(([,field]) => field));
-    return { id, version, fileName, headers: parsed.headers, suggestions, totalRows: parsed.rows.length, preview: parsed.rows.slice(0,8) };
+    return { id, version, fileName, headers: parsed.headers, suggestions, totalRows: parsed.rows.length, headerRowNumber: parsed.headerRowNumber, preview: parsed.rows.slice(0,8) };
   });
 }
 

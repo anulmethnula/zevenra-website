@@ -5,6 +5,14 @@ const MAX_FILE_BYTES = 3 * 1024 * 1024;
 const MAX_ROWS = 50_000;
 const text = (value: unknown) => String(value ?? "").trim();
 type ParsedRow = { rowNumber: number; raw: Record<string, unknown> };
+const requiredFields = new Set(["fromBranch", "destinationDistrict", "destinationCity", "firstKgCharge", "additionalKgCharge"]);
+
+export class CourierRateFileError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CourierRateFileError";
+  }
+}
 
 export function normalizeCourierRateImportRows(rows: ParsedRow[]) {
   return rows.map((row) => ({ row_number: row.rowNumber, raw: row.raw }));
@@ -28,13 +36,24 @@ export function suggestedCourierRateField(header: string) {
 
 export async function parseCourierRateFile(fileName: string, base64: string) {
   const extension = fileName.toLowerCase().split(".").pop(), buffer = Buffer.from(base64, "base64");
-  if (!extension || !["xlsx", "csv"].includes(extension)) throw new Error("Choose an .xlsx or .csv rate sheet.");
-  if (!buffer.length || buffer.length > MAX_FILE_BYTES) throw new Error("Rate sheet must be between 1 byte and 3 MB.");
+  if (!extension || !["xlsx", "csv"].includes(extension)) throw new CourierRateFileError("Choose an .xlsx or .csv rate sheet.");
+  if (!buffer.length || buffer.length > MAX_FILE_BYTES) throw new CourierRateFileError("Rate sheet must be between 1 byte and 3 MB.");
   let matrix: unknown[][];
-  if (extension === "xlsx") matrix = await readXlsxFile(buffer);
-  else matrix = parseCsv(buffer, { bom: true, relax_column_count: true, skip_empty_lines: false }) as unknown[][];
-  const headerIndex = matrix.findIndex((row) => row.some((cell) => text(cell)));
-  if (headerIndex < 0) throw new Error("The rate sheet is empty.");
+  try {
+    if (extension === "xlsx") matrix = await readXlsxFile(buffer);
+    else matrix = parseCsv(buffer, { bom: true, relax_column_count: true, skip_empty_lines: false }) as unknown[][];
+  } catch {
+    throw new CourierRateFileError("The rate sheet could not be read. Check that the file is a valid .xlsx or .csv file.");
+  }
+  if (!matrix.some((row) => row.some((cell) => text(cell)))) throw new CourierRateFileError("The rate sheet is empty.");
+  let headerIndex = -1, bestScore = 0;
+  for (let index = 0; index < Math.min(20, matrix.length); index += 1) {
+    const recognized = new Set(matrix[index].map((cell) => suggestedCourierRateField(text(cell))).filter((field) => requiredFields.has(field)));
+    const score = recognized.size;
+    if (score > bestScore) { headerIndex = index; bestScore = score; }
+    if (score === requiredFields.size) { headerIndex = index; break; }
+  }
+  if (headerIndex < 0) throw new CourierRateFileError("Could not find a recognizable courier-rate header row in the first 20 rows.");
   const used = new Map<string, number>();
   const headers = matrix[headerIndex].map((cell, index) => {
     const base = text(cell) || `Column ${index + 1}`, count = (used.get(base) || 0) + 1;
@@ -46,7 +65,7 @@ export async function parseCourierRateFile(fileName: string, base64: string) {
     raw: Object.fromEntries(headers.map((header, column) => [header, row[column] ?? ""])),
     populated: row.some((cell) => text(cell)),
   })).filter((row) => row.populated).map(({ rowNumber, raw }) => ({ rowNumber, raw }));
-  if (!rows.length) throw new Error("No data rows were found below the detected header row.");
-  if (rows.length > MAX_ROWS) throw new Error(`Rate sheets are limited to ${MAX_ROWS.toLocaleString()} rows.`);
-  return { extension, headers, rows };
+  if (!rows.length) throw new CourierRateFileError("No data rows were found below the detected header row.");
+  if (rows.length > MAX_ROWS) throw new CourierRateFileError(`Rate sheets are limited to ${MAX_ROWS.toLocaleString()} rows.`);
+  return { extension, headers, rows, headerRowNumber: headerIndex + 1 };
 }

@@ -57,6 +57,7 @@ import {
   validOrigin,
   validSession,
 } from "../_shared.js";
+import { CourierRateFileError } from "../_data/courier-rate-parser.js";
 
 const readActions = new Set([
   "bootstrap",
@@ -237,6 +238,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         : (body(req) as Record<string, unknown>);
     return json(res, await execute(action, payload));
   } catch (error) {
+    if (error instanceof CourierRateFileError)
+      return json(res, { error: error.message }, 400);
     if (error instanceof Error && error.name === "ZodError")
       return json(
         res,

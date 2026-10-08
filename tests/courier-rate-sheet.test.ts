@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { duplicateCourierRateKeys, normalizeCourierRateImportRows, parseCourierRateFile } from "../api/_data/courier-rate-parser.ts";
+import { duplicateCourierRateKeys, normalizeCourierRateImportRows, parseCourierRateFile, suggestedCourierRateField } from "../api/_data/courier-rate-parser.ts";
+import { initialCourierSelection } from "../src/services/deliverySettings.ts";
 
 function crc32(buffer: Buffer) {
   let crc = 0xffffffff;
@@ -30,6 +31,7 @@ test("detects courier CSV headers and preserves quoted values", async () => {
   ].join("\n");
   const result = await parseCourierRateFile("rates.csv", Buffer.from(csv).toString("base64"));
   assert.deepEqual(result.headers, ["From Branch","To District","To City","Charge for 1st kg","Charge per additional 1kg"]);
+  assert.equal(result.headerRowNumber, 1);
   assert.equal(result.rows.length, 2);
   assert.equal(result.rows[0].rowNumber, 2);
   assert.equal(result.rows[0].raw["To City"], "Colombo 01, Fort");
@@ -44,6 +46,38 @@ test("ignores blank CSV rows while preserving physical row numbers", async () =>
 test("parses XLSX rows and preserves physical sheet row numbers", async () => {
   const result=await parseCourierRateFile("rates.xlsx",xlsxBase64([["From Branch","To District","To City","Charge for 1st kg","Charge per additional 1kg"],["","","","",""] ,["Colombo","Colombo","Fort","350","100"]]));
   assert.equal(result.rows.length,1); assert.equal(result.rows[0].rowNumber,3); assert.equal(result.rows[0].raw["To City"],"Fort");
+});
+
+test("detects Koombiyo-style headers after a title row and begins data on row 3", async () => {
+  const headers=["From Branch","To District","To City","Charge for 1st kg","Charge per additional 1kg"];
+  const result=await parseCourierRateFile("koombiyo.xlsx",xlsxBase64([["Koombiyo Delivery","Delivery Rates"],headers,["Colombo","Colombo","Fort","350","100"]]));
+  assert.equal(result.headerRowNumber,2);
+  assert.deepEqual(result.headers,headers);
+  assert.equal(result.rows.length,1);
+  assert.equal(result.rows[0].rowNumber,3);
+  assert.equal(result.rows[0].raw["From Branch"],"Colombo");
+});
+
+test("detects headers after blank leading rows", async () => {
+  const result=await parseCourierRateFile("rates.xlsx",xlsxBase64([[""],[""],["From Branch","To District","To City","Charge for 1st kg","Charge per additional 1kg"],["Colombo","Colombo","Fort","350","100"]]));
+  assert.equal(result.headerRowNumber,3);
+  assert.equal(result.rows[0].rowNumber,4);
+});
+
+test("rejects a sheet without a recognizable header row", async () => {
+  await assert.rejects(()=>parseCourierRateFile("unknown.xlsx",xlsxBase64([["Delivery rates"],["Colombo","Fort","350"]])),/recognizable courier-rate header row/);
+});
+
+test("auto-maps all five real courier headers", () => {
+  assert.deepEqual(Object.fromEntries(["From Branch","To District","To City","Charge for 1st kg","Charge per additional 1kg"].map(header=>[header,suggestedCourierRateField(header)])),{
+    "From Branch":"fromBranch","To District":"destinationDistrict","To City":"destinationCity","Charge for 1st kg":"firstKgCharge","Charge per additional 1kg":"additionalKgCharge",
+  });
+});
+
+test("global import requires explicit courier while courier-scoped import preselects it", () => {
+  const couriers=[{id:"courier-1",name:"Koombiyo",active:true}] as never[];
+  assert.equal(initialCourierSelection(couriers),"");
+  assert.equal(initialCourierSelection(couriers,"courier-1"),"courier-1");
 });
 
 test("normalizes database insert rows without nullable row_number", () => {

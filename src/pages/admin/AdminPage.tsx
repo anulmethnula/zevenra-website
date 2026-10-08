@@ -1569,7 +1569,7 @@ function DeliveryRates() {
       await s.saveCourierConfig(couriers, rates, defaultId);
       setNotice({
         tone: "success",
-        message: "Delivery settings saved to Neon successfully.",
+        message: "Delivery settings saved",
       });
     } catch (reason) {
       setNotice({
@@ -1592,6 +1592,11 @@ function DeliveryRates() {
   };
 
   const selected = couriers.find((item) => item.id === defaultId);
+  const dirty = JSON.stringify({ couriers, rates, defaultId }) !== JSON.stringify({
+    couriers: s.admin.couriers,
+    rates: s.admin.deliveryRates,
+    defaultId: s.data.settings.defaultCourierProviderId,
+  });
   const visibleZones = rates.filter((rate) => {
     const courier = couriers.find((item) => item.id === rate.courierProviderId),
       needle = zoneSearch.trim().toLowerCase(),
@@ -2071,13 +2076,13 @@ function DeliveryRates() {
         <Panel title="Cities / Areas"><textarea className="field min-h-28" value={zoneBeingEdited.cities.join("\n")} onChange={(event) => updateRate(zoneBeingEdited.id,{cities:event.target.value.split(/[,\n]/).map((value)=>value.trim()).filter(Boolean)})} placeholder="One city or area per line" /></Panel>
         <Panel title="Postal codes"><textarea className="field min-h-28" value={zoneBeingEdited.postalCodes.join("\n")} onChange={(event) => updateRate(zoneBeingEdited.id,{postalCodes:event.target.value.split(/[,\n]/).map((value)=>value.trim()).filter(Boolean)})} placeholder="One postal code or prefix per line" /></Panel>
         <Panel title="State & priority"><Toggles items={[["Active",zoneBeingEdited.active,(active)=>updateRate(zoneBeingEdited.id,{active})],["Fallback",zoneBeingEdited.fallback,(fallback)=>fallback?setFallback(zoneBeingEdited.courierProviderId || "",zoneBeingEdited.id):updateRate(zoneBeingEdited.id,{fallback:false})]]}/><label className="block text-xs">Sort order<input className="field mt-2" type="number" min="0" value={zoneBeingEdited.sortOrder} onChange={(event) => updateRate(zoneBeingEdited.id,{sortOrder:Number(event.target.value)})}/></label><div className="mt-5 rounded-xl bg-black/[.04] p-4 text-xs leading-6"><b className="block">Matching priority</b>Postal code<br/>→ City / Area<br/>→ District<br/>→ Outstation / Fallback</div></Panel>
-        <div className="sticky bottom-0 flex justify-end gap-2 border-t border-black/10 bg-[#e9e5de]/95 p-4 backdrop-blur"><button type="button" className="btn" onClick={() => setEditingZone(null)}>Close</button><button type="button" className="btn btn-dark" disabled={busy} onClick={() => void submit()}>{busy ? "Saving…" : "Save delivery"}</button></div>
+        <div className="sticky bottom-0 flex items-center justify-between gap-2 border-t border-black/10 bg-[#e9e5de]/95 p-4 backdrop-blur"><span className="text-xs text-amber-800">{dirty ? "Unsaved changes" : ""}</span><div className="flex gap-2"><button type="button" className="btn" onClick={() => setEditingZone(null)}>Close</button><button type="button" className="btn btn-dark" disabled={busy||!dirty} onClick={() => void submit()}>{busy ? "SAVING…" : "SAVE DELIVERY SETTINGS"}</button></div></div>
       </div></AdminDrawer>}
 
       {!!couriers.length && (
         <div className="sticky bottom-4 z-20 mt-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-black/10 bg-[#f8f6f1]/95 p-4 shadow-[0_18px_55px_rgba(17,17,15,.14)] backdrop-blur sm:px-5">
           <div>
-            <p className="text-xs font-medium">Ready to update checkout?</p>
+            <p className="text-xs font-medium">{dirty ? "Unsaved changes" : "Delivery settings are up to date"}</p>
             <p className="mt-1 text-[10px] text-black/40">
               Nothing changes for customers until you press Save delivery.
             </p>
@@ -2086,7 +2091,7 @@ function DeliveryRates() {
             <button
               type="button"
               className="btn"
-              disabled={busy}
+              disabled={busy || !dirty}
               onClick={reset}
             >
               Reset
@@ -2094,10 +2099,10 @@ function DeliveryRates() {
             <button
               type="button"
               className="btn btn-dark min-w-[150px]"
-              disabled={busy}
+              disabled={busy || !dirty}
               onClick={() => void submit()}
             >
-              {busy ? "Saving…" : "Save delivery"}
+              {busy ? "SAVING…" : "SAVE DELIVERY SETTINGS"}
             </button>
           </div>
         </div>

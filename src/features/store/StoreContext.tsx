@@ -10,6 +10,7 @@ import {
 } from "react";
 import { initialStoreData } from "../../data/demo";
 import { adminApi } from "../../services/adminApi";
+import { saveAndReloadDeliverySettings } from "../../services/deliverySettings";
 import { fetchPublic,getCachedPublic,invalidatePublic,revalidatePublic } from "../../services/publicDataCache";
 import type {
   Category,
@@ -815,15 +816,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
       setAdminError("");
       try {
-        const result = await adminApi.post<{
-            couriers: unknown[];
-            deliveryRates: unknown[];
-            defaultCourierProviderId: string;
-          }>("saveCourierConfig", {
+        const result = await saveAndReloadDeliverySettings(
             couriers,
             rates,
             defaultCourierProviderId,
-          }),
+            adminApi,
+          ),
           normalizedCouriers = result.couriers.map(normalizeCourier),
           normalizedRates = result.deliveryRates.map(normalizeDeliveryRate);
         invalidatePublic("/store");invalidatePublic("/checkout-config");
