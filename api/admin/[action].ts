@@ -58,58 +58,39 @@ import {
   validSession,
 } from "../_shared.js";
 
-const allowed = new Set([
+const readActions = new Set([
   "bootstrap",
   "dashboard",
   "listProducts",
   "listAdminProducts",
   "getProduct",
-  "saveProduct",
-  "setProductStatus",
-  "archiveProduct",
-  "deleteProduct",
   "listCategories",
-  "saveCategory",
-  "deleteCategory",
   "listCollections",
-  "saveCollection",
-  "deleteCollection",
   "listSizeCharts",
-  "saveSizeChart",
-  "deleteSizeChart",
   "listNavigation",
-  "saveNavigation",
-  "deleteNavigation",
   "listHomepageSections",
-  "saveHomepageSection",
-  "deleteHomepageSection",
-  "duplicateHomepageSection",
-  "reorderHomepageSections",
   "listOrders",
   "getOrder",
-  "updateOrder",
-  "updateOrderDetails",
   "listReturns",
-  "createReturn",
-  "updateReturn",
   "listPreorders",
-  "updatePreorder",
-  "createPreorderBatch",
-  "convertPreorderToOrder",
-  "createManualOrder",
   "getSettings",
-  "saveSettings",
   "listCouriers",
   "listDeliveryRates",
-  "saveDeliveryRates",
-  "saveCourierConfig",
-  "importCourierRateSheet",
-  "validateCourierRateSheet",
-  "confirmCourierRateSheet",
   "listCourierRateCards",
   "previewCourierRateCard",
+]);
+const mutationActions = new Set([
+  "saveProduct", "setProductStatus", "archiveProduct", "deleteProduct",
+  "saveCategory", "deleteCategory", "saveCollection", "deleteCollection",
+  "saveSizeChart", "deleteSizeChart", "saveNavigation", "deleteNavigation",
+  "saveHomepageSection", "deleteHomepageSection", "duplicateHomepageSection", "reorderHomepageSections",
+  "updateOrder", "updateOrderDetails", "createReturn", "updateReturn",
+  "updatePreorder", "createPreorderBatch", "convertPreorderToOrder", "createManualOrder",
+  "saveSettings", "saveDeliveryRates", "saveCourierConfig", "importCourierRateSheet",
+  "validateCourierRateSheet", "confirmCourierRateSheet",
   "setCourierRateCardStatus",
 ]);
+const allowed = new Set([...readActions, ...mutationActions]);
 
 async function execute(action: string, payload: Record<string, unknown>) {
   switch (action) {
@@ -225,23 +206,24 @@ async function execute(action: string, payload: Record<string, unknown>) {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const value = Array.isArray(req.query.action)
+      ? req.query.action[0]
+      : req.query.action,
+    action = String(value || "");
+  if (!allowed.has(action))
+    return json(res, { error: "Unknown action" }, 404);
+  const expectedMethod = readActions.has(action) ? "GET" : "POST";
+  if (req.method !== expectedMethod) {
+    res.setHeader("Allow", expectedMethod);
+    return json(res, { error: "Method not allowed" }, 405);
+  }
   try {
     res.setHeader("Cache-Control", "private, no-store");
     const config = authEnv();
     if (!validSession(req, config.SESSION_SECRET))
       return json(res, { error: "Session expired" }, 401);
-    if (!validOrigin(req, config))
+    if (expectedMethod === "POST" && !validOrigin(req, config))
       return json(res, { error: "Invalid request origin" }, 403);
-    const value = Array.isArray(req.query.action)
-        ? req.query.action[0]
-        : req.query.action,
-      action = String(value || "");
-    if (!allowed.has(action))
-      return json(res, { error: "Unknown action" }, 404);
-    if (!["GET", "POST"].includes(req.method || "")) {
-      res.setHeader("Allow", "GET, POST");
-      return json(res, { error: "Method not allowed" }, 405);
-    }
     const payload =
       req.method === "GET"
         ? Object.fromEntries(
@@ -255,22 +237,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         : (body(req) as Record<string, unknown>);
     return json(res, await execute(action, payload));
   } catch (error) {
-    const message = error instanceof Error ? error.message : "";
     if (error instanceof Error && error.name === "ZodError")
       return json(
         res,
         { error: (error as Error & { issues?: { message?: string }[] }).issues?.[0]?.message || "Please check the submitted details." },
         400,
       );
-    const databaseError = typeof (error as { code?:unknown } | null)?.code === "string" || /relation |column |constraint|postgres|duplicate key|null value/i.test(message);
-    if (databaseError) {
-      console.error("admin action database failure", error);
-      return json(res,{ error: "The operation could not be completed. Please review the details and try again." },400);
-    }
-    return json(
-      res,
-      { error: message || "The operation could not be completed." },
-      400,
-    );
+    console.error("admin action failed", error);
+    return json(res, { error: "The operation could not be completed." }, 500);
   }
 }

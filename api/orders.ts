@@ -69,14 +69,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         { error: "Online ordering is temporarily unavailable." },
         503,
       );
+    console.error("order creation failed", error);
     return json(
       res,
-      {
-        error:
-          message ||
-          "We could not place the order. Your bag has not been cleared.",
-      },
-      400,
+      { error: "We could not place the order. Your bag has not been cleared." },
+      500,
     );
   }
 }

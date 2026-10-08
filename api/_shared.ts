@@ -252,7 +252,7 @@ export function validOrigin(
   if (["GET", "HEAD", "OPTIONS"].includes(request.method || "")) return true;
   const value = request.headers.origin;
   const origin = Array.isArray(value) ? value[0] : value;
-  if (!origin) return true;
+  if (!origin) return false;
   const host = request.headers["x-forwarded-host"] || request.headers.host;
   const protocol = request.headers["x-forwarded-proto"] || "https";
   const requestOrigin = host
