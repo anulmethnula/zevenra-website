@@ -10,8 +10,27 @@ import {
   listSettings,
   listSizeCharts,
 } from "./catalog.js";
+import { mapOrder } from "./mappers.js";
 import { recentOrders } from "./orders.js";
 import { listPreorders } from "./preorders.js";
+
+async function recentOrdersWithItems(limit = 50) {
+  const safeLimit = Math.min(50, Math.max(1, Math.floor(limit)));
+  const rows = await query<Record<string, unknown>>(
+    `SELECT o.*,
+      COALESCE((
+        SELECT jsonb_agg(to_jsonb(oi) ORDER BY oi.id)
+        FROM order_items oi
+        WHERE oi.order_id=o.order_id
+      ),'[]'::jsonb) AS items,
+      (SELECT count(*)::int FROM order_returns r WHERE r.order_id=o.order_id) AS return_count
+     FROM orders o
+     ORDER BY o.created_at DESC
+     LIMIT $1`,
+    [safeLimit],
+  );
+  return rows.rows.map(mapOrder);
+}
 
 export async function dashboard() {
   const [counts,products,top,items,preorders,recent] = await Promise.all([
@@ -100,7 +119,7 @@ export async function adminBootstrap(section = "/admin") {
     isProducts || isCollections || isHomepage ? listCollections() : Promise.resolve([]),
     isProducts ? listSizeCharts() : Promise.resolve([]),
     isHomepage ? listHomepageSections() : Promise.resolve([]),
-    isOrders ? recentOrders(50) : Promise.resolve([]),
+    isOrders ? recentOrdersWithItems(50) : Promise.resolve([]),
     isPreorders ? listPreorders() : Promise.resolve([]),
     isSettings || isDelivery || isOrders ? listSettings() : Promise.resolve([]),
     isDelivery || isOrders ? listCouriers() : Promise.resolve([]),
