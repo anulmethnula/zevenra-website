@@ -3499,12 +3499,12 @@ function Orders() {
         </p>
       )}
       <div className="mt-5 overflow-hidden border border-black/10 bg-[#f6f3ed]">
-        <div className="hidden min-h-12 grid-cols-[64px_minmax(190px,1.1fr)_minmax(190px,1fr)_120px_145px_120px_70px] items-center gap-3 border-b border-black/10 bg-white/25 px-4 text-[10px] uppercase tracking-[.14em] text-black/45 lg:grid">
+        <div className="hidden min-h-12 grid-cols-[64px_minmax(210px,1.1fr)_minmax(210px,1fr)_130px_180px_120px_70px] items-center gap-x-5 border-b border-black/10 bg-white/25 px-4 text-[10px] uppercase tracking-[.14em] text-black/45 lg:grid">
           <span className="text-center">Product</span>
           <span className="flex h-full items-center">Order / date</span>
           <span className="flex h-full items-center">Customer</span>
           <span className="flex h-full items-center justify-end text-right">Total</span>
-          <span className="flex h-full items-center">Payment</span>
+          <span className="flex h-6 items-center border-l border-black/10 pl-5">Payment</span>
           <span className="flex h-full items-center justify-center text-center">Status</span>
           <span className="flex h-full items-center justify-end text-right">Action</span>
         </div>
@@ -3523,7 +3523,7 @@ function Orders() {
                 key={order.orderId}
                 className="border-b border-black/10 transition-colors last:border-0 hover:bg-white/25"
               >
-                <div className="grid grid-cols-[64px_minmax(0,1fr)] items-center gap-3 px-4 py-2.5 lg:grid-cols-[64px_minmax(190px,1.1fr)_minmax(190px,1fr)_120px_145px_120px_70px]">
+                <div className="grid grid-cols-[64px_minmax(0,1fr)] items-center gap-3 px-4 py-2.5 lg:grid-cols-[64px_minmax(210px,1.1fr)_minmax(210px,1fr)_130px_180px_120px_70px] lg:gap-x-5">
                   <button
                     type="button"
                     onClick={() => void toggle(order.orderId)}
@@ -3558,12 +3558,12 @@ function Orders() {
                       {order.phone} · {order.district}
                     </p>
                   </div>
-                  <span className="col-span-2 flex min-h-10 items-center text-sm tabular-nums lg:col-span-1 lg:min-h-16 lg:justify-end lg:text-right">{money(Number(order.total))}</span>
-                  <div className="col-span-2 flex min-h-10 min-w-0 flex-col justify-center lg:col-span-1 lg:min-h-16">
-                    <p className="text-xs">
+                  <span className="col-span-2 flex min-h-10 items-center text-sm font-medium tabular-nums lg:col-span-1 lg:min-h-16 lg:justify-end lg:text-right">{money(Number(order.total))}</span>
+                  <div className="col-span-2 flex min-h-10 min-w-0 flex-col justify-center lg:col-span-1 lg:min-h-10 lg:border-l lg:border-black/10 lg:pl-5">
+                    <p className="text-xs font-medium">
                       {order.paymentMethod === "cod" ? "COD" : "BANK"}
                     </p>
-                    <p className="mt-1 text-[10px] uppercase tracking-wider text-black/45">
+                    <p className="mt-1 truncate whitespace-nowrap text-[10px] uppercase tracking-[.08em] text-black/45" title={order.paymentStatus}>
                       {order.paymentStatus}
                     </p>
                   </div>
