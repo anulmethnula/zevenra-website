@@ -193,6 +193,28 @@ export type CartItem = {
   isPreorder?: boolean;
 };
 export type PaymentMethod = "cod" | "bank";
+export type GuestTrackedOrder = {
+  orderId: string;
+  createdAt: string;
+  customerName: string;
+  city: string;
+  district: string;
+  orderStatus: string;
+  paymentMethod: string;
+  paymentStatus: string;
+  deliveryZoneName: string;
+  subtotal: number;
+  deliveryFee: number;
+  total: number;
+  items: Array<{
+    name: string;
+    color: string;
+    size: string;
+    quantity: number;
+    unitPrice: number;
+    isPreorder: boolean;
+  }>;
+};
 export type CheckoutData = {
   customerName: string;
   phone: string;

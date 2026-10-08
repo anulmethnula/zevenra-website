@@ -287,10 +287,16 @@ export const sriLankaDistricts = [
   "Trincomalee",
   "Vavuniya",
 ] as const;
-const phoneSchema = z
+export const phoneSchema = z
   .string()
   .trim()
   .regex(/^[+\d][\d\s-]{8,14}$/);
+export const orderTrackSchema = z
+  .object({
+    orderId: z.string().trim().min(1).max(80),
+    phone: phoneSchema,
+  })
+  .strict();
 const optionalPhoneSchema = z
   .string()
   .trim()

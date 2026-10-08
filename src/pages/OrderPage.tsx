@@ -92,6 +92,7 @@ export default function OrderPage() {
       <section className="mt-5 border border-black/10 bg-white/25 p-5 text-left sm:p-7"><h2 className="eyebrow text-bronze">Delivery to</h2><p className="mt-3 text-sm font-medium">{order.customerName}</p><p className="mt-1 text-xs text-ink/55">{[order.city,order.district].filter(Boolean).join(" · ")}</p></section>
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
         <Link className="btn btn-dark justify-center" to="/shop"><ShoppingBag size={15}/>Continue Shopping</Link>
+        <Link className="btn justify-center" to="/track-order">Track Order</Link>
         {user && (
           <Link className="btn justify-center" to="/account/orders">
             View My Orders
@@ -109,7 +110,7 @@ export default function OrderPage() {
         )}
       </div>
       <p className="mt-5 text-center text-xs leading-5 text-ink/45">
-        Keep your order ID for reference.
+        Save your Order ID. You can track this order later using your mobile number.
         {order.paymentMethod === "bank" && whatsapp.length >= 8
           ? " Your receipt is saved securely with the order; you do not need to resend the file unless ZEVENRA asks you to."
           : ""}

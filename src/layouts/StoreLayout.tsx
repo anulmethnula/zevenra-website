@@ -314,6 +314,7 @@ function MobileMenu({
       <div className="mobile-menu__foot">
         <Link to="/shop?focusSearch=1">SEARCH</Link>
         <Link to="/account">ACCOUNT</Link>
+        <Link to="/track-order">TRACK ORDER</Link>
         {instagram && (
           <a href={instagram} target="_blank" rel="noreferrer noopener">
             INSTAGRAM
@@ -421,6 +422,7 @@ function Footer() {
             <Link to="/delivery">Delivery</Link>
             <Link to="/returns">Returns &amp; Exchanges</Link>
             <Link to="/contact">Contact</Link>
+            <Link to="/track-order">Track Order</Link>
           </div>
           {(instagram || tiktok || whatsapp) && (
             <div className="footer-column footer-follow">

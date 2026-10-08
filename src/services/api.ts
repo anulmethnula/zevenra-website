@@ -2,6 +2,7 @@ import type {
   CheckoutData,
   CustomerOrder,
   CustomerPreorder,
+  GuestTrackedOrder,
   Order,
   PreorderRequest,
   Product,
@@ -37,6 +38,11 @@ export const api = {
     demo
       ? Promise.resolve([])
       : request<CustomerPreorder[]>("/account/preorders"),
+  trackOrder: (data: { orderId: string; phone: string }) =>
+    request<GuestTrackedOrder>("/order-track", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
   createPreorder: async (data: {
     customerName: string;
     phone?: string;

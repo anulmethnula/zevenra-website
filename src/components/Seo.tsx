@@ -4,10 +4,12 @@ export function Seo({
   title,
   description,
   image,
+  noindex = false,
 }: {
   title: string;
   description?: string;
   image?: string;
+  noindex?: boolean;
 }) {
   useEffect(() => {
     const copy = description || "Selected beyond borders. Curated for here.",
@@ -41,6 +43,13 @@ export function Seo({
     document
       .querySelector('link[rel="canonical"]')
       ?.setAttribute("href", siteUrl + location.pathname);
-  }, [title, description, image]);
+    let robots = document.querySelector<HTMLMetaElement>('meta[name="robots"]');
+    if (!robots) {
+      robots = document.createElement("meta");
+      robots.name = "robots";
+      document.head.appendChild(robots);
+    }
+    robots.content = noindex ? "noindex, nofollow" : "index, follow";
+  }, [title, description, image, noindex]);
   return null;
 }
