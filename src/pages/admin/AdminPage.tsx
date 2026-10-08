@@ -2582,14 +2582,16 @@ function Preorders() {
                 {open===item.requestId&&<>
                 <div className="preorder-admin-grid">
                   <section className="preorder-product-box">
-                    {image ? (
-                      <img src={image.url} alt="" loading="lazy" />
+                    {product ? (
+                      <Link to={`/admin/products/${item.productId}`} aria-label={`View ${item.productName}`}>
+                        {image ? <img src={image.url} alt="" loading="lazy" /> : <div className="preorder-product-placeholder" />}
+                      </Link>
                     ) : (
                       <div className="preorder-product-placeholder" />
                     )}
                     <div>
                       <small>Requested item</small>
-                      <h3>{item.productName}</h3>
+                      <h3>{product ? <Link to={`/admin/products/${item.productId}`} className="hover:underline">{item.productName}</Link> : item.productName}</h3>
                       <p>
                         {item.color} / {item.size} · Qty {item.quantity}
                       </p>
@@ -2598,6 +2600,7 @@ function Preorders() {
                         <b>{money(Number(item.requestedPrice))}</b>
                       </p>
                       <p>SKU: {item.sku || "—"}</p>
+                      {product ? <Link to={`/admin/products/${item.productId}`} className="mt-2 inline-block text-xs font-medium underline underline-offset-4">View product →</Link> : <p className="mt-2 text-xs font-medium text-amber-800">Product unavailable</p>}
                     </div>
                   </section>
                   <section className="preorder-customer-box">
@@ -3530,9 +3533,9 @@ function Orders() {
                 {isOpen && (
                   <>
                   <button type="button" aria-label="Close order details" onClick={() => setOpen("")} className="fixed inset-0 z-[90] bg-black/45 backdrop-blur-[1px]" />
-                  <motion.div initial={{ x: "100%" }} animate={{ x: 0 }} transition={{ type: "tween", duration: .28 }} className="fixed inset-y-0 right-0 z-[100] w-full overflow-y-auto bg-[#f6f3ed] p-5 shadow-[-20px_0_60px_rgba(0,0,0,.18)] sm:w-[600px] sm:p-7">
+                  <motion.div initial={{ x: "100%" }} animate={{ x: 0 }} transition={{ type: "tween", duration: .28 }} className="fixed inset-y-0 right-0 z-[100] w-full overflow-y-auto overflow-x-hidden bg-[#f6f3ed] p-5 shadow-[-20px_0_60px_rgba(0,0,0,.18)] sm:w-[760px] sm:p-7 lg:w-[860px]">
                     <div className="mb-6 flex items-start justify-between gap-4 border-b border-black/10 pb-5">
-                      <div><p className="eyebrow text-black/45">Order details</p><h2 className="mt-2 text-xl font-medium">{order.orderId}</h2><p className="mt-1 text-xs text-black/45">{new Date(order.createdAt).toLocaleString("en-LK")}</p><button type="button" className="mt-2 inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-black/50" onClick={() => { void navigator.clipboard.writeText(order.orderId); setStatus("Order ID copied."); }}><Copy size={12}/> Copy order ID</button></div>
+                      <div className="min-w-0"><p className="eyebrow text-black/45">Order details</p><h2 className="mt-2 break-all text-xl font-medium">{order.orderId}</h2><p className="mt-1 text-xs text-black/45">{new Date(order.createdAt).toLocaleString("en-LK")}</p><div className="mt-3 flex flex-wrap items-center gap-2"><button type="button" className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-black/50" onClick={() => { void navigator.clipboard.writeText(order.orderId); setStatus("Order ID copied."); }}><Copy size={12}/> Copy order ID</button><span className="admin-status">{order.orderStatus}</span><span className="admin-status admin-status--info">{order.paymentStatus}</span></div></div>
                       <button type="button" onClick={() => setOpen("")} className="btn px-4">Close</button>
                     </div>
                     {loadingId === order.orderId ? (
@@ -3540,41 +3543,25 @@ function Orders() {
                         Loading order details…
                       </p>
                     ) : detail ? (
-                      <div className="grid gap-8">
+                      <div className="grid gap-8 lg:grid-cols-2 lg:items-start">
                         <div className="space-y-7">
                           <div>
-                            <p className="eyebrow text-black/45">Items</p>
+                            <p className="eyebrow text-black/45">Products</p>
                             <div className="mt-3 divide-y divide-black/10">
-                              {(detail.items || []).map((item, index) => (
-                                <div
-                                  key={item.variantId || index}
-                                  className="flex justify-between gap-5 py-3 text-sm"
-                                >
-                                  <div>
-                                    <p>
-                                      {item.productName || item.name || "Item"}
-                                    </p>
-                                    <p className="mt-1 text-xs text-black/45">
-                                      {item.color} / {item.size} · Qty{" "}
-                                      {item.quantity}
-                                      {item.sku ? " · " + item.sku : ""}
-                                      {String(item.isPreorder).toLowerCase() ===
-                                      "true"
-                                        ? " · PRE-ORDER"
-                                        : ""}
-                                    </p>
+                              {(detail.items || []).map((item, index) => {
+                                const product = data.products.find((candidate) => candidate.id === item.productId),
+                                  image = product?.media.find((media) => media.type === "image");
+                                return <div key={item.orderItemId || item.variantId || index} className="grid grid-cols-[56px_minmax(0,1fr)_auto] items-center gap-3 py-3 text-sm">
+                                  {product ? <Link to={`/admin/products/${product.id}`} className="grid aspect-[4/5] place-items-center overflow-hidden bg-black/[.04]" aria-label={`View ${item.productName || item.name || "product"}`}>{image ? <img src={image.url} alt="" loading="lazy" className="h-full w-full object-contain" /> : <span className="text-[9px] text-black/35">No image</span>}</Link> : <div className="grid aspect-[4/5] place-items-center bg-black/[.04] text-[9px] text-black/35">Unavailable</div>}
+                                  <div className="min-w-0">
+                                    {product ? <Link to={`/admin/products/${product.id}`} className="font-medium hover:underline">{item.productName || item.name || "Item"}</Link> : <p className="font-medium">{item.productName || item.name || "Item"}</p>}
+                                    <p className="mt-1 text-xs text-black/45">{item.color} / {item.size} · Qty {item.quantity}{String(item.isPreorder).toLowerCase() === "true" ? " · PRE-ORDER" : ""}</p>
+                                    <p className="mt-1 text-xs text-black/55">{money(Number(item.unitPrice))} each</p>
+                                    {product ? <Link to={`/admin/products/${product.id}`} className="mt-1 inline-block text-[10px] font-medium underline underline-offset-4">View product →</Link> : <p className="mt-1 text-[10px] font-medium text-amber-800">Product unavailable</p>}
                                   </div>
-                                  <b className="font-normal">
-                                    {money(
-                                      Number(
-                                        item.lineTotal ||
-                                          Number(item.unitPrice) *
-                                            Number(item.quantity),
-                                      ),
-                                    )}
-                                  </b>
-                                </div>
-                              ))}
+                                  <b className="whitespace-nowrap font-normal">{money(Number(item.lineTotal || Number(item.unitPrice) * Number(item.quantity)))}</b>
+                                </div>;
+                              })}
                             </div>
                           </div>
                           <div>
@@ -3591,10 +3578,7 @@ function Orders() {
                               />
                               <Info label="Name" value={detail.customerName} />
                               <Info label="Phone" value={detail.phone} />
-                              <Info
-                                label="WhatsApp"
-                                value={detail.whatsapp || "—"}
-                              />
+                              <div><p className="text-[10px] uppercase tracking-[.14em] text-black/40">WhatsApp</p>{detail.whatsapp ? <a className="mt-1 inline-flex items-center gap-1 text-sm underline underline-offset-4" href={`https://wa.me/${String(detail.whatsapp).replace(/\D/g, "").replace(/^0/, "94")}`} target="_blank" rel="noreferrer"><MessageCircle size={13}/>{detail.whatsapp}</a> : <p className="mt-1 text-sm">—</p>}</div>
                               <Info label="Email" value={detail.email || "—"} />
                               <Info
                                 label="District / city"
@@ -3930,7 +3914,7 @@ function FulfilmentPanel({
     });
   };
   return (
-    <Panel title="Courier & tracking">
+    <Panel title="Fulfilment">
       <div className="mb-4 border-l-2 border-bronze pl-3 text-xs leading-5">
         <b>Checkout rate:</b> {order.courierName || "Legacy delivery"} ·{" "}
         {order.deliveryPricingMode === "flat"
@@ -3988,6 +3972,7 @@ function FulfilmentPanel({
 }
 type AdminOrderLine = {
   orderItemId?: number;
+  productId?: string;
   variantId?: string;
   productName?: string;
   name?: string;
