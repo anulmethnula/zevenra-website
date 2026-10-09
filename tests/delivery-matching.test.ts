@@ -4,8 +4,10 @@ import { checkoutCourier, defaultCourier, defaultDeliveryZones, deliveryQuote, f
 import { matchDeliveryZone, normalizeLocation, normalizePostalCode } from "../shared/delivery-match.ts";
 import { resolveDeliveryPricing } from "../shared/delivery-pricing.ts";
 
-test("normalizes case, spacing, Colombo numbers, and postal codes",()=>{
+test("normalizes case, spacing, punctuation, Colombo numbers, and postal codes",()=>{
   assert.equal(normalizeLocation("  COLOMBO   01 "),"colombo 1");
+  assert.equal(normalizeLocation("Colombo1"),"colombo 1");
+  assert.equal(normalizeLocation("Colombo-01"),"colombo 1");
   assert.equal(normalizeLocation("Mount-Lavinia"),"mount lavinia");
   assert.equal(normalizePostalCode("100"),"00100");
 });
@@ -65,6 +67,47 @@ test("server pricing uses active weight rate when one matches",()=>{
     [],
   );
   assert.deepEqual(result,{fee:500,ratePlan:"card-1",zoneName:"Nugegoda, Colombo",source:"rate-card"});
+});
+
+test("server pricing accepts normalized Colombo city aliases",()=>{
+  const result=resolveDeliveryPricing(
+    {pricingMode:"zone",flatRate:0},
+    {city:"Colombo1",district:"Colombo",postalCode:"00100"},
+    900,
+    [{rateCardId:"card-1",destinationDistrict:"Colombo",destinationCity:"Colombo 01",firstKgCharge:350,additionalKgCharge:100}],
+    [],
+  );
+  assert.equal(result.fee,350);
+  assert.equal(result.source,"rate-card");
+});
+
+test("mixed city rates never guess an arbitrary district rate",()=>{
+  const result=resolveDeliveryPricing(
+    {pricingMode:"zone",flatRate:0},
+    {city:"Unknown Colombo Area",district:"Colombo",postalCode:""},
+    900,
+    [
+      {rateCardId:"card-1",destinationDistrict:"Colombo",destinationCity:"Colombo 01",firstKgCharge:350,additionalKgCharge:100},
+      {rateCardId:"card-1",destinationDistrict:"Colombo",destinationCity:"Nugegoda",firstKgCharge:400,additionalKgCharge:100},
+    ],
+    [{id:"fallback",name:"Outstation",fee:500,active:true,districts:[],cities:[],postalCodes:[],fallback:true,sortOrder:99}],
+  );
+  assert.deepEqual(result,{fee:500,ratePlan:"fallback",zoneName:"Outstation",source:"legacy-zone"});
+});
+
+test("uniform district rate is safe when every imported city has the same price",()=>{
+  const result=resolveDeliveryPricing(
+    {pricingMode:"zone",flatRate:0},
+    {city:"Unlisted Area",district:"Jaffna",postalCode:""},
+    1001,
+    [
+      {rateCardId:"card-2",destinationDistrict:"Jaffna",destinationCity:"Jaffna",firstKgCharge:500,additionalKgCharge:100},
+      {rateCardId:"card-2",destinationDistrict:"Jaffna",destinationCity:"Chavakachcheri",firstKgCharge:500,additionalKgCharge:100},
+    ],
+    [],
+  );
+  assert.equal(result.fee,600);
+  assert.equal(result.source,"rate-card");
 });
 
 test("server pricing falls back to the saved legacy delivery zones when no rate card matches",()=>{
