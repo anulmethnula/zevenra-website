@@ -1,5 +1,5 @@
 import type { CourierProvider, DeliveryRate } from "../types";
-import { matchDeliveryZone, normalizeLocation } from "../../shared/delivery-match";
+import { matchDeliveryZone, normalizeLocation } from "../../shared/delivery-match.ts";
 type PublicCourier=Pick<CourierProvider,"id"|"pricingMode"|"flatRate"|"active">;
 type PublicDeliveryRate=Pick<DeliveryRate,"id"|"name"|"courierProviderId"|"fee"|"active"|"districts"|"cities"|"postalCodes"|"fallback"|"sortOrder">;
 

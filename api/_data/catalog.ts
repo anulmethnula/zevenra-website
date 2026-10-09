@@ -552,7 +552,7 @@ export async function saveCourierConfig(input: Record<string, unknown>) {
       : [];
   const defaultId = String(input.defaultCourierProviderId || ""),
     defaultCourier = couriers.find(
-      (courier) => String(courier.id) === defaultId && Boolean(courier.active),
+      (courier) => String(courier.id) === defaultId && courier.active === true,
     );
   if (!defaultCourier)
     throw new Error("Choose one active default checkout courier.");
@@ -561,14 +561,16 @@ export async function saveCourierConfig(input: Record<string, unknown>) {
       throw new Error("Every courier needs an ID and name.");
     if (!["zone", "flat"].includes(String(courier.pricingMode)))
       throw new Error("Courier pricing mode must be zone or flat.");
-    if (Number(courier.flatRate || 0) < 0)
+    if (courier.active!==true&&courier.active!==false)
+      throw new Error("Courier status must be active or inactive.");
+    if (!Number.isFinite(Number(courier.flatRate))||Number(courier.flatRate) < 0)
       throw new Error("Courier rates cannot be negative.");
     if (courier.active && courier.pricingMode === "zone") {
       const fallbacks = rates.filter(
         (rate) =>
           rate.courierProviderId === courier.id &&
-          Boolean(rate.active) &&
-          Boolean(rate.fallback),
+          rate.active===true &&
+          rate.fallback===true,
       );
       if (fallbacks.length !== 1)
         throw new Error(
@@ -576,8 +578,10 @@ export async function saveCourierConfig(input: Record<string, unknown>) {
         );
     }
   }
-  if (rates.some((rate) => Number(rate.fee) < 0))
+  if (rates.some((rate) => !Number.isFinite(Number(rate.fee))||Number(rate.fee) < 0))
     throw new Error("Delivery rates cannot be negative.");
+  if(rates.some(rate=>rate.active!==true&&rate.active!==false||rate.fallback!==true&&rate.fallback!==false||!Array.isArray(rate.districts)||!Array.isArray(rate.cities)||!Array.isArray(rate.postalCodes)))
+    throw new Error("Delivery area configuration is invalid.");
   await withTransaction(async (client) => {
     for (const courier of couriers)
       await client.query(
@@ -589,7 +593,7 @@ export async function saveCourierConfig(input: Record<string, unknown>) {
           courier.notes || "",
           courier.pricingMode,
           courier.flatRate || 0,
-          Boolean(courier.active),
+          courier.active,
         ],
       );
     for (const rate of rates)
@@ -600,11 +604,11 @@ export async function saveCourierConfig(input: Record<string, unknown>) {
           rate.courierProviderId,
           rate.name,
           rate.fee,
-          Boolean(rate.active),
+          rate.active,
           rate.districts || [],
           rate.cities || [],
           rate.postalCodes || [],
-          Boolean(rate.fallback),
+          rate.fallback,
           rate.sortOrder || 0,
         ],
       );
