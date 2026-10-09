@@ -9,6 +9,7 @@ import type {
 } from "../types";
 import { products } from "../data/demo";
 import { siteConfig } from "../config/site";
+import { safeHttpsUrl } from "../utils/orderTracking";
 const base = import.meta.env.VITE_API_BASE || "/api";
 const demo = import.meta.env.VITE_DEMO_MODE === "true";
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -34,8 +35,14 @@ export const api = {
     demo
       ? products.find((p) => p.slug === slug)
       : request<Product>(`/products/${encodeURIComponent(slug)}`),
-  customerOrders: () =>
-    demo ? Promise.resolve([]) : request<CustomerOrder[]>("/account/orders"),
+  customerOrders: async () => {
+    if (demo) return [];
+    const orders = await request<CustomerOrder[]>("/account/orders");
+    return orders.map((order) => ({
+      ...order,
+      trackingUrl: safeHttpsUrl(order.trackingUrl),
+    }));
+  },
   customerPreorders: () =>
     demo
       ? Promise.resolve([])
