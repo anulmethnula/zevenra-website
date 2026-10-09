@@ -25,7 +25,8 @@ AS $$
           c.slug = regexp_replace(target_value, '^/collections/', '')
         )
     )
-    WHEN link_kind = 'page' THEN target_value ~ '^/(?!/)'
+    WHEN link_kind = 'page' THEN
+      left(target_value, 1) = '/' AND left(target_value, 2) <> '//'
     WHEN link_kind = 'url' THEN target_value ~* '^https://'
     ELSE false
   END;
