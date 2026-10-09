@@ -31,10 +31,17 @@ jobs:
       - name: Production dependency audit
         run: npm audit --omit=dev --audit-level=high
 
-      - name: Database tooling syntax
+      - name: Database tooling and migration integrity
         run: |
           node --check scripts/db-migrate.mjs
           node --check scripts/db-verify.mjs
+          for file in database/migrations/*.sql; do
+            version="$(basename "$file" .sql)"
+            if ! grep -Fq "'$version'" "$file"; then
+              echo "Migration $file does not record schema_migrations version $version"
+              exit 1
+            fi
+          done
 
       - name: Required release assets
         run: |
