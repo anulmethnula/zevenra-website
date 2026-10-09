@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -4208,16 +4208,27 @@ function Media() {
     </>
   );
 }
+type SettingsSection="brand"|"payments"|"delivery"|"store";
+const settingsSections:SettingsSection[]=["brand","payments","delivery","store"];
+const settingsSectionKeys={brand:["brandName","tagline","announcement","whatsapp","phone","email","instagram","tiktok"],payments:["codEnabled","bankEnabled","bankName","accountName","accountNumber","branch"],delivery:["deliveryEnabled","freeDeliveryThreshold"],store:["storeOpen","ordersEnabled","defaultTitle","defaultDescription"]} as const;
+const settingsSectionLabels:Record<SettingsSection,string>={brand:"Brand & contact settings",payments:"Payment settings",delivery:"Delivery settings",store:"Store settings"};
+function SectionSave({section,label,busy,status,save}:{section:SettingsSection;label:string;busy:boolean;status:string;save:(section:SettingsSection)=>Promise<void>}){return <div className="mt-5 border-t border-black/10 pt-4"><button type="button" className="btn btn-dark min-h-11 w-full justify-center" disabled={busy} onClick={()=>void save(section)}>{busy?"Saving…":label}</button>{status&&<p className={`mt-3 text-xs ${status.endsWith("saved.")?"text-emerald-800":"text-red-800"}`} role="status">{status}</p>}</div>}
 function ExplicitSettings({ focus }: { focus: string }) {
   const s = useStore(),
     [draft, setDraft] = useState(s.data.settings),
-    [busy, setBusy] = useState(false),
-    [status, setStatus] = useState("");
-  useEffect(() => setDraft(s.data.settings), [s.data.settings]);
+    [busy, setBusy] = useState<Record<SettingsSection,boolean>>({brand:false,payments:false,delivery:false,store:false}),
+    [status, setStatus] = useState<Record<SettingsSection,string>>({brand:"",payments:"",delivery:"",store:""}),
+    dirty=useRef(new Set<SettingsSection>());
+  useEffect(() => setDraft(current=>{
+    const next={...current};
+    for(const section of settingsSections)if(!dirty.current.has(section))for(const key of settingsSectionKeys[section])Object.assign(next,{[key]:s.data.settings[key]});
+    return next;
+  }), [s.data.settings]);
   const change = <K extends keyof typeof draft>(
+    section: SettingsSection,
     key: K,
     value: (typeof draft)[K],
-  ) => setDraft((x) => ({ ...x, [key]: value }));
+  ) => {dirty.current.add(section);setStatus(current=>({...current,[section]:""}));setDraft((x) => ({ ...x, [key]: value }));};
   const validUrl = (value: string) => {
     if (!value.trim()) return true;
     try {
@@ -4227,52 +4238,44 @@ function ExplicitSettings({ focus }: { focus: string }) {
       return false;
     }
   };
-  async function submit() {
-    setStatus("");
-    if (!draft.brandName.trim()) return setStatus("Brand name is required.");
-    if (
+  async function submit(section:SettingsSection) {
+    setStatus(current=>({...current,[section]:""}));
+    if (section==="brand"&&!draft.brandName.trim()) return setStatus(current=>({...current,brand:"Brand name is required."}));
+    if (section==="brand"&&
       draft.email.trim() &&
       !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email.trim())
     )
-      return setStatus("Enter a valid contact email.");
-    if (draft.whatsapp.trim() && !adminPhone.test(draft.whatsapp.trim()))
-      return setStatus("Enter a valid WhatsApp number.");
-    if (draft.phone.trim() && !adminPhone.test(draft.phone.trim()))
-      return setStatus("Enter a valid phone number.");
-    if (!validUrl(draft.instagram) || !validUrl(draft.tiktok))
-      return setStatus(
-        "Instagram and TikTok must be valid http(s) URLs or left blank.",
-      );
-    if (
-      !Number.isFinite(draft.deliveryFee) ||
-      draft.deliveryFee < 0 ||
+      return setStatus(current=>({...current,brand:"Enter a valid contact email."}));
+    if (section==="brand"&&draft.whatsapp.trim() && !adminPhone.test(draft.whatsapp.trim()))
+      return setStatus(current=>({...current,brand:"Enter a valid WhatsApp number."}));
+    if (section==="brand"&&draft.phone.trim() && !adminPhone.test(draft.phone.trim()))
+      return setStatus(current=>({...current,brand:"Enter a valid phone number."}));
+    if (section==="brand"&&(!validUrl(draft.instagram) || !validUrl(draft.tiktok)))
+      return setStatus(current=>({...current,brand:"Instagram and TikTok must be valid http(s) URLs or left blank."}));
+    if (section==="delivery"&&(
       !Number.isFinite(draft.freeDeliveryThreshold) ||
       draft.freeDeliveryThreshold < 0
-    )
-      return setStatus("Delivery amounts cannot be negative.");
-    if (draft.ordersEnabled && !draft.codEnabled && !draft.bankEnabled)
-      return setStatus(
-        "Enable at least one payment method before enabling online orders.",
-      );
-    if (
+    ))
+      return setStatus(current=>({...current,delivery:"Delivery amounts cannot be negative."}));
+    if (section==="store"&&draft.ordersEnabled && !s.data.settings.codEnabled && !s.data.settings.bankEnabled)
+      return setStatus(current=>({...current,store:"Save an enabled payment method before enabling online orders."}));
+    if (section==="payments"&&
       draft.bankEnabled &&
       (!draft.bankName.trim() ||
         !draft.accountName.trim() ||
         !draft.accountNumber.trim())
     )
-      return setStatus(
-        "Complete bank name, account name and account number before enabling bank transfer.",
-      );
-    setBusy(true);
+      return setStatus(current=>({...current,payments:"Complete bank name, account name and account number before enabling bank transfer."}));
+    const patch=Object.fromEntries(settingsSectionKeys[section].map(key=>[key,draft[key]]));
+    setBusy(current=>({...current,[section]:true}));
     try {
-      await s.commitSettings(draft);
-      setStatus("Settings saved.");
+      await s.commitSettings(patch);
+      dirty.current.delete(section);
+      setStatus(current=>({...current,[section]:`${settingsSectionLabels[section]} saved.`}));
     } catch (reason) {
-      setStatus(
-        reason instanceof Error ? reason.message : "Could not save settings.",
-      );
+      setStatus(current=>({...current,[section]:reason instanceof Error ? reason.message : "Could not save settings."}));
     } finally {
-      setBusy(false);
+      setBusy(current=>({...current,[section]:false}));
     }
   }
   return (
@@ -4288,46 +4291,47 @@ function ExplicitSettings({ focus }: { focus: string }) {
               <Field
                 label="Brand name"
                 value={draft.brandName}
-                onChange={(v) => change("brandName", v)}
+                onChange={(v) => change("brand", "brandName", v)}
               />
               <Field
                 label="Tagline"
                 value={draft.tagline}
-                onChange={(v) => change("tagline", v)}
+                onChange={(v) => change("brand", "tagline", v)}
               />
               <Field
                 label="Announcement"
                 value={draft.announcement}
-                onChange={(v) => change("announcement", v)}
+                onChange={(v) => change("brand", "announcement", v)}
               />
               <Field
                 label="WhatsApp"
                 value={draft.whatsapp}
-                onChange={(v) => change("whatsapp", v)}
+                onChange={(v) => change("brand", "whatsapp", v)}
               />
               <Field
                 label="Phone"
                 value={draft.phone}
-                onChange={(v) => change("phone", v)}
+                onChange={(v) => change("brand", "phone", v)}
               />
               <Field
                 label="Email"
                 value={draft.email}
-                onChange={(v) => change("email", v)}
+                onChange={(v) => change("brand", "email", v)}
               />
               <Field
                 label="Instagram URL"
                 value={draft.instagram}
-                onChange={(v) => change("instagram", v)}
+                onChange={(v) => change("brand", "instagram", v)}
               />
               <Field
                 label="TikTok URL"
                 value={draft.tiktok}
-                onChange={(v) => change("tiktok", v)}
+                onChange={(v) => change("brand", "tiktok", v)}
               />
               <p className="text-xs leading-5 text-black/45">
                 These details power the Contact page and footer social links.
               </p>
+              <SectionSave section="brand" label="Save Brand & Contact" busy={busy.brand} status={status.brand} save={submit}/>
             </Panel>
             <Panel title="Payments">
               <Toggles
@@ -4335,35 +4339,36 @@ function ExplicitSettings({ focus }: { focus: string }) {
                   [
                     "Cash on delivery",
                     draft.codEnabled,
-                    (v) => change("codEnabled", v),
+                    (v) => change("payments", "codEnabled", v),
                   ],
                   [
                     "Bank transfer",
                     draft.bankEnabled,
-                    (v) => change("bankEnabled", v),
+                    (v) => change("payments", "bankEnabled", v),
                   ],
                 ]}
               />
               <Field
                 label="Bank"
                 value={draft.bankName}
-                onChange={(v) => change("bankName", v)}
+                onChange={(v) => change("payments", "bankName", v)}
               />
               <Field
                 label="Account name"
                 value={draft.accountName}
-                onChange={(v) => change("accountName", v)}
+                onChange={(v) => change("payments", "accountName", v)}
               />
               <Field
                 label="Account number"
                 value={draft.accountNumber}
-                onChange={(v) => change("accountNumber", v)}
+                onChange={(v) => change("payments", "accountNumber", v)}
               />
               <Field
                 label="Branch"
                 value={draft.branch}
-                onChange={(v) => change("branch", v)}
+                onChange={(v) => change("payments", "branch", v)}
               />
+              <SectionSave section="payments" label="Save Payment Settings" busy={busy.payments} status={status.payments} save={submit}/>
             </Panel>
           </>
         )}
@@ -4373,14 +4378,14 @@ function ExplicitSettings({ focus }: { focus: string }) {
               [
                 "Islandwide delivery",
                 draft.deliveryEnabled,
-                (v) => change("deliveryEnabled", v),
+                (v) => change("delivery", "deliveryEnabled", v),
               ],
             ]}
           />
           <Field
             label="Free delivery threshold (LKR)"
             value={String(draft.freeDeliveryThreshold)}
-            onChange={(v) => change("freeDeliveryThreshold", Number(v))}
+            onChange={(v) => change("delivery", "freeDeliveryThreshold", Number(v))}
           />
           <p className="mt-2 text-xs leading-5 text-black/45">
             Courier prices and delivery zones are managed separately so changing
@@ -4389,39 +4394,33 @@ function ExplicitSettings({ focus }: { focus: string }) {
           <Link to="/admin/delivery" className="btn mt-4 w-full">
             Manage couriers & delivery
           </Link>
+          <SectionSave section="delivery" label="Save Delivery Settings" busy={busy.delivery} status={status.delivery} save={submit}/>
         </Panel>
         {focus === "delivery" && <DeliveryRates />}
         <Panel title="Store & SEO">
           <Toggles
             items={[
-              ["Store open", draft.storeOpen, (v) => change("storeOpen", v)],
+              ["Store open", draft.storeOpen, (v) => change("store", "storeOpen", v)],
               [
                 "Orders enabled",
                 draft.ordersEnabled,
-                (v) => change("ordersEnabled", v),
+                (v) => change("store", "ordersEnabled", v),
               ],
             ]}
           />
           <Field
             label="Default title"
             value={draft.defaultTitle}
-            onChange={(v) => change("defaultTitle", v)}
+            onChange={(v) => change("store", "defaultTitle", v)}
           />
           <Field
             label="Description"
             value={draft.defaultDescription}
-            onChange={(v) => change("defaultDescription", v)}
+            onChange={(v) => change("store", "defaultDescription", v)}
           />
+          <SectionSave section="store" label="Save Store Settings" busy={busy.store} status={status.store} save={submit}/>
         </Panel>
         {focus !== "delivery" && <DiscountManager />}
-      </div>
-      <div className="sticky bottom-4 mt-6 bg-[#e9e5de]/95 p-3 backdrop-blur">
-        <EditorActions
-          busy={busy}
-          status={status}
-          save={submit}
-          cancel={() => setDraft(s.data.settings)}
-        />
       </div>
     </>
   );
