@@ -50,17 +50,29 @@ try {
       "SELECT count(*)::int AS count FROM order_items i LEFT JOIN orders o ON o.order_id=i.order_id WHERE o.order_id IS NULL",
     orphanProductCollections:
       "SELECT count(*)::int AS count FROM product_collections pc LEFT JOIN products p ON p.id=pc.product_id LEFT JOIN collections c ON c.id=pc.collection_id WHERE p.id IS NULL OR c.id IS NULL",
+    activePreordersMissingProduct:
+      "SELECT count(*)::int AS count FROM preorders pr LEFT JOIN products p ON p.id=pr.product_id WHERE pr.status NOT IN ('cancelled','converted') AND p.id IS NULL",
+    activePreordersMissingVariant:
+      "SELECT count(*)::int AS count FROM preorders pr LEFT JOIN variants v ON v.id=pr.variant_id WHERE pr.status NOT IN ('cancelled','converted') AND v.id IS NULL",
+    activePreorderVariantProductMismatch:
+      "SELECT count(*)::int AS count FROM preorders pr JOIN variants v ON v.id=pr.variant_id WHERE pr.status NOT IN ('cancelled','converted') AND pr.product_id IS DISTINCT FROM v.product_id",
     negativeStock: "SELECT count(*)::int AS count FROM variants WHERE stock<0",
     invalidTotals:
       "SELECT count(*)::int AS count FROM orders WHERE subtotal-COALESCE(discount_amount,0)+delivery_fee<>total",
     invalidStockStates:
       "SELECT count(*)::int AS count FROM orders WHERE stock_state NOT IN ('reserved','fulfilled','restored','not_applicable')",
+    invalidWeightSnapshots:
+      "SELECT count(*)::int AS count FROM orders WHERE (total_product_weight_grams IS NULL) <> (total_shipping_weight_grams IS NULL) OR (total_product_weight_grams IS NOT NULL AND total_shipping_weight_grams < total_product_weight_grams)",
+    invalidDeliveryEstimateSnapshots:
+      "SELECT count(*)::int AS count FROM orders WHERE (minimum_delivery_days IS NULL) <> (maximum_delivery_days IS NULL) OR (minimum_delivery_days IS NOT NULL AND (minimum_delivery_days <= 0 OR maximum_delivery_days < minimum_delivery_days))",
     excessiveReturns:
       "SELECT count(*)::int AS count FROM (SELECT ri.order_item_id,sum(ri.quantity) qty,oi.quantity purchased FROM order_return_items ri JOIN order_items oi ON oi.id=ri.order_item_id JOIN order_returns r ON r.id=ri.return_id WHERE r.status<>'rejected' GROUP BY ri.order_item_id,oi.quantity HAVING sum(ri.quantity)>oi.quantity) invalid",
     orphanReturnItems:
       "SELECT count(*)::int AS count FROM order_return_items ri LEFT JOIN order_returns r ON r.id=ri.return_id LEFT JOIN order_items oi ON oi.id=ri.order_item_id WHERE r.id IS NULL OR oi.id IS NULL",
     orphanCourierRates:
       "SELECT count(*)::int AS count FROM courier_rates r LEFT JOIN courier_rate_cards c ON c.id=r.rate_card_id LEFT JOIN courier_providers p ON p.id=r.courier_provider_id WHERE c.id IS NULL OR p.id IS NULL",
+    mismatchedCourierRateProviders:
+      "SELECT count(*)::int AS count FROM courier_rates r JOIN courier_rate_cards c ON c.id=r.rate_card_id WHERE r.courier_provider_id<>c.courier_provider_id",
     multipleActiveRateCards:
       "SELECT count(*)::int AS count FROM (SELECT courier_provider_id FROM courier_rate_cards WHERE status='active' GROUP BY courier_provider_id HAVING count(*)>1) invalid",
   };
