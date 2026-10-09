@@ -12,6 +12,4 @@ export const useRecommendations=(categoryId:string,productId:string)=>useRequest
 export const getSizeChart=(id:string)=>fetchPublic<SizeChart>(`/size-chart?id=${encodeURIComponent(id)}`,{ttlMs:300_000});
 const emptyShopResult=(cached:ShopResponse)=>cached.items.length===0;
 export const useShopProducts=(query:string)=>{const policy=shopSearchPolicy(query);return useRequest<ShopResponse>(`/products?${query}`,{ttlMs:25_000,maxEntries:40,revalidateFresh:policy.revalidateFresh,loadingWhileRevalidate:emptyShopResult,noStore:policy.search});};
-export type PublicCourier={id:string;pricingMode:"zone"|"flat";flatRate:number;active:boolean};
-export type PublicDeliveryRate={id:string;name:string;courierProviderId?:string;fee:number;active:boolean;districts:string[];cities:string[];postalCodes:string[];fallback:boolean;sortOrder:number};
-export const useCheckoutConfig=()=>useRequest<{settings:Array<{key:string;value:unknown}>;couriers:PublicCourier[];deliveryRates:PublicDeliveryRate[]}>("/checkout-config",{ttlMs:15_000});
+export const useCheckoutConfig=()=>useRequest<{settings:Array<{key:string;value:unknown}>}>("/checkout-config",{ttlMs:15_000});
