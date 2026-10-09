@@ -4,11 +4,12 @@ import { checkoutCourier, defaultCourier, defaultDeliveryZones, deliveryQuote, f
 import { matchDeliveryZone, normalizeLocation, normalizePostalCode } from "../shared/delivery-match.ts";
 import { resolveDeliveryPricing } from "../shared/delivery-pricing.ts";
 
-test("normalizes case, spacing, punctuation, Colombo numbers, and postal codes",()=>{
+test("normalizes case, spacing, punctuation, Colombo numbers, Unicode locations, and postal codes",()=>{
   assert.equal(normalizeLocation("  COLOMBO   01 "),"colombo 1");
   assert.equal(normalizeLocation("Colombo1"),"colombo 1");
   assert.equal(normalizeLocation("Colombo-01"),"colombo 1");
   assert.equal(normalizeLocation("Mount-Lavinia"),"mount lavinia");
+  assert.equal(normalizeLocation("තලෙයිමන්නාරම"),"තලෙයිමන්නාරම");
   assert.equal(normalizePostalCode("100"),"00100");
 });
 
