@@ -26,6 +26,8 @@ export function buildPublicCheckoutConfig(
   _couriers: CourierRow[],
   _rates: RateRow[],
 ) {
+  void _couriers;
+  void _rates;
   const raw = Object.fromEntries(settings.map((row) => [row.key, row.value])),
     bankEnabled = enabled(raw.bankEnabled ?? raw.bankTransferEnabled),
     publicSettings: SettingRow[] = [
