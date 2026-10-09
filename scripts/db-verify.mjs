@@ -49,8 +49,12 @@ try {
       "SELECT count(*)::int AS count FROM variants v LEFT JOIN products p ON p.id=v.product_id WHERE p.id IS NULL",
     duplicateNonblankVariantSkus:
       "SELECT count(*)::int AS count FROM (SELECT sku FROM variants WHERE btrim(COALESCE(sku,''))<>'' GROUP BY sku HAVING count(*)>1) invalid",
+    invalidCategoryHierarchy:
+      "SELECT count(*)::int AS count FROM categories c LEFT JOIN categories parent ON parent.id=c.parent_id WHERE c.parent_id=c.id OR (c.parent_id IS NOT NULL AND parent.parent_id IS NOT NULL)",
     orphanItems:
       "SELECT count(*)::int AS count FROM order_items i LEFT JOIN orders o ON o.order_id=i.order_id WHERE o.order_id IS NULL",
+    liveOrderItemsMissingVariantReference:
+      "SELECT count(*)::int AS count FROM order_items i JOIN orders o ON o.order_id=i.order_id WHERE o.order_status<>'cancelled' AND i.is_preorder=false AND (i.variant_id IS NULL OR NOT EXISTS(SELECT 1 FROM variants v WHERE v.id=i.variant_id))",
     orphanProductCollections:
       "SELECT count(*)::int AS count FROM product_collections pc LEFT JOIN products p ON p.id=pc.product_id LEFT JOIN collections c ON c.id=pc.collection_id WHERE p.id IS NULL OR c.id IS NULL",
     publishedProductsMissingShippingWeight:
@@ -59,6 +63,10 @@ try {
       "SELECT count(*)::int AS count FROM products p JOIN categories c ON c.id=p.category_id WHERE p.status='published' AND c.active IS NOT TRUE",
     publishedProductsWithoutActiveVariant:
       "SELECT count(*)::int AS count FROM products p WHERE p.status='published' AND NOT EXISTS(SELECT 1 FROM variants v WHERE v.product_id=p.id AND v.active=true)",
+    visibleNavigationBrokenTargets:
+      "SELECT count(*)::int AS count FROM navigation n WHERE n.visible=true AND ((n.link_type='category' AND NOT EXISTS(SELECT 1 FROM categories c WHERE c.active=true AND (c.id=n.target OR c.slug=regexp_replace(n.target,'^/category/','')))) OR (n.link_type='collection' AND NOT EXISTS(SELECT 1 FROM collections c WHERE c.active=true AND (c.id=n.target OR c.slug=regexp_replace(n.target,'^/collections/','')))) OR (n.link_type='page' AND NOT(left(n.target,1)='/' AND left(n.target,2)<>'//')) OR (n.link_type='url' AND n.target !~* '^https://'))",
+    enabledHomepageBrokenReferences:
+      "SELECT count(*)::int AS count FROM homepage_sections h WHERE h.enabled=true AND ((h.type='product-grid' AND (btrim(h.reference_id)='' OR (NOT EXISTS(SELECT 1 FROM products p WHERE p.id=h.reference_id AND p.status='published') AND NOT EXISTS(SELECT 1 FROM categories c WHERE c.id=h.reference_id AND c.active=true) AND NOT EXISTS(SELECT 1 FROM collections c WHERE c.id=h.reference_id AND c.active=true)))) OR (h.type='category-grid' AND btrim(h.reference_id)<>'' AND NOT EXISTS(SELECT 1 FROM categories c WHERE c.id=h.reference_id AND c.active=true)) OR (h.type='collection-feature' AND NOT EXISTS(SELECT 1 FROM collections c WHERE c.id=h.reference_id AND c.active=true)))",
     activePreordersMissingProduct:
       "SELECT count(*)::int AS count FROM preorders pr LEFT JOIN products p ON p.id=pr.product_id WHERE pr.status NOT IN ('cancelled','converted') AND p.id IS NULL",
     activePreordersMissingVariant:
