@@ -38,6 +38,8 @@ export type ResolvedDeliveryPricing = {
 };
 
 const validMoney = (value: number) => Number.isFinite(value) && value >= 0;
+const ratePair = (rate: WeightRateInput) =>
+  `${rate.firstKgCharge}\u0000${rate.additionalKgCharge}`;
 
 export function resolveDeliveryPricing(
   courier: CourierPricingInput,
@@ -62,20 +64,21 @@ export function resolveDeliveryPricing(
 
   const city = normalizeLocation(address.city),
     district = normalizeLocation(address.district),
-    selected =
-      weightRates.find(
-        (rate) =>
-          normalizeLocation(rate.destinationCity) === city &&
-          normalizeLocation(rate.destinationDistrict) === district,
-      ) ??
-      weightRates.find(
-        (rate) =>
-          !normalizeLocation(rate.destinationCity) &&
-          normalizeLocation(rate.destinationDistrict) === district,
-      ) ??
-      weightRates.find(
-        (rate) => normalizeLocation(rate.destinationDistrict) === district,
-      );
+    districtRates = weightRates.filter(
+      (rate) => normalizeLocation(rate.destinationDistrict) === district,
+    ),
+    exact = districtRates.find(
+      (rate) => normalizeLocation(rate.destinationCity) === city,
+    ),
+    districtOnly = districtRates.find(
+      (rate) => !normalizeLocation(rate.destinationCity),
+    ),
+    uniformDistrictRate =
+      districtRates.length > 0 &&
+      new Set(districtRates.map(ratePair)).size === 1
+        ? districtRates[0]
+        : undefined,
+    selected = exact ?? districtOnly ?? uniformDistrictRate;
 
   if (selected) {
     if (
