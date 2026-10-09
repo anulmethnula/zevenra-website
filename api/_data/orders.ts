@@ -141,6 +141,7 @@ async function loadLines(
   client: DatabaseClient,
   input: OrderInput,
   trustProvidedPrice = false,
+  lockRows = true,
 ) {
   const ids = new Set<string>(),
     lines: Line[] = [];
@@ -149,7 +150,7 @@ async function loadLines(
     ids.add(item.variantId);
     const row = (
       await client.query<Record<string, unknown>>(
-        `SELECT v.*,p.name AS product_name,p.price,p.status,p.preorder_enabled,p.shipping_weight_grams,c.default_shipping_weight_grams FROM variants v JOIN products p ON p.id=v.product_id LEFT JOIN categories c ON c.id=p.category_id WHERE v.id=$1 AND v.product_id=$2 AND v.active=true FOR UPDATE OF v,p`,
+        `SELECT v.*,p.name AS product_name,p.price,p.status,p.preorder_enabled,p.shipping_weight_grams,c.default_shipping_weight_grams FROM variants v JOIN products p ON p.id=v.product_id LEFT JOIN categories c ON c.id=p.category_id WHERE v.id=$1 AND v.product_id=$2 AND v.active=true${lockRows ? " FOR UPDATE OF v,p" : ""}`,
         [item.variantId, item.productId],
       )
     ).rows[0];
@@ -323,7 +324,7 @@ export async function createOrder(
 
 export async function quoteDelivery(input: Pick<OrderInput,"city"|"district"|"postalCode"|"items">) {
   return withTransaction(async client => {
-    const lines = await loadLines(client, input as OrderInput),
+    const lines = await loadLines(client, input as OrderInput, false, false),
       subtotal = lines.reduce((sum,line)=>sum+line.lineTotal,0),
       shippingWeight = await shippingWeightSnapshot(client,lines),
       delivery = await deliverySnapshot(client,input,subtotal,shippingWeight.totalShippingWeightGrams);

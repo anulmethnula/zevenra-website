@@ -144,8 +144,8 @@ export default function CheckoutPage() {
   }, [discountCode, discountItems]);
   useEffect(()=>{
     const postalError=postalCodeError(postalCode);
-    if(!settings.deliveryEnabled){setDeliveryQuote({fee:0,minimumDeliveryDays:2,maximumDeliveryDays:4});setDeliveryQuoteError("");return;}
-    if(!district||city.trim().length<2||postalError||!discountItems.length){setDeliveryQuote(null);setDeliveryQuoteError("");return;}
+    if(!settings.deliveryEnabled){setDeliveryQuote({fee:0,minimumDeliveryDays:2,maximumDeliveryDays:4});setDeliveryQuoteError("");setDeliveryQuoteLoading(false);return;}
+    if(!district||city.trim().length<2||postalError||!discountItems.length){setDeliveryQuote(null);setDeliveryQuoteError("");setDeliveryQuoteLoading(false);return;}
     let current=true;
     const timer=window.setTimeout(()=>{
       setDeliveryQuoteLoading(true);setDeliveryQuoteError("");
