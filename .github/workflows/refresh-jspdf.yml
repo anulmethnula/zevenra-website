@@ -45,3 +45,6 @@ jobs:
           git add package.json package-lock.json
           git commit -m "fix: upgrade jsPDF to patched 4.2.1"
           git push origin HEAD:dev-rebuild
+
+      - name: Confirm refresh completed
+        run: echo "jsPDF dependency lock refresh completed successfully."
