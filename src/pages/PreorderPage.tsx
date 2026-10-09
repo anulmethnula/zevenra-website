@@ -26,7 +26,7 @@ const requestSchema = z.object({
 export default function PreorderPage() {
   const { slug } = useParams(),
     [search] = useSearchParams(),
-    request=useProduct(slug||""),
+    request = useProduct(slug || ""),
     { user } = useCustomerAuth(),
     product = request.data?.product,
     variant = product?.variants.find(
@@ -43,11 +43,17 @@ export default function PreorderPage() {
     () => [user?.firstName, user?.lastName].filter(Boolean).join(" "),
     [user],
   );
-  if(request.loading)return <main className="container min-h-[70vh] py-36"><div className="home-skeleton"><div/><div/></div></main>;
-  if (!product || !variant || !product.preorderEnabled || variant.stock > 0)
+  if (request.loading)
     return (
-      <Navigate to={product ? "/product/" + product.slug : "/shop"} replace />
+      <main className="container min-h-[70vh] py-36">
+        <div className="home-skeleton">
+          <div />
+          <div />
+        </div>
+      </main>
     );
+  if (!product || !variant || !product.preorderEnabled || variant.stock > 0)
+    return <Navigate to={product ? "/product/" + product.slug : "/shop"} replace />;
   const preorderProduct = product,
     preorderVariant = variant;
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -85,36 +91,38 @@ export default function PreorderPage() {
         <Seo title="Pre-order requested" />
         <CheckCircle2 className="mx-auto" size={34} />
         <p className="eyebrow mt-5 text-bronze">Request received</p>
-        <h1 className="display mt-3 text-5xl">We’ll confirm with you first.</h1>
+        <h1 className="display mt-3 break-words text-4xl sm:text-5xl">
+          We’ll confirm with you first.
+        </h1>
         <p className="mx-auto mt-5 max-w-xl text-sm leading-7 text-ink/60">
           No payment has been taken. We will contact you on WhatsApp with the
           final price before your piece is added to a supplier batch.
         </p>
-        <p className="mt-4 text-xs text-ink/45">Reference: {done}</p>
-        <div className="mx-auto mt-8 flex flex-wrap justify-center gap-3">
+        <p className="mt-4 break-all text-xs text-ink/45">Reference: {done}</p>
+        <div className="mx-auto mt-8 flex w-full max-w-md flex-col justify-center gap-3 sm:flex-row sm:flex-wrap">
           {user && (
-            <Link className="btn btn-dark" to="/account/orders">
+            <Link className="btn btn-dark justify-center" to="/account/orders">
               View my requests
             </Link>
           )}
-          <Link className="btn" to="/shop">
+          <Link className="btn justify-center" to="/shop">
             Continue shopping
           </Link>
         </div>
       </main>
     );
   return (
-    <main className="container pb-20 pt-28 lg:pt-36">
+    <main className="container min-w-0 pb-20 pt-28 lg:pt-36">
       <Seo title={"Pre-order " + product.name} />
       <Link
         to={"/product/" + product.slug}
-        className="inline-flex items-center gap-2 text-xs underline"
+        className="inline-flex min-h-11 items-center gap-2 text-xs underline"
       >
         <ArrowLeft size={14} /> Back to product
       </Link>
-      <div className="mt-7 grid gap-8 lg:grid-cols-[.85fr_1.15fr]">
-        <section className="preorder-request-summary">
-          <div className="grid grid-cols-[110px_1fr] gap-4 sm:grid-cols-[150px_1fr]">
+      <div className="mt-7 grid min-w-0 gap-8 lg:grid-cols-[.85fr_1.15fr]">
+        <section className="preorder-request-summary min-w-0">
+          <div className="grid min-w-0 grid-cols-[96px_minmax(0,1fr)] gap-4 sm:grid-cols-[150px_minmax(0,1fr)]">
             {product.media.find((m) => m.type === "image") ? (
               <img
                 src={product.media.find((m) => m.type === "image")!.url}
@@ -124,19 +132,17 @@ export default function PreorderPage() {
             ) : (
               <div className="aspect-[4/5] bg-black/5" />
             )}
-            <div>
+            <div className="min-w-0">
               <p className="eyebrow text-bronze">Pre-order request</p>
-              <h1 className="display mt-3 text-3xl sm:text-4xl">
+              <h1 className="display mt-3 break-words text-3xl sm:text-4xl">
                 {product.name}
               </h1>
-              <p className="mt-3 text-sm text-ink/55">
+              <p className="mt-3 break-words text-sm text-ink/55">
                 {variant.color} / {variant.size}
               </p>
-              <p className="mt-2 text-sm">
+              <p className="mt-2 break-words text-sm">
                 {money(product.price)}{" "}
-                <span className="text-xs text-ink/45">
-                  current display price
-                </span>
+                <span className="text-xs text-ink/45">current display price</span>
               </p>
             </div>
           </div>
@@ -172,22 +178,22 @@ export default function PreorderPage() {
               </span>
             </div>
           </div>
-          <p className="preorder-request-note">
+          <p className="preorder-request-note break-words">
             {product.preorderMessage ||
               "Supplier delivery is usually around two weeks after the supplier order is placed, but timing can vary."}
           </p>
         </section>
-        <form onSubmit={submit} className="preorder-request-form">
-          <div>
+        <form onSubmit={submit} className="preorder-request-form min-w-0">
+          <div className="min-w-0">
             <p className="eyebrow">Quick request</p>
-            <h2 className="display mt-2 text-4xl">Request this piece.</h2>
-            <p className="mt-3 text-xs leading-6 text-ink/55">
+            <h2 className="display mt-2 break-words text-4xl">Request this piece.</h2>
+            <p className="mt-3 break-words text-xs leading-6 text-ink/55">
               Keep it simple: we only need your contact and area now. We will
               collect the full delivery address later, before creating the final
               order.
             </p>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid min-w-0 gap-4 sm:grid-cols-2">
             <Field
               name="customerName"
               label="Full name *"
@@ -221,16 +227,16 @@ export default function PreorderPage() {
             <div className="flex min-h-12 w-fit items-center border border-line">
               <button
                 type="button"
-                className="px-4"
+                className="grid h-11 w-11 place-items-center"
                 onClick={() => setQty(Math.max(1, qty - 1))}
                 aria-label="Reduce quantity"
               >
                 <Minus size={15} />
               </button>
-              <span className="w-10 text-center text-sm">{qty}</span>
+              <span className="w-10 text-center text-sm tabular-nums">{qty}</span>
               <button
                 type="button"
-                className="px-4"
+                className="grid h-11 w-11 place-items-center disabled:opacity-30"
                 disabled={qty >= 5}
                 onClick={() => setQty(Math.min(5, qty + 1))}
                 aria-label="Increase quantity"
@@ -239,23 +245,17 @@ export default function PreorderPage() {
               </button>
             </div>
           </div>
-          <div className="border border-bronze/25 bg-bronze/5 p-4 text-xs leading-6 text-ink/65">
+          <div className="break-words border border-bronze/25 bg-bronze/5 p-4 text-xs leading-6 text-ink/65">
             <b>No payment now.</b> The displayed price is not a final supplier
             commitment. ZEVENRA will confirm the item and final price with you
             on WhatsApp before spending money on the supplier order.
           </div>
           {error && (
-            <p
-              role="alert"
-              className="bg-red-950 p-3 text-xs leading-5 text-white"
-            >
+            <p role="alert" className="break-words bg-red-950 p-3 text-xs leading-5 text-white">
               {error}
             </p>
           )}
-          <button
-            disabled={busy}
-            className="btn btn-dark w-full disabled:opacity-50"
-          >
+          <button disabled={busy} className="btn btn-dark w-full disabled:opacity-50">
             {busy ? "Sending request…" : "Send pre-order request"}
           </button>
         </form>
@@ -263,6 +263,7 @@ export default function PreorderPage() {
     </main>
   );
 }
+
 function Field({
   name,
   label,
@@ -279,7 +280,7 @@ function Field({
   minLength?: number;
 }) {
   return (
-    <label className="text-xs">
+    <label className="min-w-0 text-xs">
       {label}
       <input
         name={name}
@@ -287,7 +288,7 @@ function Field({
         type={type}
         minLength={minLength}
         inputMode={type === "tel" ? "tel" : undefined}
-        className="field mt-2"
+        className="field mt-2 min-w-0"
         defaultValue={defaultValue}
       />
     </label>
