@@ -1,3 +1,4 @@
+import { readdir } from "node:fs/promises";
 import process from "node:process";
 import { neonConfig, Pool } from "@neondatabase/serverless";
 import ws from "ws";
@@ -82,12 +83,19 @@ try {
     if (count) throw new Error(`${name} verification failed`);
   }
   const migrations = await pool.query(
-    "SELECT version,applied_at FROM schema_migrations ORDER BY version",
-  );
-  console.log(
-    "migrations:",
-    migrations.rows.map((row) => row.version).join(", "),
-  );
+      "SELECT version,applied_at FROM schema_migrations ORDER BY version",
+    ),
+    applied = new Set(migrations.rows.map((row) => row.version)),
+    expected = (await readdir("database/migrations"))
+      .filter((file) => /^\d+.*\.sql$/.test(file))
+      .map((file) => file.replace(/\.sql$/, ""))
+      .sort(),
+    missingMigrations = expected.filter((version) => !applied.has(version));
+  console.log("migrations:", migrations.rows.map((row) => row.version).join(", "));
+  if (missingMigrations.length)
+    throw new Error(
+      `Database is missing migrations: ${missingMigrations.join(", ")}. Run npm run db:migrate first.`,
+    );
   console.log("database verification passed");
 } finally {
   await pool.end();
