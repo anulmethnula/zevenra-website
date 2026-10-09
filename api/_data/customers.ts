@@ -67,17 +67,17 @@ export async function updateCustomerProfile(
 }
 
 const orderWithItems = `SELECT o.*,COALESCE((SELECT jsonb_agg(to_jsonb(oi) ORDER BY oi.id) FROM order_items oi WHERE oi.order_id=o.order_id),'[]') AS items FROM orders o`;
-export async function listCustomerOrders(customerId: string, email: string) {
+export async function listCustomerOrders(customerId: string, _email?: string) {
   const result = await query<Record<string, unknown>>(
-    `${orderWithItems} WHERE o.customer_id=$1 OR (o.customer_id IS NULL AND lower(o.email)=lower($2)) ORDER BY o.created_at DESC`,
-    [customerId, email],
+    `${orderWithItems} WHERE o.customer_id=$1 ORDER BY o.created_at DESC`,
+    [customerId],
   );
   return result.rows.map(mapOrder);
 }
-export async function listCustomerPreorders(customerId: string, email: string) {
+export async function listCustomerPreorders(customerId: string, _email?: string) {
   const result = await query<Record<string, unknown>>(
-    "SELECT * FROM preorders WHERE customer_id=$1 OR (customer_id IS NULL AND lower(email)=lower($2)) ORDER BY created_at DESC",
-    [customerId, email],
+    "SELECT * FROM preorders WHERE customer_id=$1 ORDER BY created_at DESC",
+    [customerId],
   );
   return result.rows.map(mapPreorder);
 }
