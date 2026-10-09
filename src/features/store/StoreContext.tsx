@@ -261,6 +261,8 @@ const normalizeCourier = (row: unknown): CourierProvider => {
     pricingMode: String(x.pricingMode) === "flat" ? "flat" : "zone",
     flatRate: number(x.flatRate),
     active: bool(x.active),
+    minimumDeliveryDays: number(x.minimumDeliveryDays) || 2,
+    maximumDeliveryDays: number(x.maximumDeliveryDays) || 4,
     createdAt: String(x.createdAt ?? ""),
     updatedAt: String(x.updatedAt ?? ""),
   };

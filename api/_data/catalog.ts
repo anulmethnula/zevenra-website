@@ -578,6 +578,9 @@ export async function saveCourierConfig(input: Record<string, unknown>) {
       throw new Error("Courier status must be active or inactive.");
     if (!Number.isFinite(Number(courier.flatRate))||Number(courier.flatRate) < 0)
       throw new Error("Courier rates cannot be negative.");
+    if (!Number.isInteger(Number(courier.minimumDeliveryDays)) || Number(courier.minimumDeliveryDays) <= 0 ||
+        !Number.isInteger(Number(courier.maximumDeliveryDays)) || Number(courier.maximumDeliveryDays) < Number(courier.minimumDeliveryDays))
+      throw new Error("Courier delivery estimates are invalid.");
     if (courier.active && courier.pricingMode === "zone") {
       const fallbacks = rates.filter(
         (rate) =>
@@ -598,7 +601,7 @@ export async function saveCourierConfig(input: Record<string, unknown>) {
   await withTransaction(async (client) => {
     for (const courier of couriers)
       await client.query(
-        `INSERT INTO courier_providers(id,name,phone,notes,pricing_mode,flat_rate,active,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,now()) ON CONFLICT(id) DO UPDATE SET name=EXCLUDED.name,phone=EXCLUDED.phone,notes=EXCLUDED.notes,pricing_mode=EXCLUDED.pricing_mode,flat_rate=EXCLUDED.flat_rate,active=EXCLUDED.active,updated_at=now()`,
+        `INSERT INTO courier_providers(id,name,phone,notes,pricing_mode,flat_rate,active,minimum_delivery_days,maximum_delivery_days,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,now()) ON CONFLICT(id) DO UPDATE SET name=EXCLUDED.name,phone=EXCLUDED.phone,notes=EXCLUDED.notes,pricing_mode=EXCLUDED.pricing_mode,flat_rate=EXCLUDED.flat_rate,active=EXCLUDED.active,minimum_delivery_days=EXCLUDED.minimum_delivery_days,maximum_delivery_days=EXCLUDED.maximum_delivery_days,updated_at=now()`,
         [
           courier.id,
           courier.name,
@@ -607,6 +610,8 @@ export async function saveCourierConfig(input: Record<string, unknown>) {
           courier.pricingMode,
           courier.flatRate || 0,
           courier.active,
+          courier.minimumDeliveryDays,
+          courier.maximumDeliveryDays,
         ],
       );
     for (const rate of rates)

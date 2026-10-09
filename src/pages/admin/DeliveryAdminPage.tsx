@@ -139,6 +139,8 @@ export default function DeliveryAdminPage() {
         pricingMode: "flat",
         flatRate: 0,
         active: true,
+        minimumDeliveryDays: 2,
+        maximumDeliveryDays: 4,
       },
     ]);
     if (!defaultId) setDefaultId(id);
@@ -218,6 +220,9 @@ export default function DeliveryAdminPage() {
       if (!courier.name.trim()) return "Every courier needs a name.";
       if (!Number.isFinite(courier.flatRate) || courier.flatRate < 0)
         return `${courier.name}: delivery fee must be zero or more.`;
+      if (!Number.isInteger(courier.minimumDeliveryDays) || courier.minimumDeliveryDays <= 0 ||
+          !Number.isInteger(courier.maximumDeliveryDays) || courier.maximumDeliveryDays < courier.minimumDeliveryDays)
+        return `${courier.name}: delivery estimate must use valid minimum and maximum days.`;
       if (courier.pricingMode !== "zone") continue;
       const courierRates = rates.filter((rate) => rate.courierProviderId === courier.id);
       const activeRates = courierRates.filter((rate) => rate.active);
@@ -434,6 +439,17 @@ export default function DeliveryAdminPage() {
               <label className="flex min-h-[52px] items-center gap-3 self-end rounded-xl border border-black/[.08] bg-[#f8f6f1] px-4 text-xs">
                 <input type="checkbox" className="h-5 w-5 accent-black" checked={selected.active} onChange={(event) => updateCourier(selected.id, { active: event.target.checked })} />
                 <span><b>Active</b><small className="mt-0.5 block text-[10px] text-black/40">Available for checkout</small></span>
+              </label>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="text-xs font-medium">
+                Minimum delivery days
+                <input className="field mt-2" type="number" min="1" step="1" value={selected.minimumDeliveryDays} onChange={(event) => updateCourier(selected.id, { minimumDeliveryDays: Number(event.target.value) })} />
+              </label>
+              <label className="text-xs font-medium">
+                Maximum delivery days
+                <input className="field mt-2" type="number" min={selected.minimumDeliveryDays} step="1" value={selected.maximumDeliveryDays} onChange={(event) => updateCourier(selected.id, { maximumDeliveryDays: Number(event.target.value) })} />
               </label>
             </div>
 

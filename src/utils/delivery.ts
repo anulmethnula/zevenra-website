@@ -12,6 +12,8 @@ export const defaultCourier: CourierProvider = {
   pricingMode: "zone",
   flatRate: 0,
   active: true,
+  minimumDeliveryDays: 2,
+  maximumDeliveryDays: 4,
 };
 export const defaultDeliveryZones: DeliveryRate[] = [
   {

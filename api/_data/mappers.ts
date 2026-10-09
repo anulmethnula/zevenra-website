@@ -122,6 +122,8 @@ export const mapCourier = (row: Record<string, unknown>) => ({
   pricingMode: text(row.pricing_mode),
   flatRate: number(row.flat_rate),
   active: bool(row.active),
+  minimumDeliveryDays: number(row.minimum_delivery_days) || 2,
+  maximumDeliveryDays: number(row.maximum_delivery_days) || 4,
   createdAt: date(row.created_at),
   updatedAt: date(row.updated_at),
 });
@@ -198,6 +200,8 @@ export function mapOrder(row: Record<string, unknown>) {
     deliveryFee: number(row.delivery_fee),
     totalProductWeightGrams: row.total_product_weight_grams == null ? undefined : number(row.total_product_weight_grams),
     totalShippingWeightGrams: row.total_shipping_weight_grams == null ? undefined : number(row.total_shipping_weight_grams),
+    minimumDeliveryDays: row.minimum_delivery_days == null ? undefined : number(row.minimum_delivery_days),
+    maximumDeliveryDays: row.maximum_delivery_days == null ? undefined : number(row.maximum_delivery_days),
     total: number(row.total),
     orderStatus: text(row.order_status),
     source: text(row.source),

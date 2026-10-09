@@ -344,6 +344,8 @@ export type CourierProvider = {
   pricingMode: DeliveryPricingMode;
   flatRate: number;
   active: boolean;
+  minimumDeliveryDays: number;
+  maximumDeliveryDays: number;
   createdAt?: string;
   updatedAt?: string;
 };
