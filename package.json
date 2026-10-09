@@ -24,7 +24,7 @@
     "test:checkout-config": "node --import tsx --test tests/checkout-config.test.ts",
     "test:checkout-amounts": "node --import tsx --test tests/checkout-amounts.test.ts",
     "test:receipt-upload": "node --import tsx --test tests/payment-receipt-upload.test.ts",
-    "test:rate-sheet": "node --import tsx --test tests/courier-rate-sheet.test.ts",
+    "test:rate-sheet": "node --import tsx --test tests/courier-rate-sheet.test.ts tests/courier-rate-dedup.test.ts",
     "test:images": "node --import tsx --test tests/cloudinary-image.test.ts",
     "test:public-cache": "node --import tsx --test tests/public-data-cache.test.ts",
     "test:product-search": "node --import tsx --test tests/product-search.test.ts",
