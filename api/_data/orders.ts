@@ -7,6 +7,7 @@ import { mapOrder } from "./mappers.js";
 import { validateDiscount } from "./discounts.js";
 import { calculateShippingWeight } from "../../shared/shipping-weight.js";
 import { resolveDeliveryPricing } from "../../shared/delivery-pricing.js";
+import { paymentMethodAvailable } from "../../shared/payment-availability.js";
 
 export {
   createReturn,
@@ -70,6 +71,21 @@ const settingValue = (
 ) => rows.find((row) => row.key === key)?.value ?? fallback;
 const truthy = (value: unknown) =>
   value === true || String(value).toLowerCase() === "true";
+
+async function assertCheckoutPaymentAvailable(
+  client: DatabaseClient,
+  input: Pick<OrderInput, "paymentMethod" | "source">,
+) {
+  if (input.source && input.source !== "web") return;
+  const settings = (
+    await client.query<{ key: string; value: unknown }>(
+      "SELECT key,value FROM site_settings WHERE key=ANY($1::text[])",
+      [["codEnabled", "bankEnabled", "bankTransferEnabled"]],
+    )
+  ).rows;
+  if (!paymentMethodAvailable(settings, input.paymentMethod))
+    throw new Error("PAYMENT_METHOD_UNAVAILABLE");
+}
 
 export async function deliverySnapshot(
   client: DatabaseClient,
@@ -263,6 +279,7 @@ export async function createOrder(
   } = {},
 ) {
   return withTransaction(async (client) => {
+    await assertCheckoutPaymentAvailable(client, input);
     const lines = await loadLines(client, input, options.trustProvidedPrice),
       subtotal = lines.reduce((sum, line) => sum + line.lineTotal, 0),
       shippingWeight = await shippingWeightSnapshot(client, lines),
