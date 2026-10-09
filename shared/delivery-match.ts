@@ -13,7 +13,7 @@ export function normalizeLocation(value: unknown) {
     .normalize("NFKD")
     .replace(/\p{M}/gu, "")
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim()
     .replace(/\s+/g, " ")
     .replace(/\bcolombo\s*0*([1-9]|1[0-5])\b/g, "colombo $1");
