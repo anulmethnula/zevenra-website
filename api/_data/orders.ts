@@ -8,6 +8,7 @@ import { validateDiscount } from "./discounts.js";
 import { calculateShippingWeight } from "../../shared/shipping-weight.js";
 import { resolveDeliveryPricing } from "../../shared/delivery-pricing.js";
 import { paymentMethodAvailable } from "../../shared/payment-availability.js";
+import { enforceOnlineStoreAvailability } from "../../shared/order-source.js";
 
 export {
   findGuestOrder,
@@ -289,6 +290,7 @@ export async function createOrder(
         input,
         subtotal,
         shippingWeight.totalShippingWeightGrams,
+        enforceOnlineStoreAvailability(input.source),
       ),
       asset = receiptAsset(input.paymentReceiptUrl),
       orderId = newOrderId();
