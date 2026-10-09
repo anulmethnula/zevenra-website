@@ -217,6 +217,8 @@ export type GuestTrackedOrder = {
   discountCode: string;
   discountAmount: number;
   deliveryFee: number;
+  minimumDeliveryDays?: number;
+  maximumDeliveryDays?: number;
   total: number;
   items: Array<{
     name: string;
@@ -278,6 +280,8 @@ export type Order = {
   discountCode?: string;
   discountAmount?: number;
   deliveryFee: number;
+  minimumDeliveryDays?: number;
+  maximumDeliveryDays?: number;
   total: number;
   orderStatus: string;
   paymentStatus: string;

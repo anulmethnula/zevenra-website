@@ -1472,6 +1472,8 @@ function DeliveryRates() {
         pricingMode: "flat",
         flatRate: 0,
         active: true,
+        minimumDeliveryDays: 2,
+        maximumDeliveryDays: 4,
       },
     ]);
     if (!defaultId) setDefaultId(id);

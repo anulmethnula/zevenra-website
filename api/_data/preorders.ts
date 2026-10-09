@@ -1,7 +1,8 @@
 import { randomBytes } from "node:crypto";
 import { query, withTransaction } from "../_db.js";
 import { mapOrder, mapPreorder } from "./mappers.js";
-import { matchDeliveryZone } from "../../shared/delivery-match.js";
+import { calculateShippingWeight } from "../../shared/shipping-weight.js";
+import { deliverySnapshot } from "./orders.js";
 
 const activeStatuses = [
   "new",
@@ -197,41 +198,25 @@ export async function convertPreorderToOrder(input: Record<string, unknown>) {
       throw new Error(
         "Complete the customer delivery address before conversion.",
       );
-    const settings = (
-        await client.query<{ key: string; value: unknown }>(
-          "SELECT key,value FROM site_settings",
-        )
-      ).rows,
-      setting = (key: string, fallback: unknown) =>
-        settings.find((row) => row.key === key)?.value ?? fallback,
-      defaultCourier = String(setting("defaultCourierProviderId", "")),
-      courier = (
-        await client.query<Record<string, unknown>>(
-          "SELECT * FROM courier_providers WHERE id=$1 AND active=true",
-          [defaultCourier],
-        )
-      ).rows[0];
-    if (!courier) throw new Error("Delivery courier is not configured.");
-    let fee = Number(courier.flat_rate) || 0,
-      zoneName = "Flat rate",
-      ratePlan = "flat";
-    if (courier.pricing_mode === "zone") {
-      const zones=(await client.query<Record<string,unknown>>("SELECT * FROM delivery_rates WHERE courier_provider_id=$1 AND active=true ORDER BY sort_order",[defaultCourier])).rows.map(zone=>({id:String(zone.id),name:String(zone.name),fee:Number(zone.fee)||0,active:Boolean(zone.active),fallback:Boolean(zone.fallback),sortOrder:Number(zone.sort_order)||0,districts:Array.isArray(zone.districts)?zone.districts.map(String):[],cities:Array.isArray(zone.cities)?zone.cities.map(String):[],postalCodes:Array.isArray(zone.postal_codes)?zone.postal_codes.map(String):[]}));
-      const zone=matchDeliveryZone(zones,{district:String(preorder.district),city:String(preorder.city),postalCode:String(preorder.postal_code||"")});
-      if (!zone)
-        throw new Error("Delivery is not configured for this address.");
-      fee = Number(zone.fee);
-      zoneName = String(zone.name);
-      ratePlan = String(zone.id);
-    }
-    const price = Number(preorder.confirmed_price),
-      threshold = Number(setting("freeDeliveryThreshold", 0));
-    if (!(setting("deliveryEnabled", true) === true || String(setting("deliveryEnabled", true)).toLowerCase() === "true")) fee=0;
-    if (threshold > 0 && price * Number(preorder.quantity) >= threshold)
-      fee = 0;
+    const product = (await client.query<Record<string,unknown>>(
+      `SELECT p.shipping_weight_grams,c.default_shipping_weight_grams
+       FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.id=$1`,
+      [preorder.product_id],
+    )).rows[0];
+    const packaging = (await client.query<{value:unknown}>("SELECT value FROM site_settings WHERE key='packagingWeightGrams'")).rows[0];
+    if (!packaging) throw new Error("Packaging weight is not configured.");
+    const shippingWeight = calculateShippingWeight([{
+      productId:String(preorder.product_id),productName:String(preorder.product_name),quantity:Number(preorder.quantity),
+      shippingWeightGrams:product?.shipping_weight_grams == null ? undefined : Number(product.shipping_weight_grams),
+      categoryDefaultShippingWeightGrams:product?.default_shipping_weight_grams == null ? undefined : Number(product.default_shipping_weight_grams),
+    }],Number(packaging.value));
+    if (!shippingWeight.ready) throw new Error(`Shipping weight is not configured for: ${preorder.product_name}.`);
+    const price = Number(preorder.confirmed_price), subtotal=price*Number(preorder.quantity),
+      delivery=await deliverySnapshot(client,{district:String(preorder.district),city:String(preorder.city),postalCode:String(preorder.postal_code||"")},subtotal,shippingWeight.totalShippingWeightGrams,false),
+      fee=delivery.fee;
     const orderId = newId("ZEV");
     await client.query(
-      `INSERT INTO orders(order_id,customer_id,customer_name,phone,whatsapp,email,address1,address2,city,district,postal_code,courier_provider_id,courier_name,delivery_pricing_mode,delivery_rate_plan,delivery_zone_name,payment_method,payment_status,subtotal,delivery_fee,total,stock_state,order_status,source,has_preorder) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,'not_applicable','pending','preorder',true)`,
+      `INSERT INTO orders(order_id,customer_id,customer_name,phone,whatsapp,email,address1,address2,city,district,postal_code,courier_provider_id,courier_name,delivery_pricing_mode,delivery_rate_plan,delivery_zone_name,payment_method,payment_status,subtotal,delivery_fee,total,total_product_weight_grams,total_shipping_weight_grams,minimum_delivery_days,maximum_delivery_days,stock_state,order_status,source,has_preorder) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,'not_applicable','pending','preorder',true)`,
       [
         orderId,
         preorder.customer_id,
@@ -244,20 +229,24 @@ export async function convertPreorderToOrder(input: Record<string, unknown>) {
         preorder.city,
         preorder.district,
         preorder.postal_code,
-        courier.id,
-        courier.name,
-        courier.pricing_mode,
-        ratePlan,
-        zoneName,
+        delivery.courierProviderId,
+        delivery.courierName,
+        delivery.pricingMode,
+        delivery.ratePlan,
+        delivery.zoneName,
         input.paymentMethod === "bank" ? "bank" : "cod",
         input.paymentMethod === "bank" ? "verification required" : "COD",
-        price * Number(preorder.quantity),
+        subtotal,
         fee,
-        price * Number(preorder.quantity) + fee,
+        subtotal + fee,
+        shippingWeight.totalProductWeightGrams,
+        shippingWeight.totalShippingWeightGrams,
+        delivery.minimumDeliveryDays,
+        delivery.maximumDeliveryDays,
       ],
     );
     await client.query(
-      `INSERT INTO order_items(order_id,product_id,variant_id,sku,product_name,color,size,quantity,unit_price,line_total,is_preorder) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,true)`,
+      `INSERT INTO order_items(order_id,product_id,variant_id,sku,product_name,color,size,quantity,unit_price,line_total,is_preorder,shipping_weight_grams) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,true,$11)`,
       [
         orderId,
         preorder.product_id,
@@ -269,6 +258,7 @@ export async function convertPreorderToOrder(input: Record<string, unknown>) {
         preorder.quantity,
         price,
         price * Number(preorder.quantity),
+        shippingWeight.totalProductWeightGrams / Number(preorder.quantity),
       ],
     );
     await client.query(

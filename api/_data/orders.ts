@@ -4,7 +4,6 @@ import { withTransaction } from "../_db.js";
 import { receiptAsset } from "../_receipt-asset.js";
 import { mapOrder } from "./mappers.js";
 import { validateDiscount } from "./discounts.js";
-import { matchDeliveryZone } from "../../shared/delivery-match.js";
 import { calculateShippingWeight } from "../../shared/shipping-weight.js";
 import { weightBasedDeliveryFee } from "../../shared/delivery-weight-fee.js";
 import { normalizeLocation } from "../../shared/delivery-match.js";
@@ -77,13 +76,14 @@ export async function deliverySnapshot(
   input: Pick<OrderInput, "city" | "district" | "postalCode">,
   subtotal: number,
   totalShippingWeightGrams: number,
+  enforceStoreAvailability = true,
 ) {
   const settings = (
     await client.query<{ key: string; value: unknown }>(
       "SELECT key,value FROM site_settings",
     )
   ).rows;
-  if (
+  if (enforceStoreAvailability &&
     !truthy(settingValue(settings, "storeOpen", true)) ||
     !truthy(settingValue(settings, "ordersEnabled", true))
   )

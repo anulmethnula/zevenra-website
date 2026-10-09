@@ -11,7 +11,6 @@ import { useStore } from "../features/store/StoreContext";
 import { api } from "../services/api";
 import { uploadPaymentReceipt } from "../services/paymentReceiptUpload";
 import type { Order, PaymentMethod } from "../types";
-import { checkoutCourier, deliveryQuote } from "../utils/delivery";
 import { checkoutAmounts } from "../utils/checkoutAmounts";
 import { paymentReadinessMessage, postalCodeError } from "../utils/checkoutValidation";
 import { rememberGuestOrder } from "../utils/guestOrders";
@@ -97,7 +96,10 @@ export default function CheckoutPage() {
       message: string;
     } | null>(null),
     [discountBusy, setDiscountBusy] = useState(false),
-    [discountMessage, setDiscountMessage] = useState("");
+    [discountMessage, setDiscountMessage] = useState(""),
+    [deliveryQuote, setDeliveryQuote] = useState<{fee:number;minimumDeliveryDays:number;maximumDeliveryDays:number}|null>(null),
+    [deliveryQuoteLoading, setDeliveryQuoteLoading] = useState(false),
+    [deliveryQuoteError, setDeliveryQuoteError] = useState("");
   useEffect(() => {
     if (!availablePayments.includes(payment) && availablePayments[0]) setPayment(availablePayments[0]);
   }, [availablePayments, payment]);
@@ -140,6 +142,17 @@ export default function CheckoutPage() {
       current = false;
     };
   }, [discountCode, discountItems]);
+  useEffect(()=>{
+    const postalError=postalCodeError(postalCode);
+    if(!settings.deliveryEnabled){setDeliveryQuote({fee:0,minimumDeliveryDays:2,maximumDeliveryDays:4});setDeliveryQuoteError("");return;}
+    if(!district||city.trim().length<2||postalError||!discountItems.length){setDeliveryQuote(null);setDeliveryQuoteError("");return;}
+    let current=true;
+    const timer=window.setTimeout(()=>{
+      setDeliveryQuoteLoading(true);setDeliveryQuoteError("");
+      void api.deliveryQuote({city,district,postalCode,items:discountItems}).then(result=>{if(current)setDeliveryQuote(result);}).catch(reason=>{if(current){setDeliveryQuote(null);setDeliveryQuoteError(reason instanceof Error?reason.message:"Delivery could not be calculated.");}}).finally(()=>{if(current)setDeliveryQuoteLoading(false);});
+    },250);
+    return()=>{current=false;window.clearTimeout(timer);};
+  },[city,district,postalCode,discountItems,settings.deliveryEnabled]);
   if ((!cart.items.length && !successOrder) || cart.items.some((i) => i.isPreorder)) return <Navigate to="/cart" replace />;
   if (checkout.loading)
     return (
@@ -167,18 +180,15 @@ export default function CheckoutPage() {
   const subtotal = cart.items.reduce((sum, i) => sum + price(i) * i.quantity, 0),
     postalFormatError = postalCodeError(postalCode),
     addressReady = Boolean(district && city.trim().length >= 2 && !postalFormatError);
-  const courier = checkoutCourier(checkout.data?.couriers || [], settings.defaultCourierProviderId),
-    allRates = checkout.data?.deliveryRates || [];
-  const quote = addressReady ? deliveryQuote(courier,allRates,{district,city,postalCode}) : undefined,
-    deliveryReady = !settings.deliveryEnabled || Boolean(quote);
-  const deliveryFee = settings.freeDeliveryThreshold > 0 && subtotal >= settings.freeDeliveryThreshold ? 0 : settings.deliveryEnabled ? (quote?.fee ?? 0) : 0,
+  const deliveryReady = !settings.deliveryEnabled || Boolean(deliveryQuote);
+  const deliveryFee = deliveryQuote?.fee ?? 0,
     amounts = checkoutAmounts(subtotal, deliveryFee, !settings.deliveryEnabled || (addressReady && deliveryReady), discount?.amount || 0);
   const paymentStatus = paymentReadinessMessage({
             city,
             district,
             postalError: postalFormatError,
             deliveryEnabled: settings.deliveryEnabled,
-            quoteReady: Boolean(quote),
+            quoteReady: Boolean(deliveryQuote),
           });
   const clearError = (name: string) =>
     setFieldErrors((current) => {
@@ -281,7 +291,7 @@ export default function CheckoutPage() {
       focusFirst(e);
       return;
     }
-    if (settings.deliveryEnabled && !quote) {
+    if (settings.deliveryEnabled && !deliveryQuote) {
       const e = {
         city: "Delivery is unavailable for these details.",
       };
@@ -462,12 +472,12 @@ export default function CheckoutPage() {
                   />
                 </div>
                 <div className="mt-6">
-                  <p className="eyebrow mb-3 text-ink/50">Delivery</p>
+                  <p className="eyebrow mb-3 text-ink/50">Shipping method</p>
                   <div className={`border p-4 ${amounts.ready ? "border-black bg-black/[.025]" : "border-black/10"}`}>
                     <div className="flex items-center justify-between gap-4">
                       <span>
-                        <b className="block text-sm">{quote?.zone?.name || orderDeliveryLabel(courier?.pricingMode)}</b>
-                        <small className="mt-1 block text-xs text-ink/50">{amounts.ready ? "Calculated using the store's configured courier rate." : "Enter your delivery details to calculate the rate."}</small>
+                        <b className="block text-sm">Standard</b>
+                        <small className="mt-1 block text-xs text-ink/50">{deliveryQuote ? `${deliveryQuote.minimumDeliveryDays}–${deliveryQuote.maximumDeliveryDays} Business Days` : deliveryQuoteLoading ? "Calculating delivery…" : deliveryQuoteError || "Enter your delivery details to calculate the rate."}</small>
                       </span>
                       {amounts.ready ? <b className="text-sm">{amounts.deliveryFee ? money(amounts.deliveryFee) : "Free"}</b> : null}
                     </div>
@@ -551,9 +561,6 @@ export default function CheckoutPage() {
     </>
   );
 }
-function orderDeliveryLabel(mode?: string) {
-  return mode === "flat" ? "Sri Lanka" : "Selected delivery area";
-}
 function OrderSuccessModal({ order, viewOrder, continueShopping }: { order: Order; viewOrder: () => void; continueShopping: () => void }) {
   const dialogRef = useRef<HTMLDivElement>(null),
     viewRef = useRef<HTMLButtonElement>(null),
@@ -595,6 +602,7 @@ function OrderSuccessModal({ order, viewOrder, continueShopping }: { order: Orde
         <div className="mt-5 border-y border-black/10 py-4">
           <p className="text-sm font-semibold">{order.paymentMethod === "cod" ? "Cash on Delivery" : "Payment verification pending"}</p>
           <p className="mt-2 text-xs leading-5 text-ink/60">{order.paymentMethod === "cod" ? `Pay ${money(order.total)} when your order arrives.` : "Your receipt was submitted successfully."}</p>
+          {order.minimumDeliveryDays && order.maximumDeliveryDays ? <p className="mt-2 text-xs leading-5 text-ink/60">Standard shipping · {order.minimumDeliveryDays}–{order.maximumDeliveryDays} Business Days</p> : null}
         </div>
         <div className="mt-5 grid gap-3">
           <button ref={viewRef} type="button" className="btn btn-dark w-full" onClick={viewOrder}>

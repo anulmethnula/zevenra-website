@@ -96,6 +96,7 @@ export default function OrderPage() {
           <b>{money(order.total)}</b>
         </div>
       </div></section>
+      {order.minimumDeliveryDays && order.maximumDeliveryDays ? <section className="mt-5 border border-black/10 bg-white/25 p-5 text-left sm:p-7"><h2 className="eyebrow text-bronze">Shipping method</h2><div className="mt-3 flex items-center justify-between gap-4 text-sm"><span><b className="block">Standard</b><small className="mt-1 block text-xs text-ink/55">{order.minimumDeliveryDays}–{order.maximumDeliveryDays} Business Days</small></span><b>{order.deliveryFee ? money(order.deliveryFee) : "Complimentary"}</b></div></section> : null}
       <section className="mt-5 border border-black/10 bg-white/25 p-5 text-left sm:p-7"><h2 className="eyebrow text-bronze">Delivery to</h2><p className="mt-3 text-sm font-medium">{order.customerName}</p><p className="mt-1 text-xs text-ink/55">{[order.city,order.district].filter(Boolean).join(" · ")}</p></section>
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
         <button type="button" className="btn justify-center" onClick={() => void copyOrderId()}><Copy size={15}/>Copy Order ID</button>
