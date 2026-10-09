@@ -6,6 +6,7 @@ import { calculateShippingWeight } from "../../shared/shipping-weight.js";
 import {
   isPreorderTransitionAllowed,
   normalizePreorderPaymentMethod,
+  preorderDeliveryAddressReady,
   preorderActiveStatuses,
   resolvePreorderConfirmedPrice,
 } from "../../shared/preorder-lifecycle.js";
@@ -199,9 +200,14 @@ export async function convertPreorderToOrder(input: Record<string, unknown>) {
       );
     if (Number(preorder.confirmed_price) <= 0)
       throw new Error("Confirmed selling price is required before conversion.");
-    if (!preorder.address1 || !preorder.city || !preorder.district)
+    if (!preorderDeliveryAddressReady({
+      address1: preorder.address1,
+      city: preorder.city,
+      district: preorder.district,
+      postalCode: preorder.postal_code,
+    }))
       throw new Error(
-        "Complete the customer delivery address before conversion.",
+        "Complete the delivery address with a valid 5-digit postal code before conversion.",
       );
 
     const paymentMethod = normalizePreorderPaymentMethod(input.paymentMethod),

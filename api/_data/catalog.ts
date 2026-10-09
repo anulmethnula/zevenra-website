@@ -581,6 +581,8 @@ export async function saveCourierConfig(input: Record<string, unknown>) {
     if (!Number.isInteger(Number(courier.minimumDeliveryDays)) || Number(courier.minimumDeliveryDays) <= 0 ||
         !Number.isInteger(Number(courier.maximumDeliveryDays)) || Number(courier.maximumDeliveryDays) < Number(courier.minimumDeliveryDays))
       throw new Error("Courier delivery estimates are invalid.");
+    if (String(courier.dispatchBranch || "").trim().length > 120)
+      throw new Error("Courier dispatch branch is too long.");
     if (courier.active && courier.pricingMode === "zone") {
       const fallbacks = rates.filter(
         (rate) =>
@@ -601,12 +603,13 @@ export async function saveCourierConfig(input: Record<string, unknown>) {
   await withTransaction(async (client) => {
     for (const courier of couriers)
       await client.query(
-        `INSERT INTO courier_providers(id,name,phone,notes,pricing_mode,flat_rate,active,minimum_delivery_days,maximum_delivery_days,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,now()) ON CONFLICT(id) DO UPDATE SET name=EXCLUDED.name,phone=EXCLUDED.phone,notes=EXCLUDED.notes,pricing_mode=EXCLUDED.pricing_mode,flat_rate=EXCLUDED.flat_rate,active=EXCLUDED.active,minimum_delivery_days=EXCLUDED.minimum_delivery_days,maximum_delivery_days=EXCLUDED.maximum_delivery_days,updated_at=now()`,
+        `INSERT INTO courier_providers(id,name,phone,notes,dispatch_branch,pricing_mode,flat_rate,active,minimum_delivery_days,maximum_delivery_days,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,now()) ON CONFLICT(id) DO UPDATE SET name=EXCLUDED.name,phone=EXCLUDED.phone,notes=EXCLUDED.notes,dispatch_branch=EXCLUDED.dispatch_branch,pricing_mode=EXCLUDED.pricing_mode,flat_rate=EXCLUDED.flat_rate,active=EXCLUDED.active,minimum_delivery_days=EXCLUDED.minimum_delivery_days,maximum_delivery_days=EXCLUDED.maximum_delivery_days,updated_at=now()`,
         [
           courier.id,
           courier.name,
           courier.phone || "",
           courier.notes || "",
+          String(courier.dispatchBranch || "").trim(),
           courier.pricingMode,
           courier.flatRate || 0,
           courier.active,
@@ -614,6 +617,25 @@ export async function saveCourierConfig(input: Record<string, unknown>) {
           courier.maximumDeliveryDays,
         ],
       );
+    for (const courier of couriers) {
+      const activeCard = await client.query(
+        "SELECT 1 FROM courier_rate_cards WHERE courier_provider_id=$1 AND status='active' LIMIT 1",
+        [courier.id],
+      );
+      if (activeCard.rowCount) {
+        const branch = String(courier.dispatchBranch || "").trim();
+        if (!branch)
+          throw new Error(`${courier.name}: set a dispatch branch for the active imported rate card.`);
+        const matchingRate = await client.query(
+          `SELECT 1 FROM courier_rates r JOIN courier_rate_cards c ON c.id=r.rate_card_id
+           WHERE c.courier_provider_id=$1 AND c.status='active'
+             AND lower(btrim(r.from_branch))=lower(btrim($2)) LIMIT 1`,
+          [courier.id, branch],
+        );
+        if (!matchingRate.rowCount)
+          throw new Error(`${courier.name}: the active rate card has no rates for dispatch branch "${branch}".`);
+      }
+    }
     for (const rate of rates)
       await client.query(
         `INSERT INTO delivery_rates(id,courier_provider_id,name,fee,active,districts,cities,postal_codes,fallback,sort_order,updated_at) VALUES($1,$2,$3,$4,$5,$6::text[],$7::text[],$8::text[],$9,$10,now()) ON CONFLICT(id) DO UPDATE SET courier_provider_id=EXCLUDED.courier_provider_id,name=EXCLUDED.name,fee=EXCLUDED.fee,active=EXCLUDED.active,districts=EXCLUDED.districts,cities=EXCLUDED.cities,postal_codes=EXCLUDED.postal_codes,fallback=EXCLUDED.fallback,sort_order=EXCLUDED.sort_order,updated_at=now()`,

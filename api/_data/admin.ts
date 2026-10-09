@@ -41,6 +41,7 @@ export async function dashboard() {
       `SELECT
         (SELECT count(*)::int FROM products WHERE status='published') AS published,
         (SELECT count(DISTINCT p.id)::int FROM products p JOIN variants v ON v.product_id=p.id WHERE p.status='published' AND v.active=true AND v.stock>0 AND v.stock<=v.low_stock_threshold) AS low_stock,
+        COALESCE((SELECT jsonb_agg(jsonb_build_object('id',p.id,'name',p.name,'category',COALESCE(c.name,'Uncategorised')) ORDER BY c.name,p.name) FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.status='published' AND p.shipping_weight_grams IS NULL AND c.default_shipping_weight_grams IS NULL),'[]'::jsonb) AS missing_shipping_weights,
         COALESCE((SELECT jsonb_agg(row_data ORDER BY (row_data->>'totalStock')::int,row_data->>'name') FROM (
           SELECT jsonb_build_object('id',p.id,'name',p.name,'slug',p.slug,'thumbnail',COALESCE(p.media->0->>'url',''),'totalStock',sum(v.stock)::int,'lowVariantCount',count(*) FILTER(WHERE v.stock>0 AND v.stock<=v.low_stock_threshold)::int,'preorderEnabled',p.preorder_enabled) row_data
           FROM products p JOIN variants v ON v.product_id=p.id AND v.active=true
@@ -66,6 +67,7 @@ export async function dashboard() {
     publishedProducts: Number(productRow.published) || 0,
     lowStockProducts: Number(productRow.low_stock) || 0,
     stockAttention: Array.isArray(productRow.attention) ? productRow.attention : [],
+    missingShippingWeights: Array.isArray(productRow.missing_shipping_weights) ? productRow.missing_shipping_weights : [],
     ordersToday: Number(row.orders_today) || 0,
     pending: Number(row.pending) || 0,
     confirmed: Number(row.confirmed) || 0,

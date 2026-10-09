@@ -46,3 +46,17 @@ export function normalizePreorderPaymentMethod(
   if (normalized === "cod" || normalized === "bank") return normalized;
   throw new Error("Choose a valid payment method.");
 }
+
+export function preorderDeliveryAddressReady(value: {
+  address1?: unknown;
+  city?: unknown;
+  district?: unknown;
+  postalCode?: unknown;
+}) {
+  return Boolean(
+    String(value.address1 || "").trim() &&
+      String(value.city || "").trim() &&
+      String(value.district || "").trim() &&
+      /^\d{5}$/.test(String(value.postalCode || "")),
+  );
+}

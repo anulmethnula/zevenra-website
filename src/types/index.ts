@@ -345,6 +345,7 @@ export type CourierProvider = {
   name: string;
   phone?: string;
   notes?: string;
+  dispatchBranch?: string;
   pricingMode: DeliveryPricingMode;
   flatRate: number;
   active: boolean;
@@ -418,6 +419,7 @@ export type DashboardData = {
   publishedProducts: number;
   lowStockProducts: number;
   stockAttention: Array<{ id: string; name: string; slug: string; thumbnail: string; totalStock: number; lowVariantCount: number; preorderEnabled: boolean }>;
+  missingShippingWeights: Array<{ id: string; name: string; category: string }>;
   ordersToday: number;
   pending: number;
   confirmed: number;

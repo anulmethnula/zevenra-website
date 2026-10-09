@@ -12,6 +12,7 @@ import {
 import { money } from "../../config/site";
 import { useStore } from "../../features/store/StoreContext";
 import { adminApi } from "../../services/adminApi";
+import { CourierRateSheetImport } from "../../components/admin/CourierRateSheetImport";
 import type { CourierProvider, DeliveryRate } from "../../types";
 import { defaultDeliveryZones } from "../../utils/delivery";
 
@@ -136,6 +137,7 @@ export default function DeliveryAdminPage() {
         name: "New courier",
         phone: "",
         notes: "",
+        dispatchBranch: "",
         pricingMode: "flat",
         flatRate: 0,
         active: true,
@@ -453,6 +455,22 @@ export default function DeliveryAdminPage() {
               </label>
             </div>
 
+            {selected.pricingMode === "zone" && (
+              <label className="max-w-md text-xs font-medium">
+                Dispatch branch for imported rate sheets
+                <input
+                  className="field mt-2"
+                  value={selected.dispatchBranch || ""}
+                  maxLength={120}
+                  placeholder="Must exactly match From Branch"
+                  onChange={(event) => updateCourier(selected.id, { dispatchBranch: event.target.value })}
+                />
+                <span className="mt-2 block text-[10px] leading-4 text-black/45">
+                  Required before an imported rate card can be activated. Checkout uses only rows for this branch.
+                </span>
+              </label>
+            )}
+
             <div className="border-t border-black/[.07] pt-6">
               <p className="text-xs font-medium">Pricing method</p>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -575,6 +593,10 @@ export default function DeliveryAdminPage() {
           </div>
         </section>
       )}
+
+      <div className="mt-8">
+        <CourierRateSheetImport couriers={couriers} courierId={selectedId} />
+      </div>
 
       {dirty && (
         <div className="fixed bottom-5 left-1/2 z-[80] flex w-[min(680px,calc(100vw-32px))] -translate-x-1/2 flex-wrap items-center justify-between gap-3 rounded-2xl border border-black/10 bg-[#f8f6f1]/95 p-3 shadow-2xl backdrop-blur md:left-[calc(50%+8rem)]">

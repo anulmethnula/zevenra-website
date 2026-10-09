@@ -123,8 +123,9 @@ export async function deliverySnapshot(
             await client.query<Record<string, unknown>>(
               `SELECT r.* FROM courier_rates r
                JOIN courier_rate_cards card ON card.id=r.rate_card_id
-               WHERE r.courier_provider_id=$1 AND r.active=true AND card.status='active'`,
-              [defaultId],
+               WHERE r.courier_provider_id=$1 AND r.active=true AND card.status='active'
+                 AND lower(btrim(r.from_branch))=lower(btrim($2))`,
+              [defaultId, String(courier.dispatch_branch || "")],
             )
           ).rows
         : [],

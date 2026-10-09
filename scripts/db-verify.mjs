@@ -100,11 +100,14 @@ try {
       "WITH s AS (SELECT key,value #>> '{}' value FROM site_settings), enabled AS (SELECT COALESCE((SELECT lower(value)='true' FROM s WHERE key='ordersEnabled'),true) ok), default_id AS (SELECT COALESCE((SELECT value FROM s WHERE key='defaultCourierProviderId'),'') id) SELECT CASE WHEN (SELECT ok FROM enabled) AND NOT EXISTS(SELECT 1 FROM courier_providers p,default_id d WHERE p.id=d.id AND p.active=true) THEN 1 ELSE 0 END::int AS count",
     activeZoneCourierWithoutFallback:
       "WITH s AS (SELECT value #>> '{}' id FROM site_settings WHERE key='defaultCourierProviderId') SELECT CASE WHEN EXISTS(SELECT 1 FROM courier_providers p JOIN s ON s.id=p.id WHERE p.active=true AND p.pricing_mode='zone') AND (SELECT count(*) FROM delivery_rates r JOIN s ON s.id=r.courier_provider_id WHERE r.active=true AND r.fallback=true)<>1 THEN 1 ELSE 0 END::int AS count",
+    activeRateCardWithoutConfiguredDispatchBranch:
+      "SELECT count(*)::int AS count FROM courier_rate_cards c JOIN courier_providers p ON p.id=c.courier_provider_id WHERE c.status='active' AND (btrim(p.dispatch_branch)='' OR NOT EXISTS(SELECT 1 FROM courier_rates r WHERE r.rate_card_id=c.id AND lower(btrim(r.from_branch))=lower(btrim(p.dispatch_branch))))",
   };
+  const failures = [];
   for (const [name, sql] of Object.entries(checks)) {
     const count = (await pool.query(sql)).rows[0].count;
     console.log(`${name}: ${count}`);
-    if (count) throw new Error(`${name} verification failed`);
+    if (count) failures.push(`${name}=${count}`);
   }
   const migrations = await pool.query(
       "SELECT version,applied_at FROM schema_migrations ORDER BY version",
@@ -117,9 +120,9 @@ try {
     missingMigrations = expected.filter((version) => !applied.has(version));
   console.log("migrations:", migrations.rows.map((row) => row.version).join(", "));
   if (missingMigrations.length)
-    throw new Error(
-      `Database is missing migrations: ${missingMigrations.join(", ")}. Run npm run db:migrate first.`,
-    );
+    failures.push(`missingMigrations=${missingMigrations.join(",")}`);
+  if (failures.length)
+    throw new Error(`Database verification failed: ${failures.join("; ")}`);
   console.log("database verification passed");
 } finally {
   await pool.end();

@@ -31,8 +31,8 @@
     "test:product-search": "node --import tsx --test tests/product-search.test.ts",
     "dev:full": "node --env-file=.env.local scripts/dev-full.mjs",
     "admin:hash-password": "node scripts/hash-admin-password.mjs",
-    "db:migrate": "node scripts/db-migrate.mjs",
-    "db:verify": "node scripts/db-verify.mjs",
+    "db:migrate": "node --env-file-if-exists=.env.local scripts/db-migrate.mjs",
+    "db:verify": "node --env-file-if-exists=.env.local scripts/db-verify.mjs",
     "db:search-smoke": "node --env-file=.env.local --import tsx scripts/search-smoke.ts",
     "db:smoke": "node --env-file=.env.local scripts/query-smoke.mjs",
     "perf:reads": "node scripts/load-test-reads.mjs"

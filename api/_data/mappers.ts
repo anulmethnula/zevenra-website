@@ -119,6 +119,7 @@ export const mapCourier = (row: Record<string, unknown>) => ({
   name: text(row.name),
   phone: text(row.phone),
   notes: text(row.notes),
+  dispatchBranch: text(row.dispatch_branch),
   pricingMode: text(row.pricing_mode),
   flatRate: number(row.flat_rate),
   active: bool(row.active),

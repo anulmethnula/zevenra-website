@@ -258,6 +258,22 @@ function Dashboard() {
         Revenue shows delivered product value only. Delivery fees are shown
         separately, so shipping charges are not mixed into product sales.
       </p>
+      {stats?.missingShippingWeights?.length ? (
+        <section className="mt-6 overflow-hidden rounded-2xl border border-amber-800/20 bg-amber-50/70">
+          <div className="border-b border-amber-800/15 p-4 sm:p-5">
+            <h2 className="text-sm font-semibold text-amber-950">Shipping weights required before checkout</h2>
+            <p className="mt-1 text-xs leading-5 text-amber-900/70">These published products have neither a product weight nor a category default. Add an authoritative value; do not estimate.</p>
+          </div>
+          <div className="divide-y divide-amber-800/10">
+            {stats.missingShippingWeights.map((product) => (
+              <Link key={product.id} to={`/admin/products/${product.id}`} className="flex min-h-12 items-center justify-between gap-3 px-4 py-3 text-xs hover:bg-amber-100/60 sm:px-5">
+                <span className="min-w-0 break-words font-medium">{product.name}</span>
+                <span className="shrink-0 text-amber-900/60">{product.category}</span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
       <div className="mt-6 grid gap-5 xl:grid-cols-2">
         <Panel title="Top selling products">
           {stats?.topProducts?.length ? (
