@@ -10,4 +10,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS variants_sku_nonblank_unique_idx
   ON variants(sku)
   WHERE btrim(sku) <> '';
 
+INSERT INTO schema_migrations(version)
+VALUES ('010_optional_variant_sku')
+ON CONFLICT (version) DO NOTHING;
+
 COMMIT;
