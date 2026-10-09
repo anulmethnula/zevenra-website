@@ -5,6 +5,7 @@ import { receiptAsset } from "../_receipt-asset.js";
 import { mapOrder } from "./mappers.js";
 import { validateDiscount } from "./discounts.js";
 import { matchDeliveryZone } from "../../shared/delivery-match.js";
+import { calculateShippingWeight } from "../../shared/shipping-weight.js";
 
 export {
   createReturn,
@@ -57,6 +58,7 @@ type Line = {
   unitPrice: number;
   lineTotal: number;
   isPreorder: boolean;
+  shippingWeightGrams: number;
 };
 
 const orderWithItems = `SELECT o.*,COALESCE((SELECT jsonb_agg(to_jsonb(oi) ORDER BY oi.id) FROM order_items oi WHERE oi.order_id=o.order_id),'[]') AS items,(SELECT count(*)::int FROM order_returns r WHERE r.order_id=o.order_id) AS return_count FROM orders o`;
@@ -138,7 +140,7 @@ async function loadLines(
     ids.add(item.variantId);
     const row = (
       await client.query<Record<string, unknown>>(
-        `SELECT v.*,p.name AS product_name,p.price,p.status,p.preorder_enabled FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=$1 AND v.product_id=$2 AND v.active=true FOR UPDATE`,
+        `SELECT v.*,p.name AS product_name,p.price,p.status,p.preorder_enabled,p.shipping_weight_grams,c.default_shipping_weight_grams FROM variants v JOIN products p ON p.id=v.product_id LEFT JOIN categories c ON c.id=p.category_id WHERE v.id=$1 AND v.product_id=$2 AND v.active=true FOR UPDATE OF v,p`,
         [item.variantId, item.productId],
       )
     ).rows[0];
@@ -155,6 +157,7 @@ async function loadLines(
       trustProvidedPrice && Number(item.unitPrice) > 0
         ? Number(item.unitPrice)
         : Number(row.price);
+    const resolvedShippingWeight = row.shipping_weight_grams ?? row.default_shipping_weight_grams;
     lines.push({
       productId: String(row.product_id),
       variantId: String(row.id),
@@ -166,6 +169,7 @@ async function loadLines(
       unitPrice,
       lineTotal: unitPrice * quantity,
       isPreorder,
+      shippingWeightGrams: resolvedShippingWeight == null ? 0 : Number(resolvedShippingWeight),
     });
   }
   return lines;
@@ -190,7 +194,13 @@ export async function createOrder(
       discount = input.discountCode ? await validateDiscount(client,input.discountCode,subtotal,true) : null,
       delivery = await deliverySnapshot(client, input, subtotal),
       asset = receiptAsset(input.paymentReceiptUrl),
-      orderId = newOrderId();
+      orderId = newOrderId(),
+      settings = (await client.query<{key:string;value:unknown}>("SELECT key,value FROM site_settings WHERE key='packagingWeightGrams'")).rows,
+      packagingSetting = settings.find(row=>row.key==="packagingWeightGrams");
+
+    if (!packagingSetting) throw new Error("Packaging weight is not configured. Ask an administrator to configure delivery settings.");
+    const shippingWeight = calculateShippingWeight(lines.map(line=>({productId:line.productId,productName:line.productName,quantity:line.quantity,shippingWeightGrams:line.shippingWeightGrams||undefined})),Number(packagingSetting.value));
+    if (!shippingWeight.ready) throw new Error(`Shipping weight is not configured for: ${shippingWeight.missing.map(item=>item.productName||item.productId).join(", ")}.`);
 
     if (input.discountCode && !discount) throw new Error("DISCOUNT_INVALID");
     const discountAmount=discount?.amount||0,total=Math.max(0,subtotal-discountAmount+delivery.fee);
@@ -221,7 +231,7 @@ export async function createOrder(
       hasPreorder = lines.some((line) => line.isPreorder);
 
     await client.query(
-      `INSERT INTO orders(order_id,customer_id,customer_name,phone,whatsapp,email,address1,address2,city,district,postal_code,delivery_notes,courier_provider_id,courier_name,delivery_pricing_mode,delivery_rate_plan,delivery_zone_name,payment_method,payment_status,payment_reference,payment_receipt_public_id,payment_receipt_resource_type,payment_receipt_format,subtotal,discount_code,discount_amount,discount_type,discount_value,delivery_fee,total,stock_state,order_status,source,has_preorder) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,'pending',$32,$33)`,
+      `INSERT INTO orders(order_id,customer_id,customer_name,phone,whatsapp,email,address1,address2,city,district,postal_code,delivery_notes,courier_provider_id,courier_name,delivery_pricing_mode,delivery_rate_plan,delivery_zone_name,payment_method,payment_status,payment_reference,payment_receipt_public_id,payment_receipt_resource_type,payment_receipt_format,subtotal,discount_code,discount_amount,discount_type,discount_value,delivery_fee,total,total_product_weight_grams,total_shipping_weight_grams,stock_state,order_status,source,has_preorder) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,'pending',$34,$35)`,
       [
         orderId,
         input.customerId || null,
@@ -254,6 +264,8 @@ export async function createOrder(
         discount?.value||0,
         delivery.fee,
         total,
+        shippingWeight.totalProductWeightGrams,
+        shippingWeight.totalShippingWeightGrams,
         stockState,
         input.source || "web",
         hasPreorder,
@@ -263,7 +275,7 @@ export async function createOrder(
 
     for (const line of lines)
       await client.query(
-        `INSERT INTO order_items(order_id,product_id,variant_id,sku,product_name,color,size,quantity,unit_price,line_total,is_preorder) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+        `INSERT INTO order_items(order_id,product_id,variant_id,sku,product_name,color,size,quantity,unit_price,line_total,is_preorder,shipping_weight_grams) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
         [
           orderId,
           line.productId,
@@ -276,6 +288,7 @@ export async function createOrder(
           line.unitPrice,
           line.lineTotal,
           line.isPreorder,
+          line.shippingWeightGrams,
         ],
       );
 
@@ -286,6 +299,7 @@ export async function createOrder(
         JSON.stringify({
           total,
           deliveryZone: delivery.zoneName,
+          totalShippingWeightGrams: shippingWeight.totalShippingWeightGrams,
         }),
       ],
     );

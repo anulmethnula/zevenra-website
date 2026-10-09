@@ -37,6 +37,7 @@ export type Product = {
   sortOrder: number;
   variants: Variant[];
   sizeChartId?: string;
+  shippingWeightGrams?: number;
 };
 export type ProductSummary = Pick<Product,"id"|"slug"|"name"|"price"|"compareAtPrice"|"categoryId"|"subcategory"|"collectionIds"|"media"|"featured"|"newArrival"|"preorderEnabled"|"status"|"sortOrder"> & { variants: Array<Pick<Variant,"id"|"color"|"size"|"stock"|"lowStockThreshold"|"active">> };
 export type ShopResponse = {items:ProductSummary[];page:number;pageSize:number;total:number;pageCount:number;filters:{sizes:string[];colors:string[];minPrice:number;maxPrice:number}};
@@ -56,6 +57,7 @@ export type Category = {
   showOnHomepage: boolean;
   parentId?: string;
   sortOrder: number;
+  defaultShippingWeightGrams?: number;
 };
 export type Collection = {
   id: string;
@@ -138,6 +140,7 @@ export type SiteSettings = {
   deliveryEnabled: boolean;
   deliveryFee: number;
   freeDeliveryThreshold: number;
+  packagingWeightGrams?: number;
   defaultCourierProviderId: string;
   currency: string;
   storeOpen: boolean;

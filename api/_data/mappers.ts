@@ -44,6 +44,7 @@ export function mapProduct(row: Record<string, unknown>) {
     status: text(row.status),
     sortOrder: number(row.sort_order),
     sizeChartId: text(row.size_chart_id) || undefined,
+    shippingWeightGrams: row.shipping_weight_grams == null ? undefined : number(row.shipping_weight_grams),
     variants: Array.isArray(row.variants)
       ? row.variants.map((item) => mapVariant(item as Record<string, unknown>))
       : [],
@@ -64,6 +65,7 @@ export const mapCategory = (row: Record<string, unknown>) => ({
   showOnHomepage: bool(row.show_on_homepage),
   parentId: text(row.parent_id) || undefined,
   sortOrder: number(row.sort_order),
+  defaultShippingWeightGrams: row.default_shipping_weight_grams == null ? undefined : number(row.default_shipping_weight_grams),
 });
 export const mapCollection = (row: Record<string, unknown>) => ({
   id: text(row.id),
@@ -194,6 +196,8 @@ export function mapOrder(row: Record<string, unknown>) {
     discountCode: text(row.discount_code),
     discountAmount: number(row.discount_amount),
     deliveryFee: number(row.delivery_fee),
+    totalProductWeightGrams: row.total_product_weight_grams == null ? undefined : number(row.total_product_weight_grams),
+    totalShippingWeightGrams: row.total_shipping_weight_grams == null ? undefined : number(row.total_shipping_weight_grams),
     total: number(row.total),
     orderStatus: text(row.order_status),
     source: text(row.source),
@@ -223,6 +227,7 @@ export function mapOrderItem(row: Record<string, unknown>) {
     lineTotal: number(row.line_total),
     subtotal: number(row.line_total),
     isPreorder: bool(row.is_preorder),
+    shippingWeightGrams: row.shipping_weight_grams == null ? undefined : number(row.shipping_weight_grams),
   };
 }
 

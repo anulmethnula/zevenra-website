@@ -169,6 +169,7 @@ const normalizeCategory = (row: unknown): Category => {
     showInNavigation: bool(x.showInNavigation),
     showOnHomepage: bool(x.showOnHomepage),
     sortOrder: number(x.sortOrder),
+    defaultShippingWeightGrams: x.defaultShippingWeightGrams == null || x.defaultShippingWeightGrams === "" ? undefined : number(x.defaultShippingWeightGrams),
   } as Category;
 };
 const normalizeCollection = (row: unknown): Collection => {
@@ -294,6 +295,7 @@ const normalizeProduct = (row: unknown): Product => {
       x.compareAtPrice === "" || x.compareAtPrice == null
         ? undefined
         : number(x.compareAtPrice),
+    shippingWeightGrams: x.shippingWeightGrams == null || x.shippingWeightGrams === "" ? undefined : number(x.shippingWeightGrams),
     media: json(x.media ?? x.mediaJson, []),
     tags: Array.isArray(x.tags)
       ? x.tags.map((tag) => String(tag))

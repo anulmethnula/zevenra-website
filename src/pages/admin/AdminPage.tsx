@@ -593,6 +593,7 @@ function Categories() {
     featured: false,
     showInNavigation: kind === "main",
     showOnHomepage: false,
+    defaultShippingWeightGrams: undefined,
     parentId: kind === "sub" ? main[0]?.id : undefined,
     sortOrder: store.data.categories.length + 1,
   });
@@ -659,6 +660,8 @@ function CategoryCard({
     );
   async function submit() {
     if (!draft.name.trim()) return setStatus("Name is required.");
+    if (draft.defaultShippingWeightGrams != null && (!Number.isInteger(draft.defaultShippingWeightGrams) || draft.defaultShippingWeightGrams <= 0))
+      return setStatus("Default shipping weight must be a whole number greater than zero, or left blank.");
     if (draft.parentId === draft.id)
       return setStatus("A category cannot be its own parent.");
     setBusy(true);
@@ -717,6 +720,11 @@ function CategoryCard({
           value={String(draft.sortOrder)}
           onChange={(value) => change("sortOrder", Number(value) || 0)}
         />
+        <Field
+          label="Default shipping weight (g)"
+          value={draft.defaultShippingWeightGrams == null ? "" : String(draft.defaultShippingWeightGrams)}
+          onChange={(value) => change("defaultShippingWeightGrams", value ? Number(value) : undefined)}
+        />
         <UploadField
           label="Category image (optional)"
           value={draft.imageUrl}
@@ -732,6 +740,9 @@ function CategoryCard({
         <p className="mt-3 border-l-2 border-[#96724f] pl-3 text-xs text-black/50">
           Storefront path: {parent.name} → {draft.name || "Subcategory"}
         </p>
+      )}
+      {!draft.defaultShippingWeightGrams && (
+        <p role="alert" className="mt-3 border-l-2 border-amber-700 pl-3 text-xs leading-5 text-amber-900">No default shipping weight is configured. Products in this category need their own override before weight-based delivery can be calculated.</p>
       )}
       {childCount > 0 && !draft.parentId && (
         <p className="mt-3 text-xs text-amber-900">
@@ -4209,7 +4220,7 @@ function Media() {
 }
 type SettingsSection="brand"|"payments"|"delivery"|"store";
 const settingsSections:SettingsSection[]=["brand","payments","delivery","store"];
-const settingsSectionKeys={brand:["brandName","tagline","announcement","whatsapp","phone","email","instagram","tiktok"],payments:["codEnabled","bankEnabled","bankName","accountName","accountNumber","branch"],delivery:["deliveryEnabled","freeDeliveryThreshold"],store:["storeOpen","ordersEnabled","defaultTitle","defaultDescription"]} as const;
+const settingsSectionKeys={brand:["brandName","tagline","announcement","whatsapp","phone","email","instagram","tiktok"],payments:["codEnabled","bankEnabled","bankName","accountName","accountNumber","branch"],delivery:["deliveryEnabled","freeDeliveryThreshold","packagingWeightGrams"],store:["storeOpen","ordersEnabled","defaultTitle","defaultDescription"]} as const;
 const settingsSectionLabels:Record<SettingsSection,string>={brand:"Brand & contact settings",payments:"Payment settings",delivery:"Delivery settings",store:"Store settings"};
 function SectionSave({section,label,busy,status,save}:{section:SettingsSection;label:string;busy:boolean;status:string;save:(section:SettingsSection)=>Promise<void>}){return <div className="mt-5 border-t border-black/10 pt-4"><button type="button" className="btn btn-dark min-h-11 w-full justify-center" disabled={busy} onClick={()=>void save(section)}>{busy?"Saving…":label}</button>{status&&<p className={`mt-3 text-xs ${status.endsWith("saved.")?"text-emerald-800":"text-red-800"}`} role="status">{status}</p>}</div>}
 function ExplicitSettings({ focus }: { focus: string }) {
@@ -4253,9 +4264,13 @@ function ExplicitSettings({ focus }: { focus: string }) {
       return setStatus(current=>({...current,brand:"Instagram and TikTok must be valid http(s) URLs or left blank."}));
     if (section==="delivery"&&(
       !Number.isFinite(draft.freeDeliveryThreshold) ||
-      draft.freeDeliveryThreshold < 0
+      draft.freeDeliveryThreshold < 0 ||
+      draft.packagingWeightGrams == null ||
+      !Number.isFinite(draft.packagingWeightGrams) ||
+      !Number.isInteger(draft.packagingWeightGrams) ||
+      draft.packagingWeightGrams <= 0
     ))
-      return setStatus(current=>({...current,delivery:"Delivery amounts cannot be negative."}));
+      return setStatus(current=>({...current,delivery:"Packaging weight must be a whole number greater than zero, and delivery amounts cannot be negative."}));
     if (section==="store"&&draft.ordersEnabled && !s.data.settings.codEnabled && !s.data.settings.bankEnabled)
       return setStatus(current=>({...current,store:"Save an enabled payment method before enabling online orders."}));
     if (section==="payments"&&
@@ -4386,6 +4401,12 @@ function ExplicitSettings({ focus }: { focus: string }) {
             value={String(draft.freeDeliveryThreshold)}
             onChange={(v) => change("delivery", "freeDeliveryThreshold", Number(v))}
           />
+          <Field
+            label="Packaging weight (g)"
+            value={draft.packagingWeightGrams == null ? "" : String(draft.packagingWeightGrams)}
+            onChange={(v) => change("delivery", "packagingWeightGrams", v === "" ? undefined : Number(v))}
+          />
+          {draft.packagingWeightGrams == null && <p role="alert" className="mt-2 border-l-2 border-amber-700 pl-3 text-xs leading-5 text-amber-900">Packaging weight is not configured. Weight-based delivery cannot be calculated until it is saved.</p>}
           <p className="mt-2 text-xs leading-5 text-black/45">
             Courier prices and delivery zones are managed separately so changing
             courier companies never changes your store settings.

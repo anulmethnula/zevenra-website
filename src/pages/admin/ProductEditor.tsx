@@ -128,7 +128,8 @@ export default function ProductEditor() {
     subcategoryId = selectedCategory?.parentId ? selectedCategory.id : "";
   const selectedChart = store.data.sizeCharts.find(
     (chart) => chart.id === product.sizeChartId,
-  );
+  ),
+    resolvedCategoryWeight = selectedCategory?.defaultShippingWeightGrams;
 
   function selectMain(id: string) {
     set("categoryId", id);
@@ -231,6 +232,10 @@ export default function ProductEditor() {
     }
     if (!activeVariants.length) {
       setError("Add at least one active size / stock variant.");
+      return;
+    }
+    if (product.shippingWeightGrams != null && (!Number.isInteger(product.shippingWeightGrams) || product.shippingWeightGrams <= 0)) {
+      setError("Shipping weight override must be a whole number greater than zero, or left blank.");
       return;
     }
     if (
@@ -802,6 +807,18 @@ export default function ProductEditor() {
                 )
               }
             />
+            <Field
+              label="Shipping weight (g) — optional override"
+              value={product.shippingWeightGrams == null ? "" : String(product.shippingWeightGrams)}
+              set={(value) => set("shippingWeightGrams", value ? Number(value) : undefined)}
+            />
+            {product.shippingWeightGrams ? (
+              <p className="text-xs leading-5 text-black/45">This product override will be used instead of the category default.</p>
+            ) : resolvedCategoryWeight ? (
+              <p className="text-xs leading-5 text-black/45">Using category default: {resolvedCategoryWeight} g.</p>
+            ) : (
+              <p role="alert" className="border-l-2 border-amber-700 pl-3 text-xs leading-5 text-amber-900">Shipping weight is not configured. Add an override here or set a default on the selected category before weight-based delivery can be calculated.</p>
+            )}
           </Card>
 
           <Card title="Collections">

@@ -274,6 +274,7 @@ const definitions = {
       "show_on_homepage",
       "parent_id",
       "sort_order",
+      "default_shipping_weight_grams",
     ],
     keys: [
       "name",
@@ -288,6 +289,7 @@ const definitions = {
       "showOnHomepage",
       "parentId",
       "sortOrder",
+      "defaultShippingWeightGrams",
     ],
   },
   collections: {
@@ -371,6 +373,9 @@ export async function saveEntity(
   table: Entity,
   input: Record<string, unknown>,
 ) {
+  if (table === "categories" && input.defaultShippingWeightGrams != null &&
+      (!Number.isInteger(Number(input.defaultShippingWeightGrams)) || Number(input.defaultShippingWeightGrams) <= 0))
+    throw new Error("Default shipping weight must be a whole number greater than zero, or left blank.");
   const definition = definitions[table],
     id = String(input.id || randomUUID()),
     values = definition.keys.map((key) => {
@@ -405,6 +410,9 @@ export async function saveProduct(input: Record<string, unknown>) {
       : [];
   if (!input.name || !input.slug || Number(input.price) <= 0)
     throw new Error("Product name, slug and price are required.");
+  if (input.shippingWeightGrams != null && input.shippingWeightGrams !== "" &&
+      (!Number.isInteger(Number(input.shippingWeightGrams)) || Number(input.shippingWeightGrams) <= 0))
+    throw new Error("Shipping weight override must be a whole number greater than zero, or left blank.");
   if (
     !variants.some(
       (variant) => variant.active === true || String(variant.active) === "true",
@@ -413,9 +421,9 @@ export async function saveProduct(input: Record<string, unknown>) {
     throw new Error("Add at least one active size / stock variant.");
   await withTransaction(async (client) => {
     await client.query(
-      `INSERT INTO products(id,slug,name,short_description,description,price,compare_at_price,category_id,subcategory,size_chart_id,media,material,fit,care,tags,featured,new_arrival,preorder_enabled,preorder_message,status,sort_order,updated_at)
-   VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14,$15::text[],$16,$17,$18,$19,$20,$21,now())
-   ON CONFLICT(id) DO UPDATE SET slug=EXCLUDED.slug,name=EXCLUDED.name,short_description=EXCLUDED.short_description,description=EXCLUDED.description,price=EXCLUDED.price,compare_at_price=EXCLUDED.compare_at_price,category_id=EXCLUDED.category_id,subcategory=EXCLUDED.subcategory,size_chart_id=EXCLUDED.size_chart_id,media=EXCLUDED.media,material=EXCLUDED.material,fit=EXCLUDED.fit,care=EXCLUDED.care,tags=EXCLUDED.tags,featured=EXCLUDED.featured,new_arrival=EXCLUDED.new_arrival,preorder_enabled=EXCLUDED.preorder_enabled,preorder_message=EXCLUDED.preorder_message,status=EXCLUDED.status,sort_order=EXCLUDED.sort_order,updated_at=now()`,
+      `INSERT INTO products(id,slug,name,short_description,description,price,compare_at_price,category_id,subcategory,size_chart_id,media,material,fit,care,tags,featured,new_arrival,preorder_enabled,preorder_message,status,sort_order,shipping_weight_grams,updated_at)
+   VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14,$15::text[],$16,$17,$18,$19,$20,$21,$22,now())
+   ON CONFLICT(id) DO UPDATE SET slug=EXCLUDED.slug,name=EXCLUDED.name,short_description=EXCLUDED.short_description,description=EXCLUDED.description,price=EXCLUDED.price,compare_at_price=EXCLUDED.compare_at_price,category_id=EXCLUDED.category_id,subcategory=EXCLUDED.subcategory,size_chart_id=EXCLUDED.size_chart_id,media=EXCLUDED.media,material=EXCLUDED.material,fit=EXCLUDED.fit,care=EXCLUDED.care,tags=EXCLUDED.tags,featured=EXCLUDED.featured,new_arrival=EXCLUDED.new_arrival,preorder_enabled=EXCLUDED.preorder_enabled,preorder_message=EXCLUDED.preorder_message,status=EXCLUDED.status,sort_order=EXCLUDED.sort_order,shipping_weight_grams=EXCLUDED.shipping_weight_grams,updated_at=now()`,
       [
         id,
         input.slug,
@@ -438,6 +446,7 @@ export async function saveProduct(input: Record<string, unknown>) {
         input.preorderMessage || "",
         input.status || "draft",
         input.sortOrder || 0,
+        input.shippingWeightGrams == null || input.shippingWeightGrams === "" ? null : Number(input.shippingWeightGrams),
       ],
     );
     const ids: string[] = [];
@@ -520,9 +529,13 @@ export async function saveSettings(patch: Record<string, unknown>) {
     throw new Error("Brand name is required.");
   if (
     Number(next.deliveryFlatFee ?? next.deliveryFee ?? 0) < 0 ||
-    Number(next.freeDeliveryThreshold ?? 0) < 0
+    Number(next.freeDeliveryThreshold ?? 0) < 0 ||
+    Number(next.packagingWeightGrams ?? 0) < 0
   )
     throw new Error("Delivery amounts cannot be negative.");
+  if (patch.packagingWeightGrams !== undefined &&
+      (!Number.isInteger(Number(patch.packagingWeightGrams)) || Number(patch.packagingWeightGrams) <= 0))
+    throw new Error("Packaging weight must be a whole number greater than zero.");
   const ordersEnabled = isTrue(next.ordersEnabled ?? true),
     codEnabled = isTrue(next.codEnabled),
     bankEnabled = isTrue(next.bankTransferEnabled ?? next.bankEnabled);
