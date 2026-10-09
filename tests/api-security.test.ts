@@ -3,7 +3,7 @@ import test from "node:test";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import adminHandler from "../api/admin/[action].js";
 import orderHandler from "../api/orders.js";
-import { adminCookie, makeSession, validOrigin } from "../api/_shared.js";
+import { adminCookie, makeSession, orderSchema, validOrigin } from "../api/_shared.js";
 
 type ResponseState = { status: number; headers: Record<string, string>; body: unknown };
 
@@ -20,6 +20,18 @@ function response() {
 function request(method: string, action: string, headers: Record<string, string> = {}, body: unknown = {}) {
   return { method, query: { action }, headers, body, socket: {} } as unknown as VercelRequest;
 }
+
+const validOrder = {
+  customerName: "Test Customer",
+  phone: "+94770000000",
+  email: "",
+  address1: "1 Test Street",
+  city: "Colombo",
+  district: "Colombo" as const,
+  postalCode: "00100",
+  paymentMethod: "cod" as const,
+  items: [{ productId: "product", variantId: "variant", quantity: 1 }],
+};
 
 test("GET mutation returns 405 with POST Allow header", async () => {
   const { res, state } = response();
@@ -52,6 +64,29 @@ test("mutation origin validation rejects missing and wrong origins", () => {
   assert.equal(validOrigin(request("POST", "saveSettings", { origin: "https://evil.example", host: "shop.example", "x-forwarded-proto": "https" }), config), false);
 });
 
+test("public order payload rejects client-authoritative totals and delivery fields", () => {
+  const parsed = orderSchema.safeParse({
+    ...validOrder,
+    subtotal: 1,
+    deliveryFee: 1,
+    total: 2,
+    courierProviderId: "fake-courier",
+    totalShippingWeightGrams: 1,
+  });
+  assert.equal(parsed.success, false);
+});
+
+test("web order submission requires a postal code before any database work", async () => {
+  process.env.ALLOWED_ORIGIN = "https://shop.example";
+  const { res, state } = response();
+  await orderHandler(
+    request("POST", "", { origin: "https://shop.example" }, { ...validOrder, postalCode: "" }),
+    res,
+  );
+  assert.equal(state.status, 400);
+  assert.deepEqual(state.body, { error: "Enter a valid 5-digit postal code." });
+});
+
 test("admin internal error is logged and sanitized", async () => {
   process.env.SESSION_SECRET = "test-session-secret";
   process.env.ADMIN_USERNAME = "owner";
@@ -80,11 +115,7 @@ test("order internal error is logged and sanitized", async () => {
   const original = console.error;
   console.error = () => {};
   try {
-    await orderHandler(request("POST", "", { origin: "https://shop.example" }, {
-      customerName: "Test Customer", phone: "+94770000000", email: "",
-      address1: "1 Test Street", city: "Colombo", district: "Colombo", postalCode: "",
-      paymentMethod: "cod", items: [{ productId: "product", variantId: "variant", quantity: 1 }],
-    }), res);
+    await orderHandler(request("POST", "", { origin: "https://shop.example" }, validOrder), res);
   } finally {
     console.error = original;
   }
