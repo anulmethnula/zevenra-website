@@ -23,8 +23,8 @@ import {
   saveEntity,
   saveProduct,
   setProductStatus,
-  saveSettings,
 } from "../_data/catalog.js";
+import { saveSettings } from "../_data/settings.js";
 import {
   createOrder,
   createReturn,
@@ -224,6 +224,29 @@ async function execute(action: string, payload: Record<string, unknown>) {
   }
 }
 
+function databaseConflictMessage(action: string, error: unknown) {
+  const code = error && typeof error === "object" && "code" in error
+    ? String((error as { code?: unknown }).code || "")
+    : "";
+  if (code === "23505") {
+    if (action === "saveProduct")
+      return "Product slug, SKU, or size/color combination already exists.";
+    if (action === "saveCategory" || action === "saveCollection")
+      return "That slug is already in use.";
+    return "A record with the same unique value already exists.";
+  }
+  if (code === "23503") {
+    if (action === "deleteCategory")
+      return "This category is still used by products or subcategories. Move or archive those records first.";
+    if (action === "deleteProduct" || action === "saveProduct")
+      return "This product or size is still used by an active pre-order. Archive it or finish/cancel the pre-order first.";
+    return "This record is still referenced by other data and cannot be removed yet.";
+  }
+  if (code === "23514" && action === "updateOrder")
+    return "This order has an active courier return and cannot be marked delivered.";
+  return "";
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const value = Array.isArray(req.query.action)
       ? req.query.action[0]
@@ -266,6 +289,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         { error: (error as Error & { issues?: { message?: string }[] }).issues?.[0]?.message || "Please check the submitted details." },
         400,
       );
+    const conflict = databaseConflictMessage(action, error);
+    if (conflict) return json(res, { error: conflict }, 409);
     console.error("admin action failed", error);
     return json(res, { error: "The operation could not be completed." }, 500);
   }
