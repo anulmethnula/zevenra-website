@@ -1,5 +1,6 @@
 import readXlsxFile from "read-excel-file/node";
 import { parse as parseCsv } from "csv-parse/sync";
+import { normalizeLocation } from "../../shared/delivery-match.js";
 
 const MAX_FILE_BYTES = 3 * 1024 * 1024;
 const MAX_ROWS = 50_000;
@@ -20,7 +21,7 @@ export function normalizeCourierRateImportRows(rows: ParsedRow[]) {
 
 export function duplicateCourierRateKeys(rows: Array<{ district:string; city:string }>) {
   const counts=new Map<string,number>();
-  for(const row of rows){const value=`${row.district.trim().toLocaleLowerCase()}\u0000${row.city.trim().toLocaleLowerCase()}`;counts.set(value,(counts.get(value)||0)+1);}
+  for(const row of rows){const value=`${normalizeLocation(row.district)}\u0000${normalizeLocation(row.city)}`;counts.set(value,(counts.get(value)||0)+1);}
   return new Set([...counts].filter(([,count])=>count>1).map(([value])=>value));
 }
 
