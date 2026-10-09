@@ -63,7 +63,7 @@ import {
   validSession,
 } from "../_shared.js";
 import { CourierRateFileError } from "../_data/courier-rate-parser.js";
-import { deactivateDiscount, discountDeactivateSchema, listDiscounts, saveDiscount } from "../_data/discounts.js";
+import { deleteDiscount, DiscountConflictError, discountDeleteSchema, listDiscounts, saveDiscount } from "../_data/discounts.js";
 
 const readActions = new Set([
   "bootstrap",
@@ -97,7 +97,7 @@ const mutationActions = new Set([
   "saveSettings", "saveDeliveryRates", "saveCourierConfig", "importCourierRateSheet",
   "validateCourierRateSheet", "confirmCourierRateSheet",
   "setCourierRateCardStatus", "previewDeliveryZoneTemplate", "applyDeliveryZoneTemplate",
-  "saveDiscount", "deactivateDiscount",
+  "saveDiscount", "deleteDiscount",
 ]);
 const allowed = new Set([...readActions, ...mutationActions]);
 
@@ -139,8 +139,8 @@ async function execute(action: string, payload: Record<string, unknown>) {
       return listDiscounts();
     case "saveDiscount":
       return saveDiscount(payload);
-    case "deactivateDiscount":
-      return deactivateDiscount(discountDeactivateSchema.parse(payload).id);
+    case "deleteDiscount":
+      return deleteDiscount(discountDeleteSchema.parse(payload).id);
     case "saveProduct":
       return saveProduct(payload);
     case "setProductStatus":
@@ -256,6 +256,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         : (body(req) as Record<string, unknown>);
     return json(res, await execute(action, payload));
   } catch (error) {
+    if (error instanceof DiscountConflictError)
+      return json(res, { error: error.message }, 409);
     if (error instanceof CourierRateFileError || error instanceof DeliveryZoneTemplateError)
       return json(res, { error: error.message }, 400);
     if (error instanceof Error && error.name === "ZodError")

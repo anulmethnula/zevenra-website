@@ -4,7 +4,7 @@ import { query, type DatabaseClient } from "../_db.js";
 
 export const discountCode = (value: unknown) => String(value ?? "").trim().toUpperCase();
 export const discountAdminSchema = z.object({
-  id: z.string().trim().max(100).optional(), code: z.string().trim().min(2).max(40).regex(/^[A-Za-z0-9_-]+$/),
+  id: z.string().trim().max(100).optional(), code: z.string().trim().min(1).max(40).regex(/^[A-Za-z0-9_-]+$/),
   type: z.enum(["percentage", "fixed"]), value: z.number().finite().positive(), minimumSubtotal: z.number().finite().min(0),
   maximumDiscount: z.number().finite().positive().nullable().optional(), active: z.boolean(),
   startsAt: z.string().datetime().nullable().optional(), expiresAt: z.string().datetime().nullable().optional(),
@@ -14,7 +14,14 @@ export const discountAdminSchema = z.object({
   if (value.type === "fixed" && value.maximumDiscount) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["maximumDiscount"], message: "Maximum discount applies only to percentage codes." });
   if (value.startsAt && value.expiresAt && value.expiresAt <= value.startsAt) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["expiresAt"], message: "End date must be after start date." });
 });
-export const discountDeactivateSchema=z.object({id:z.string().trim().min(1).max(100)}).strict();
+export const discountDeleteSchema=z.object({id:z.string().trim().min(1).max(100)}).strict();
+
+export class DiscountConflictError extends Error {
+  constructor(message = "A discount with this code already exists.") {
+    super(message);
+    this.name = "DiscountConflictError";
+  }
+}
 
 export type DiscountRow = Record<string, unknown>;
 export type AppliedDiscount = { code: string; type: "percentage" | "fixed"; value: number; amount: number };
@@ -53,8 +60,14 @@ export async function listDiscounts() {
 }
 export async function saveDiscount(input: unknown) {
   const value=discountAdminSchema.parse(input), id=value.id||randomUUID(), code=discountCode(value.code);
-  const row=(await query<DiscountRow>(`INSERT INTO discount_codes(id,code,type,value,minimum_subtotal,maximum_discount,active,starts_at,expires_at,usage_limit,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,now()) ON CONFLICT(id) DO UPDATE SET code=EXCLUDED.code,type=EXCLUDED.type,value=EXCLUDED.value,minimum_subtotal=EXCLUDED.minimum_subtotal,maximum_discount=EXCLUDED.maximum_discount,active=EXCLUDED.active,starts_at=EXCLUDED.starts_at,expires_at=EXCLUDED.expires_at,usage_limit=EXCLUDED.usage_limit,updated_at=now() RETURNING *`,[id,code,value.type,value.value,value.minimumSubtotal,value.type==="percentage"?value.maximumDiscount??null:null,value.active,value.startsAt||null,value.expiresAt||null,value.usageLimit??null])).rows[0];
-  return mapDiscount(row);
+  try {
+    const row=(await query<DiscountRow>(`INSERT INTO discount_codes(id,code,type,value,minimum_subtotal,maximum_discount,active,starts_at,expires_at,usage_limit,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,now()) ON CONFLICT(id) DO UPDATE SET code=EXCLUDED.code,type=EXCLUDED.type,value=EXCLUDED.value,minimum_subtotal=EXCLUDED.minimum_subtotal,maximum_discount=EXCLUDED.maximum_discount,active=EXCLUDED.active,starts_at=EXCLUDED.starts_at,expires_at=EXCLUDED.expires_at,usage_limit=EXCLUDED.usage_limit,updated_at=now() RETURNING *`,[id,code,value.type,value.value,value.minimumSubtotal,value.type==="percentage"?value.maximumDiscount??null:null,value.active,value.startsAt||null,value.expiresAt||null,value.usageLimit??null])).rows[0];
+    return mapDiscount(row);
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "23505")
+      throw new DiscountConflictError();
+    throw error;
+  }
 }
-export async function deactivateDiscount(id:string){const row=(await query<DiscountRow>("UPDATE discount_codes SET active=false,updated_at=now() WHERE id=$1 RETURNING *",[id])).rows[0];if(!row)throw new Error("Discount not found");return mapDiscount(row);}
+export async function deleteDiscount(id:string){const row=(await query<{id:string}>("DELETE FROM discount_codes WHERE id=$1 RETURNING id",[id])).rows[0];if(!row)throw new Error("Discount not found");return{id:row.id};}
 function mapDiscount(row:DiscountRow){return{id:String(row.id),code:String(row.code),type:String(row.type),value:Number(row.value),minimumSubtotal:Number(row.minimum_subtotal),maximumDiscount:row.maximum_discount==null?null:Number(row.maximum_discount),active:Boolean(row.active),startsAt:row.starts_at?new Date(String(row.starts_at)).toISOString():null,expiresAt:row.expires_at?new Date(String(row.expires_at)).toISOString():null,usageLimit:row.usage_limit==null?null:Number(row.usage_limit),usageCount:Number(row.usage_count),createdAt:new Date(String(row.created_at)).toISOString(),updatedAt:new Date(String(row.updated_at)).toISOString()};}

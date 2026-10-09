@@ -35,6 +35,17 @@ test("POST read returns 405 with GET Allow header", async () => {
   assert.equal(state.headers.Allow, "GET");
 });
 
+test("discount deletion requires an authenticated admin session", async () => {
+  process.env.SESSION_SECRET = "test-session-secret";
+  process.env.ADMIN_USERNAME = "owner";
+  process.env.ADMIN_PASSWORD_HASH = "unused";
+  process.env.ALLOWED_ORIGIN = "https://shop.example";
+  const { res, state } = response();
+  await adminHandler(request("POST", "deleteDiscount", { origin: "https://shop.example" }, { id: "discount-one" }), res);
+  assert.equal(state.status, 401);
+  assert.deepEqual(state.body, { error: "Session expired" });
+});
+
 test("mutation origin validation rejects missing and wrong origins", () => {
   const config = { ALLOWED_ORIGIN: "https://shop.example" };
   assert.equal(validOrigin(request("POST", "saveSettings"), config), false);

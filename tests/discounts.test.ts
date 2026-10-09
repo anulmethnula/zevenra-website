@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { calculateDiscount, discountAdminSchema, discountCode, discountDeactivateSchema } from "../api/_data/discounts.ts";
+import { calculateDiscount, discountAdminSchema, discountCode, discountDeleteSchema } from "../api/_data/discounts.ts";
 import { checkoutAmounts } from "../src/utils/checkoutAmounts.ts";
 import { orderSchema } from "../api/_shared.ts";
 
@@ -14,6 +14,8 @@ test("usage limit is enforced",()=>assert.equal(calculateDiscount({...base,usage
 test("codes normalize case and whitespace",()=>assert.equal(discountCode("  welcome10 "),"WELCOME10"));
 test("final total subtracts discount once and never falls below zero",()=>{assert.equal(checkoutAmounts(6500,399,true,650).total,6249);assert.equal(checkoutAmounts(100,0,true,500).total,0);});
 test("historical totals default to zero discount",()=>assert.equal(checkoutAmounts(1600,400,true).total,2000));
+test("historical order totals retain their stored discount amount",()=>assert.deepEqual(checkoutAmounts(5000,450,true,500),{ready:true,subtotal:5000,discountAmount:500,deliveryFee:450,total:4950}));
 test("admin schema is strict and validates percentage rules",()=>{const valid={code:"WELCOME10",type:"percentage",value:10,minimumSubtotal:0,maximumDiscount:null,active:true,startsAt:null,expiresAt:null,usageLimit:null};assert.equal(discountAdminSchema.safeParse(valid).success,true);assert.equal(discountAdminSchema.safeParse({...valid,internal:true}).success,false);assert.equal(discountAdminSchema.safeParse({...valid,value:101}).success,false);});
-test("admin deactivate schema rejects unknown fields",()=>assert.equal(discountDeactivateSchema.safeParse({id:"one",extra:true}).success,false));
+test("admin delete schema rejects unknown fields",()=>assert.equal(discountDeleteSchema.safeParse({id:"one",extra:true}).success,false));
+test("admin schema rejects invalid values and date ranges",()=>{const valid={code:"SAVE10",type:"percentage",value:10,minimumSubtotal:0,maximumDiscount:null,active:true,startsAt:"2026-10-09T10:00:00.000Z",expiresAt:"2026-10-10T10:00:00.000Z",usageLimit:null};assert.equal(discountAdminSchema.safeParse({...valid,code:" "}).success,false);assert.equal(discountAdminSchema.safeParse({...valid,value:0}).success,false);assert.equal(discountAdminSchema.safeParse({...valid,type:"fixed",value:-1}).success,false);assert.equal(discountAdminSchema.safeParse({...valid,minimumSubtotal:-1}).success,false);assert.equal(discountAdminSchema.safeParse({...valid,usageLimit:-1}).success,false);assert.equal(discountAdminSchema.safeParse({...valid,expiresAt:"2026-10-08T10:00:00.000Z"}).success,false);});
 test("order input cannot forge subtotal or discount amount",()=>{const input={customerName:"Test User",phone:"0771234567",address1:"45 Test Road",city:"Colombo",district:"Colombo",paymentMethod:"cod",items:[{productId:"p1",variantId:"v1",quantity:1}]};assert.equal(orderSchema.safeParse({...input,subtotal:1}).success,false);assert.equal(orderSchema.safeParse({...input,discountAmount:9999}).success,false);});
