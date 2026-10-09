@@ -10,10 +10,9 @@ export type DeliveryZoneLike = {
 
 export function normalizeLocation(value: unknown) {
   return String(value ?? "")
-    .normalize("NFKD")
-    .replace(/\p{M}/gu, "")
+    .normalize("NFKC")
     .toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/[^\p{L}\p{M}\p{N}]+/gu, " ")
     .trim()
     .replace(/\s+/g, " ")
     .replace(/\bcolombo\s*0*([1-9]|1[0-5])\b/g, "colombo $1");
