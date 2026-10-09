@@ -10,17 +10,15 @@ import { resolveDeliveryPricing } from "../../shared/delivery-pricing.js";
 import { paymentMethodAvailable } from "../../shared/payment-availability.js";
 
 export {
-  createReturn,
   findGuestOrder,
   getOrder,
   listOrders,
-  listReturns,
   receiptForOrder,
   recentOrders,
   updateOrder,
   updateOrderDetails,
-  updateReturn,
 } from "./orders-legacy.js";
+export { createReturn, listReturns, updateReturn } from "./returns.js";
 
 type OrderInput = {
   customerId?: string;
