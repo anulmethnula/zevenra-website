@@ -1,0 +1,47 @@
+name: Refresh jsPDF Lock
+
+on:
+  push:
+    branches: [dev-rebuild]
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: dev-rebuild
+
+      - name: Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Refresh jsPDF to patched release
+        run: npm install jspdf@4.2.1 --save-exact --package-lock-only
+
+      - name: Verify lock and audit
+        run: |
+          node -e "const p=require('./package.json'); if(p.dependencies.jspdf !== '4.2.1') process.exit(1)"
+          npm ci
+          npm audit --omit=dev --audit-level=high
+          npm run qa
+
+      - name: Commit regenerated dependency files
+        run: |
+          if git diff --quiet -- package.json package-lock.json; then
+            echo "Dependency files already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          git commit -m "fix: upgrade jsPDF to patched 4.2.1"
+          git push origin HEAD:dev-rebuild
