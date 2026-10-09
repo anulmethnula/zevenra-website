@@ -11,7 +11,21 @@ permissions:
 jobs:
   qa:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: zevenra_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d zevenra_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -42,6 +56,18 @@ jobs:
               exit 1
             fi
           done
+
+      - name: Apply migrations to clean PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          for file in database/migrations/*.sql; do
+            echo "Applying $file"
+            psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d zevenra_ci -f "$file"
+          done
+          expected="$(find database/migrations -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')"
+          applied="$(psql -At -h 127.0.0.1 -U postgres -d zevenra_ci -c 'SELECT count(*) FROM schema_migrations')"
+          test "$applied" = "$expected"
 
       - name: Required release assets
         run: |
