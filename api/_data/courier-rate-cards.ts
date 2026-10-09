@@ -1,12 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { query, withTransaction } from "../_db.js";
 import { normalizeCourierRateImportRows, parseCourierRateFile, suggestedCourierRateField } from "./courier-rate-parser.js";
+import { normalizeLocation } from "../../shared/delivery-match.js";
 
 const fields = ["fromBranch", "destinationDistrict", "destinationCity", "firstKgCharge", "additionalKgCharge"] as const;
 type Mapping = Record<(typeof fields)[number], string>;
 
 const text = (value: unknown) => String(value ?? "").trim();
-const key = (district: string, city: string) => `${district.trim().toLocaleLowerCase()}\u0000${city.trim().toLocaleLowerCase()}`;
+const key = (district: string, city: string) => `${normalizeLocation(district)}\u0000${normalizeLocation(city)}`;
 const moneyValue = (value: unknown) => {
   if (typeof value === "number") return Number.isFinite(value) ? value : NaN;
   const cleaned = text(value).replace(/[^0-9.-]/g, "");
@@ -48,7 +49,7 @@ export async function validateCourierRateSheet(input: Record<string, unknown>) {
       const existing=prior.get(duplicateKey), changeKind=!existing?"new":Number(existing.first_kg_charge)!==first||Number(existing.additional_kg_charge)!==additional?"changed":"unchanged";
       return {rowNumber:row.row_number,fromBranch,destinationDistrict:district,destinationCity:city,firstKgCharge:Number.isFinite(first)?first:null,additionalKgCharge:Number.isFinite(additional)?additional:null,errors,duplicateKey,changeKind};
     });
-    for(const row of normalized)if(occurrences.get(row.duplicateKey)!>1)row.errors.push("Duplicate destination district and city in this file.");
+    for(const row of normalized)if(occurrences.get(row.duplicateKey)!>1)row.errors.push("Duplicate normalized destination district and city in this file.");
     const updates=normalized.map((row)=>({rowNumber:row.rowNumber,fromBranch:row.fromBranch,destinationDistrict:row.destinationDistrict,destinationCity:row.destinationCity,firstKgCharge:row.firstKgCharge,additionalKgCharge:row.additionalKgCharge,errors:row.errors,changeKind:row.changeKind,status:row.errors.some(error=>error.startsWith("Duplicate"))?"duplicate":row.errors.length?"invalid":"valid"}));
     await client.query(`UPDATE courier_rate_import_rows target SET validation_status=x.status,validation_errors=x.errors,from_branch=x.from_branch,destination_district=x.destination_district,destination_city=x.destination_city,first_kg_charge=x.first_kg_charge,additional_kg_charge=x.additional_kg_charge,change_kind=x.change_kind FROM jsonb_to_recordset($2::jsonb) AS x(row_number int,status text,errors text[],from_branch text,destination_district text,destination_city text,first_kg_charge numeric,additional_kg_charge numeric,change_kind text) WHERE target.rate_card_id=$1 AND target.row_number=x.row_number`,[id,JSON.stringify(updates.map(row=>({row_number:row.rowNumber,status:row.status,errors:row.errors,from_branch:row.fromBranch,destination_district:row.destinationDistrict,destination_city:row.destinationCity,first_kg_charge:row.firstKgCharge,additional_kg_charge:row.additionalKgCharge,change_kind:row.changeKind})))]);
     const counts={valid:updates.filter(r=>r.status==="valid").length,invalid:updates.filter(r=>r.status==="invalid").length,duplicate:updates.filter(r=>r.status==="duplicate").length,new:updates.filter(r=>r.status==="valid"&&r.changeKind==="new").length,changed:updates.filter(r=>r.status==="valid"&&r.changeKind==="changed").length};
