@@ -13,6 +13,7 @@ import { money } from "../../config/site";
 import { useStore } from "../../features/store/StoreContext";
 import { adminApi } from "../../services/adminApi";
 import type { CourierProvider, DeliveryRate } from "../../types";
+import { defaultDeliveryZones } from "../../utils/delivery";
 
 type Notice = { tone: "success" | "error"; message: string };
 type TemplatePreview = {
@@ -34,23 +35,7 @@ const cloneCouriers = (value: CourierProvider[]) => structuredClone(value);
 const cloneRates = (value: DeliveryRate[]) => structuredClone(value);
 
 function starterZones(courierProviderId: string): DeliveryRate[] {
-  return [
-    ["Colombo Central", 350, false],
-    ["Colombo & Nearby Suburbs", 425, false],
-    ["Standard Outstation", 450, false],
-    ["Extended / Remote Outstation", 500, true],
-  ].map(([name, fee, fallback], index) => ({
-    id: crypto.randomUUID(),
-    courierProviderId,
-    name: String(name),
-    fee: Number(fee),
-    active: true,
-    districts: [],
-    cities: [],
-    postalCodes: [],
-    fallback: Boolean(fallback),
-    sortOrder: index + 1,
-  }));
+  return defaultDeliveryZones.map(zone=>({...structuredClone(zone),id:crypto.randomUUID(),courierProviderId}));
 }
 
 async function toBase64(file: File) {
@@ -62,13 +47,8 @@ async function toBase64(file: File) {
 }
 
 function downloadTemplate() {
-  const rows = [
-    ["Zone Name", "Fee", "Fallback", "Active"],
-    ["Colombo Central", "350", "No", "Yes"],
-    ["Colombo & Nearby Suburbs", "425", "No", "Yes"],
-    ["Standard Outstation", "450", "No", "Yes"],
-    ["Extended / Remote Outstation", "500", "Yes", "Yes"],
-  ];
+  const rows:string[][]=[["Zone Name","Fee","District","City / Area","Postal Code","Fallback","Active"]];
+  for(const zone of defaultDeliveryZones){const count=Math.max(1,zone.districts.length,zone.cities.length,zone.postalCodes.length);for(let index=0;index<count;index++)rows.push([zone.name,String(zone.fee),zone.districts[index]||"",zone.cities[index]||"",zone.postalCodes[index]||"",zone.fallback?"Yes":"No",zone.active?"Yes":"No"]);}
   const csv = rows
     .map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(","))
     .join("\n");
@@ -176,7 +156,7 @@ export default function DeliveryAdminPage() {
     setNotice(null);
   }
 
-  function useForCheckout(id: string) {
+  function selectForCheckout(id: string) {
     updateCourier(id, { active: true });
     setDefaultId(id);
     setSelectedId(id);
@@ -189,7 +169,7 @@ export default function DeliveryAdminPage() {
       setRates((items) => [...items, ...starterZones(courier.id)]);
   }
 
-  function useStarter(courierId: string) {
+  function applyStarterZones(courierId: string) {
     if (
       rates.some((rate) => rate.courierProviderId === courierId) &&
       !window.confirm("Replace this courier's unsaved delivery areas with the 4-area starter?")
@@ -345,7 +325,7 @@ export default function DeliveryAdminPage() {
           <p className="admin-kicker">Checkout logistics</p>
           <h1 className="admin-title mt-2">Delivery</h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-black/50">
-            Choose one courier for checkout. Customers never choose the courier. If that courier uses area pricing, customers simply choose their delivery area from a dropdown.
+            Choose one courier for checkout. Customers never choose a courier or shipping speed; the saved pricing rules calculate delivery automatically.
           </p>
         </div>
         <button type="button" className="btn btn-dark" onClick={addCourier}>
@@ -410,12 +390,13 @@ export default function DeliveryAdminPage() {
               <p className="text-xs leading-5 text-black/45">
                 {courier.pricingMode === "flat"
                   ? "One delivery fee for every customer."
-                  : "Customer chooses an area; the server uses that area's saved fee."}
+                  : "Postal code, city, and district determine the saved delivery area automatically."}
               </p>
               <div className="flex flex-wrap gap-2">
-                <button type="button" className="btn" onClick={() => setSelectedId(courier.id)}>Manage</button>
+                <button type="button" className="btn" onClick={() => setSelectedId(courier.id)}>Edit</button>
+                <button type="button" className="btn" onClick={() => updateCourier(courier.id,{active:!courier.active})}>{courier.active?"Disable":"Enable"}</button>
                 {!isDefault && (
-                  <button type="button" className="btn btn-dark" onClick={() => useForCheckout(courier.id)}>
+                  <button type="button" className="btn btn-dark" onClick={() => selectForCheckout(courier.id)}>
                     Use for checkout
                   </button>
                 )}
@@ -464,7 +445,7 @@ export default function DeliveryAdminPage() {
                   onClick={() => setPricingMode(selected, "flat")}
                   className={"rounded-xl border p-4 text-left " + (selected.pricingMode === "flat" ? "border-black bg-black text-white" : "border-black/[.08] bg-[#faf9f6]")}
                 >
-                  <b className="block text-sm">One price nationwide</b>
+                  <b className="block text-sm">Flat-rate pricing</b>
                   <span className="mt-1 block text-[11px] opacity-60">Example: LKR 400 for every address.</span>
                 </button>
                 <button
@@ -472,8 +453,8 @@ export default function DeliveryAdminPage() {
                   onClick={() => setPricingMode(selected, "zone")}
                   className={"rounded-xl border p-4 text-left " + (selected.pricingMode === "zone" ? "border-black bg-black text-white" : "border-black/[.08] bg-[#faf9f6]")}
                 >
-                  <b className="block text-sm">Customer selects delivery area</b>
-                  <span className="mt-1 block text-[11px] opacity-60">Example: Colombo Central, Suburbs, Outstation.</span>
+                  <b className="block text-sm">Area-based pricing</b>
+                  <span className="mt-1 block text-[11px] opacity-60">Postal code, city, district, then outstation fallback.</span>
                 </button>
               </div>
             </div>
@@ -493,11 +474,11 @@ export default function DeliveryAdminPage() {
                     <div>
                       <p className="text-sm font-medium">Delivery areas shown at checkout</p>
                       <p className="mt-1 text-[11px] leading-5 text-black/45">
-                        Customers see only these names and prices in a dropdown. They never choose the courier.
+                        Checkout matches these areas automatically and shows the matched area name with its fee.
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <button type="button" className="btn" onClick={() => useStarter(selected.id)}>Use 4-area starter</button>
+                      <button type="button" className="btn" onClick={() => applyStarterZones(selected.id)}>Use 4-area starter</button>
                       <button type="button" className="btn" onClick={() => addZone(selected.id)}><Plus size={14} /> Add area</button>
                     </div>
                   </div>

@@ -4,6 +4,7 @@ import { withTransaction } from "../_db.js";
 import { receiptAsset } from "../_receipt-asset.js";
 import { mapOrder } from "./mappers.js";
 import { validateDiscount } from "./discounts.js";
+import { matchDeliveryZone } from "../../shared/delivery-match.js";
 
 export {
   createReturn,
@@ -30,7 +31,6 @@ type OrderInput = {
   district: string;
   postalCode?: string;
   deliveryNotes?: string;
-  deliveryRatePlan?: string;
   paymentMethod: "cod" | "bank";
   paymentStatus?: string;
   paymentReference?: string;
@@ -60,14 +60,6 @@ type Line = {
 };
 
 const orderWithItems = `SELECT o.*,COALESCE((SELECT jsonb_agg(to_jsonb(oi) ORDER BY oi.id) FROM order_items oi WHERE oi.order_id=o.order_id),'[]') AS items,(SELECT count(*)::int FROM order_returns r WHERE r.order_id=o.order_id) AS return_count FROM orders o`;
-const normalize = (value: string) =>
-  value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-const postalMatches = (rule: string, postal: string) =>
-  rule.endsWith("*") ? postal.startsWith(rule.slice(0, -1)) : postal === rule;
 const settingValue = (
   rows: Array<{ key: string; value: unknown }>,
   key: string,
@@ -112,66 +104,12 @@ async function deliverySnapshot(
         [defaultId],
       )
     ).rows;
-    const requestedRatePlan = String(input.deliveryRatePlan || "").trim();
-    const district = normalize(input.district);
-
-    if (requestedRatePlan) {
-      const selected = rates.find((rate) => String(rate.id) === requestedRatePlan);
-      if (!selected)
-        throw new Error("The selected delivery area is no longer available. Please choose it again.");
-      const districts = Array.isArray(selected.districts)
-        ? (selected.districts as string[])
-        : [];
-      if (
-        districts.length &&
-        !districts.some((item) => normalize(String(item)) === district)
-      )
-        throw new Error("The selected delivery area does not match the selected district.");
-      fee = Number(selected.fee) || 0;
-      zoneName = String(selected.name);
-      ratePlan = String(selected.id);
-    } else {
-      // Backward-compatible automatic matching for manual/admin-created orders
-      // and older clients that do not submit an area selection.
-      const postal = String(input.postalCode || "").replace(/\D/g, ""),
-        city = normalize(input.city);
-      const matches = rates
-        .map((rate) => {
-          const postals = Array.isArray(rate.postal_codes) ? (rate.postal_codes as string[]) : [],
-            cities = Array.isArray(rate.cities) ? (rate.cities as string[]) : [],
-            districts = Array.isArray(rate.districts) ? (rate.districts as string[]) : [];
-          if (rate.fallback) return { rate, score: 0 };
-          if (
-            districts.length &&
-            !districts.some((item) => normalize(String(item)) === district)
-          )
-            return { rate, score: -1 };
-          if (
-            postal &&
-            postals.some((item) =>
-              postalMatches(String(item).replace(/\s/g, ""), postal),
-            )
-          )
-            return { rate, score: 300 };
-          if (city && cities.some((item) => normalize(String(item)) === city))
-            return { rate, score: 200 };
-          if (districts.length && !cities.length && !postals.length)
-            return { rate, score: 100 };
-          return { rate, score: -1 };
-        })
-        .filter((item) => item.score >= 0)
-        .sort(
-          (a, b) =>
-            b.score - a.score ||
-            Number(a.rate.sort_order) - Number(b.rate.sort_order),
-        );
-      const selected = matches[0]?.rate;
-      if (!selected)
-        throw new Error("Delivery is not configured for this address.");
-      fee = Number(selected.fee) || 0;
-      zoneName = String(selected.name);
-      ratePlan = String(selected.id);
-    }
+    const normalizedRates=rates.map(rate=>({id:String(rate.id),name:String(rate.name),fee:Number(rate.fee)||0,active:Boolean(rate.active),fallback:Boolean(rate.fallback),sortOrder:Number(rate.sort_order)||0,districts:Array.isArray(rate.districts)?rate.districts.map(String):[],cities:Array.isArray(rate.cities)?rate.cities.map(String):[],postalCodes:Array.isArray(rate.postal_codes)?rate.postal_codes.map(String):[]}));
+    const selected=matchDeliveryZone(normalizedRates,input);
+    if (!selected) throw new Error("Delivery is not configured for this address.");
+    fee = Number(selected.fee) || 0;
+    zoneName = String(selected.name);
+    ratePlan = String(selected.id);
   }
 
   if (!truthy(settingValue(settings, "deliveryEnabled", true))) fee = 0;

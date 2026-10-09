@@ -28,17 +28,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!validOrigin(req, originEnv()))
       return json(res, { error: "Invalid request origin" }, 403);
     const raw = body(req),
-      source = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {},
-      deliveryRatePlan = String(source.deliveryRatePlan || "").trim(),
-      orderInput = { ...source };
-    if (deliveryRatePlan.length > 100)
-      return json(res, { error: "Choose a valid delivery area." }, 400);
-    delete orderInput.deliveryRatePlan;
-    const payload = orderSchema.parse(orderInput),
+      source = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+    const payload = orderSchema.parse(source),
       identity = readCustomerSession(req),
       order = await createOrder({
         ...payload,
-        deliveryRatePlan: deliveryRatePlan || undefined,
         customerId: identity?.id,
         email: identity?.email || payload.email,
       });

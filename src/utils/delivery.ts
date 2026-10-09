@@ -1,6 +1,7 @@
 import type { CourierProvider, DeliveryRate } from "../types";
+import { matchDeliveryZone, normalizeLocation } from "../../shared/delivery-match";
 type PublicCourier=Pick<CourierProvider,"id"|"pricingMode"|"flatRate"|"active">;
-type PublicDeliveryRate=Pick<DeliveryRate,"courierProviderId"|"fee"|"active"|"districts"|"cities"|"postalCodes"|"fallback"|"sortOrder">;
+type PublicDeliveryRate=Pick<DeliveryRate,"id"|"name"|"courierProviderId"|"fee"|"active"|"districts"|"cities"|"postalCodes"|"fallback"|"sortOrder">;
 
 export const legacyCourierId = "courier-legacy-zone";
 export const defaultCourier: CourierProvider = {
@@ -159,58 +160,12 @@ export const defaultDeliveryZones: DeliveryRate[] = [
     sortOrder: 999,
   },
 ];
-const normalize = (value: string) =>
-  value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-const postalMatches = (rule: string, postalCode: string) => {
-  const clean = rule.replace(/\s/g, "");
-  return clean.endsWith("*")
-    ? postalCode.startsWith(clean.slice(0, -1))
-    : postalCode === clean;
-};
 export function findDeliveryZone(
   zones: PublicDeliveryRate[],
   address: { district: string; city: string; postalCode: string },
   courierProviderId?: string,
 ) {
-  const district = normalize(address.district),
-    city = normalize(address.city),
-    postalCode = address.postalCode.replace(/\D/g, ""),
-    active = zones
-      .filter(
-        (zone) =>
-          zone.active &&
-          (!courierProviderId || zone.courierProviderId === courierProviderId),
-      )
-      .sort((a, b) => a.sortOrder - b.sortOrder);
-  const matches = active
-    .map((zone) => {
-      if (zone.fallback) return { zone, score: -1 };
-      const districtMatch =
-        !zone.districts.length ||
-        zone.districts.some((value) => normalize(value) === district);
-      if (!districtMatch) return { zone, score: -1 };
-      if (
-        postalCode &&
-        zone.postalCodes.some((value) => postalMatches(value, postalCode))
-      )
-        return { zone, score: 300 };
-      if (city && zone.cities.some((value) => normalize(value) === city))
-        return { zone, score: 200 };
-      if (
-        !zone.cities.length &&
-        !zone.postalCodes.length &&
-        zone.districts.length
-      )
-        return { zone, score: 100 };
-      return { zone, score: -1 };
-    })
-    .filter((result) => result.score >= 0)
-    .sort((a, b) => b.score - a.score || a.zone.sortOrder - b.zone.sortOrder);
-  return matches[0]?.zone || active.find((zone) => zone.fallback);
+  return matchDeliveryZone(zones.filter(zone=>!courierProviderId||zone.courierProviderId===courierProviderId),address);
 }
 export function checkoutCourier(
   couriers: PublicCourier[],
@@ -231,7 +186,7 @@ export function deliveryQuote(
 }
 
 export function cityDistrictMismatch(zones:PublicDeliveryRate[],address:{district:string;city:string},courierProviderId?:string){
-  const city=normalize(address.city),district=normalize(address.district);
+  const city=normalizeLocation(address.city),district=normalizeLocation(address.district);
   if(!city||!district)return false;
-  return zones.some(zone=>zone.active&&!zone.fallback&&(!courierProviderId||zone.courierProviderId===courierProviderId)&&zone.cities.some(value=>normalize(value)===city)&&zone.districts.length>0&&!zone.districts.some(value=>normalize(value)===district));
+  return zones.some(zone=>zone.active&&!zone.fallback&&(!courierProviderId||zone.courierProviderId===courierProviderId)&&zone.cities.some(value=>normalizeLocation(value)===city)&&zone.districts.length>0&&!zone.districts.some(value=>normalizeLocation(value)===district));
 }

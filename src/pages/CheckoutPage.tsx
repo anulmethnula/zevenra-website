@@ -11,7 +11,7 @@ import { useStore } from "../features/store/StoreContext";
 import { api } from "../services/api";
 import { uploadPaymentReceipt } from "../services/paymentReceiptUpload";
 import type { Order, PaymentMethod } from "../types";
-import { checkoutCourier } from "../utils/delivery";
+import { checkoutCourier, deliveryQuote } from "../utils/delivery";
 import { checkoutAmounts } from "../utils/checkoutAmounts";
 import { paymentReadinessMessage, postalCodeError } from "../utils/checkoutValidation";
 import { rememberGuestOrder } from "../utils/guestOrders";
@@ -81,8 +81,7 @@ export default function CheckoutPage() {
     [district, setDistrict] = useState(user?.district || ""),
     [city, setCity] = useState(user?.city || ""),
     [postalCode, setPostalCode] = useState(user?.postalCode || ""),
-    [postalTouched, setPostalTouched] = useState(false),
-    [deliveryRatePlan, setDeliveryRatePlan] = useState("");
+    [postalTouched, setPostalTouched] = useState(false);
   const [error, setError] = useState(""),
     [fieldErrors, setFieldErrors] = useState<Record<string, string>>({}),
     [busy, setBusy] = useState(false),
@@ -169,18 +168,12 @@ export default function CheckoutPage() {
     postalFormatError = postalCodeError(postalCode),
     addressReady = Boolean(district && city.trim().length >= 2 && !postalFormatError);
   const courier = checkoutCourier(checkout.data?.couriers || [], settings.defaultCourierProviderId),
-    allRates = checkout.data?.deliveryRates || [],
-    areaOptions = allRates.filter((rate) => rate.active && rate.courierProviderId === courier?.id && (!district || !rate.districts.length || rate.districts.includes(district) || rate.fallback)).sort((a, b) => a.sortOrder - b.sortOrder),
-    selectedArea = areaOptions.find((rate) => rate.id === deliveryRatePlan);
-  const quote = addressReady && courier ? (courier.pricingMode === "flat" ? { fee: courier.flatRate } : selectedArea ? { fee: selectedArea.fee, zone: selectedArea } : undefined) : undefined,
+    allRates = checkout.data?.deliveryRates || [];
+  const quote = addressReady ? deliveryQuote(courier,allRates,{district,city,postalCode}) : undefined,
     deliveryReady = !settings.deliveryEnabled || Boolean(quote);
   const deliveryFee = settings.freeDeliveryThreshold > 0 && subtotal >= settings.freeDeliveryThreshold ? 0 : settings.deliveryEnabled ? (quote?.fee ?? 0) : 0,
     amounts = checkoutAmounts(subtotal, deliveryFee, !settings.deliveryEnabled || (addressReady && deliveryReady), discount?.amount || 0);
-  const deliveryMismatch = Boolean(addressReady && settings.deliveryEnabled && deliveryRatePlan && courier?.pricingMode === "zone" && !selectedArea),
-    paymentStatus =
-      courier?.pricingMode === "zone" && addressReady && !selectedArea
-        ? "Choose your delivery area to calculate the total."
-        : paymentReadinessMessage({
+  const paymentStatus = paymentReadinessMessage({
             city,
             district,
             postalError: postalFormatError,
@@ -256,13 +249,6 @@ export default function CheckoutPage() {
       setError("No payment method is currently available.");
       return;
     }
-    if (settings.deliveryEnabled && courier?.pricingMode === "zone" && !selectedArea) {
-      const e = { deliveryRatePlan: "Choose your delivery area." };
-      setFieldErrors(e);
-      setError("Choose your delivery area before placing the order.");
-      focusFirst(e);
-      return;
-    }
     if (payment === "bank" && !receiptUrl) {
       const e = {
         paymentReceiptUrl: "Upload your bank transfer receipt before placing the order.",
@@ -297,7 +283,7 @@ export default function CheckoutPage() {
     }
     if (settings.deliveryEnabled && !quote) {
       const e = {
-        deliveryRatePlan: courier?.pricingMode === "zone" ? "Choose your delivery area." : "Delivery is unavailable for these details.",
+        city: "Delivery is unavailable for these details.",
       };
       setFieldErrors(e);
       setError("We could not calculate delivery from these details.");
@@ -309,7 +295,6 @@ export default function CheckoutPage() {
       const order = await api.createOrder({
         ...parsed.data,
         postalCode: parsed.data.postalCode || "",
-        deliveryRatePlan: courier?.pricingMode === "zone" ? selectedArea?.id : undefined,
         discountCode: discount?.code,
         items: cart.items,
       });
@@ -448,9 +433,7 @@ export default function CheckoutPage() {
                       value={district}
                       onChange={(event) => {
                         setDistrict(event.target.value);
-                        setDeliveryRatePlan("");
                         clearError("district");
-                        clearError("deliveryRatePlan");
                       }}
                     >
                       <option value="" disabled>
@@ -477,46 +460,19 @@ export default function CheckoutPage() {
                       clearError("postalCode");
                     }}
                   />
-                  {settings.deliveryEnabled && courier?.pricingMode === "zone" && (
-                    <label className="label sm:col-span-2">
-                      Delivery area <i>*</i>
-                      <select
-                        name="deliveryRatePlan"
-                        className={`field mt-1.5 ${fieldErrors.deliveryRatePlan ? "border-red-700" : ""}`}
-                        value={deliveryRatePlan}
-                        onChange={(event) => {
-                          setDeliveryRatePlan(event.target.value);
-                          clearError("deliveryRatePlan");
-                        }}
-                      >
-                        <option value="">Select delivery area</option>
-                        {areaOptions.map((rate) => (
-                          <option key={rate.id} value={rate.id}>
-                            {rate.name} — {money(rate.fee)}
-                          </option>
-                        ))}
-                      </select>
-                      <InlineError id="deliveryRatePlan-error" message={fieldErrors.deliveryRatePlan} />
-                    </label>
-                  )}
                 </div>
                 <div className="mt-6">
                   <p className="eyebrow mb-3 text-ink/50">Delivery</p>
                   <div className={`border p-4 ${amounts.ready ? "border-black bg-black/[.025]" : "border-black/10"}`}>
                     <div className="flex items-center justify-between gap-4">
                       <span>
-                        <b className="block text-sm">{selectedArea?.name || orderDeliveryLabel(courier?.pricingMode)}</b>
+                        <b className="block text-sm">{quote?.zone?.name || orderDeliveryLabel(courier?.pricingMode)}</b>
                         <small className="mt-1 block text-xs text-ink/50">{amounts.ready ? "Calculated using the store's configured courier rate." : "Enter your delivery details to calculate the rate."}</small>
                       </span>
                       {amounts.ready ? <b className="text-sm">{amounts.deliveryFee ? money(amounts.deliveryFee) : "Free"}</b> : null}
                     </div>
                   </div>
                 </div>
-                {deliveryMismatch && (
-                  <p role="alert" className="mt-4 border-l-2 border-red-800 bg-red-950/[.04] p-3 text-xs leading-5 text-red-900">
-                    That delivery area is not available for the selected district. Please choose it again.
-                  </p>
-                )}
               </Section>
               <Section number="03" title="Optional information">
                 <details className="group border border-black/10 bg-white/20">

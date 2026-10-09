@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { query, withTransaction } from "../_db.js";
 import { mapOrder, mapPreorder } from "./mappers.js";
+import { matchDeliveryZone } from "../../shared/delivery-match.js";
 
 const activeStatuses = [
   "new",
@@ -215,12 +216,8 @@ export async function convertPreorderToOrder(input: Record<string, unknown>) {
       zoneName = "Flat rate",
       ratePlan = "flat";
     if (courier.pricing_mode === "zone") {
-      const zone = (
-        await client.query<Record<string, unknown>>(
-          "SELECT * FROM delivery_rates WHERE courier_provider_id=$1 AND active=true AND (fallback=true OR $2=ANY(districts)) ORDER BY fallback,sort_order LIMIT 1",
-          [defaultCourier, preorder.district],
-        )
-      ).rows[0];
+      const zones=(await client.query<Record<string,unknown>>("SELECT * FROM delivery_rates WHERE courier_provider_id=$1 AND active=true ORDER BY sort_order",[defaultCourier])).rows.map(zone=>({id:String(zone.id),name:String(zone.name),fee:Number(zone.fee)||0,active:Boolean(zone.active),fallback:Boolean(zone.fallback),sortOrder:Number(zone.sort_order)||0,districts:Array.isArray(zone.districts)?zone.districts.map(String):[],cities:Array.isArray(zone.cities)?zone.cities.map(String):[],postalCodes:Array.isArray(zone.postal_codes)?zone.postal_codes.map(String):[]}));
+      const zone=matchDeliveryZone(zones,{district:String(preorder.district),city:String(preorder.city),postalCode:String(preorder.postal_code||"")});
       if (!zone)
         throw new Error("Delivery is not configured for this address.");
       fee = Number(zone.fee);
@@ -229,6 +226,7 @@ export async function convertPreorderToOrder(input: Record<string, unknown>) {
     }
     const price = Number(preorder.confirmed_price),
       threshold = Number(setting("freeDeliveryThreshold", 0));
+    if (!(setting("deliveryEnabled", true) === true || String(setting("deliveryEnabled", true)).toLowerCase() === "true")) fee=0;
     if (threshold > 0 && price * Number(preorder.quantity) >= threshold)
       fee = 0;
     const orderId = newId("ZEV");

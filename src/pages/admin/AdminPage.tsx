@@ -3967,12 +3967,11 @@ function FulfilmentPanel({
   };
   return (
     <Panel title="Fulfilment">
-      <div className="mb-4 border-l-2 border-bronze pl-3 text-xs leading-5">
-        <b>Checkout rate:</b> {order.courierName || "Legacy delivery"} ·{" "}
-        {order.deliveryPricingMode === "flat"
-          ? "Flat rate"
-          : order.deliveryZoneName || "Zone based"}{" "}
-        · {money(Number(order.deliveryFee))}
+      <div className="mb-4 grid gap-3 border-l-2 border-bronze bg-black/[.025] p-3 text-xs sm:grid-cols-2">
+        <Info label="Courier" value={order.courierName || "Legacy delivery"}/>
+        <Info label="Pricing mode" value={order.deliveryPricingMode === "flat" ? "Flat rate" : "Area based"}/>
+        <Info label="Delivery zone" value={order.deliveryZoneName || (order.deliveryPricingMode === "flat" ? "Nationwide" : "Not recorded")}/>
+        <Info label="Delivery fee" value={Number(order.deliveryFee)?money(Number(order.deliveryFee)):"Complimentary"}/>
       </div>
       <div className="grid gap-3">
         <label className="text-xs">

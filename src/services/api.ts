@@ -92,9 +92,7 @@ export const api = {
       status: "new",
     };
   },
-  createOrder: async (
-    data: CheckoutData & { deliveryRatePlan?: string },
-  ): Promise<Order> => {
+  createOrder: async (data: CheckoutData): Promise<Order> => {
     if (!demo)
       return request<Order>("/orders", {
         method: "POST",
