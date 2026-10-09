@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import adminHandler from "../api/admin/[action].js";
@@ -85,6 +86,13 @@ test("web order submission requires a postal code before any database work", asy
   );
   assert.equal(state.status, 400);
   assert.deepEqual(state.body, { error: "Enter a valid 5-digit postal code." });
+});
+
+test("authenticated account history never claims guest orders by matching email alone", async () => {
+  const source = await readFile(new URL("../api/_data/customers.ts", import.meta.url), "utf8");
+  assert.match(source, /WHERE o\.customer_id=\$1 ORDER BY/);
+  assert.match(source, /FROM preorders WHERE customer_id=\$1 ORDER BY/);
+  assert.doesNotMatch(source, /customer_id IS NULL AND lower\([^)]*email/);
 });
 
 test("admin internal error is logged and sanitized", async () => {
