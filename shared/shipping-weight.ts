@@ -17,6 +17,12 @@ export function calculateShippingWeight(
   items: ShippingWeightItem[],
   packagingWeightGrams: number,
 ): ShippingWeightResult {
+  if (
+    !Number.isInteger(Number(packagingWeightGrams)) ||
+    Number(packagingWeightGrams) <= 0
+  )
+    throw new Error("Packaging weight is not configured.");
+
   const missing: Array<{ productId: string; productName?: string }> = [];
   let totalProductWeightGrams = 0;
 
@@ -36,6 +42,6 @@ export function calculateShippingWeight(
     ready: true,
     totalProductWeightGrams,
     totalShippingWeightGrams:
-      totalProductWeightGrams + Math.max(0, Number(packagingWeightGrams) || 0),
+      totalProductWeightGrams + Number(packagingWeightGrams),
   };
 }
