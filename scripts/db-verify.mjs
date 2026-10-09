@@ -47,10 +47,18 @@ try {
   const checks = {
     orphanVariants:
       "SELECT count(*)::int AS count FROM variants v LEFT JOIN products p ON p.id=v.product_id WHERE p.id IS NULL",
+    blankVariantSkus:
+      "SELECT count(*)::int AS count FROM variants WHERE btrim(COALESCE(sku,''))=''",
     orphanItems:
       "SELECT count(*)::int AS count FROM order_items i LEFT JOIN orders o ON o.order_id=i.order_id WHERE o.order_id IS NULL",
     orphanProductCollections:
       "SELECT count(*)::int AS count FROM product_collections pc LEFT JOIN products p ON p.id=pc.product_id LEFT JOIN collections c ON c.id=pc.collection_id WHERE p.id IS NULL OR c.id IS NULL",
+    publishedProductsMissingShippingWeight:
+      "SELECT count(*)::int AS count FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.status='published' AND p.shipping_weight_grams IS NULL AND c.default_shipping_weight_grams IS NULL",
+    publishedProductsInactiveCategory:
+      "SELECT count(*)::int AS count FROM products p JOIN categories c ON c.id=p.category_id WHERE p.status='published' AND c.active IS NOT TRUE",
+    publishedProductsWithoutActiveVariant:
+      "SELECT count(*)::int AS count FROM products p WHERE p.status='published' AND NOT EXISTS(SELECT 1 FROM variants v WHERE v.product_id=p.id AND v.active=true)",
     activePreordersMissingProduct:
       "SELECT count(*)::int AS count FROM preorders pr LEFT JOIN products p ON p.id=pr.product_id WHERE pr.status NOT IN ('cancelled','converted') AND p.id IS NULL",
     activePreordersMissingVariant:
@@ -76,6 +84,14 @@ try {
       "SELECT count(*)::int AS count FROM courier_rates r JOIN courier_rate_cards c ON c.id=r.rate_card_id WHERE r.courier_provider_id<>c.courier_provider_id",
     multipleActiveRateCards:
       "SELECT count(*)::int AS count FROM (SELECT courier_provider_id FROM courier_rate_cards WHERE status='active' GROUP BY courier_provider_id HAVING count(*)>1) invalid",
+    packagingWeightMissingOrInvalid:
+      "SELECT CASE WHEN EXISTS(SELECT 1 FROM site_settings WHERE key='packagingWeightGrams' AND (value #>> '{}') ~ '^[0-9]+$' AND (value #>> '{}')::int>0) THEN 0 ELSE 1 END::int AS count",
+    enabledCheckoutWithoutPaymentMethod:
+      "WITH s AS (SELECT key,lower(value #>> '{}') value FROM site_settings) SELECT CASE WHEN COALESCE((SELECT value='true' FROM s WHERE key='ordersEnabled'),true) AND NOT COALESCE((SELECT value='true' FROM s WHERE key='codEnabled'),false) AND NOT COALESCE((SELECT value='true' FROM s WHERE key='bankEnabled'),(SELECT value='true' FROM s WHERE key='bankTransferEnabled'),false) THEN 1 ELSE 0 END::int AS count",
+    enabledCheckoutWithoutActiveDefaultCourier:
+      "WITH s AS (SELECT key,value #>> '{}' value FROM site_settings), enabled AS (SELECT COALESCE((SELECT lower(value)='true' FROM s WHERE key='ordersEnabled'),true) ok), default_id AS (SELECT COALESCE((SELECT value FROM s WHERE key='defaultCourierProviderId'),'') id) SELECT CASE WHEN (SELECT ok FROM enabled) AND NOT EXISTS(SELECT 1 FROM courier_providers p,default_id d WHERE p.id=d.id AND p.active=true) THEN 1 ELSE 0 END::int AS count",
+    activeZoneCourierWithoutFallback:
+      "WITH s AS (SELECT value #>> '{}' id FROM site_settings WHERE key='defaultCourierProviderId') SELECT CASE WHEN EXISTS(SELECT 1 FROM courier_providers p JOIN s ON s.id=p.id WHERE p.active=true AND p.pricing_mode='zone') AND (SELECT count(*) FROM delivery_rates r JOIN s ON s.id=r.courier_provider_id WHERE r.active=true AND r.fallback=true)<>1 THEN 1 ELSE 0 END::int AS count",
   };
   for (const [name, sql] of Object.entries(checks)) {
     const count = (await pool.query(sql)).rows[0].count;
