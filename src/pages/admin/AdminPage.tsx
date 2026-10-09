@@ -216,39 +216,42 @@ function Dashboard() {
         }
       />
       <div className="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {[
+        {([
           [
             "Published products",
             stats?.publishedProducts || 0,
+            "/admin/products?status=published",
           ],
-          ["Low stock", stats?.lowStockProducts || 0],
-          ["Orders today", stats?.ordersToday || 0],
-          ["Pending orders", stats?.pending || 0],
-          ["Confirmed", stats?.confirmed || 0],
-          ["Packed", stats?.packed || 0],
-          ["Shipped", stats?.shipped || 0],
-          ["Delivered", stats?.delivered || 0],
-          ["Cancelled", stats?.cancelled || 0],
+          ["Low stock", stats?.lowStockProducts || 0, "/admin/products?stock=low"],
+          ["Orders today", stats?.ordersToday || 0, "/admin/orders?date=today"],
+          ["Pending orders", stats?.pending || 0, "/admin/orders?status=pending"],
+          ["Confirmed", stats?.confirmed || 0, "/admin/orders?status=confirmed"],
+          ["Packed", stats?.packed || 0, "/admin/orders?status=packed"],
+          ["Shipped", stats?.shipped || 0, "/admin/orders?status=shipped"],
+          ["Delivered", stats?.delivered || 0, "/admin/orders?status=delivered"],
+          ["Cancelled", stats?.cancelled || 0, "/admin/orders?status=cancelled"],
           [
             "Product revenue",
             money(stats?.productRevenue ?? stats?.revenue ?? 0),
+            "/admin/orders?status=delivered",
           ],
-          ["Delivery collected", money(stats?.deliveryCollected || 0)],
-          ["Items sold", stats?.itemsSold || 0],
-          ["Pre-order requests", stats?.preorderNew || 0],
+          ["Delivery collected", money(stats?.deliveryCollected || 0), "/admin/orders?status=delivered"],
+          ["Items sold", stats?.itemsSold || 0, "/admin/orders?status=delivered"],
+          ["Pre-order requests", stats?.preorderNew || 0, "/admin/preorders?status=new"],
           [
             "Batch progress",
             (stats?.preorderConfirmed || 0) +
               " / " +
               (stats?.preorderBatchTarget || 6),
+            "/admin/preorders?status=confirmed",
           ],
-        ].map(([label, value]) => (
-          <div key={label} className="admin-metric-card border p-4 sm:p-5">
+        ] as Array<[string,string|number,string]>).map(([label, value, to]) => (
+          <Link key={label} to={to} aria-label={`View ${label}`} className="admin-metric-card block border p-4 transition hover:-translate-y-0.5 hover:border-bronze/50 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bronze sm:p-5">
             <p className="text-xs text-black/50">{label}</p>
             <p className="display mt-3 break-words text-2xl sm:mt-4 sm:text-3xl">
               {value}
             </p>
-          </div>
+          </Link>
         ))}
       </div>
       <p className="mt-4 text-xs leading-5 text-black/45">
@@ -552,7 +555,7 @@ export function Products() {
 type ProductListRow = { id:string;name:string;slug:string;price:number;status:string;preorderEnabled:boolean;updatedAt:string;categoryId:string;categoryName:string;parentCategoryId:string;parentCategoryName:string;thumbnail:string;variantCount:number;totalStock:number;lowStockCount:number };
 type ProductListResponse = { items:ProductListRow[];page:number;pageSize:number;total:number;pageCount:number;categoryCounts:Record<string,number> };
 function ProductsWorkspace() {
-  const { data }=useStore(), [query,setQuery]=useState(""),[debounced,setDebounced]=useState(""),[category,setCategory]=useState("all"),[status,setStatus]=useState("all"),[stock,setStock]=useState("all"),[sort,setSort]=useState("updated_desc"),[page,setPage]=useState(1),[result,setResult]=useState<ProductListResponse>({items:[],page:1,pageSize:25,total:0,pageCount:1,categoryCounts:{}}),[loading,setLoading]=useState(true),[error,setError]=useState(""),[menu,setMenu]=useState(""),[danger,setDanger]=useState<ProductListRow|null>(null);
+  const { data }=useStore(), location=useLocation(), initialParams=new URLSearchParams(location.search), [query,setQuery]=useState(""),[debounced,setDebounced]=useState(""),[category,setCategory]=useState("all"),[status,setStatus]=useState(()=>initialParams.get("status")||"all"),[stock,setStock]=useState(()=>initialParams.get("stock")||"all"),[sort,setSort]=useState("updated_desc"),[page,setPage]=useState(1),[result,setResult]=useState<ProductListResponse>({items:[],page:1,pageSize:25,total:0,pageCount:1,categoryCounts:{}}),[loading,setLoading]=useState(true),[error,setError]=useState(""),[menu,setMenu]=useState(""),[danger,setDanger]=useState<ProductListRow|null>(null);
   const main=data.categories.filter(item=>item.active&&!item.parentId).sort((a,b)=>a.sortOrder-b.sortOrder), selectedMain=main.find(item=>item.id===category)||data.categories.find(item=>item.id===category&&item.parentId), mainId=selectedMain?.parentId||selectedMain?.id||"", subs=data.categories.filter(item=>item.active&&item.parentId===mainId).sort((a,b)=>a.sortOrder-b.sortOrder);
   useEffect(()=>{const timer=setTimeout(()=>setDebounced(query.trim()),300);return()=>clearTimeout(timer);},[query]);
   const load=useCallback(async(signal?:AbortSignal)=>{setLoading(true);setError("");try{const next=await adminApi.get<Partial<ProductListResponse>>("listAdminProducts",{q:debounced,category,status,stock,sort,page:String(page),pageSize:"25"},signal);setResult({items:next.items??[],page:next.page??page,pageSize:next.pageSize??25,total:next.total??0,pageCount:next.pageCount??1,categoryCounts:next.categoryCounts??{}});}catch(reason){if(reason instanceof DOMException&&reason.name==="AbortError")return;setError(reason instanceof Error?reason.message:"Could not load products.");}finally{if(!signal?.aborted)setLoading(false);}},[category,debounced,page,sort,status,stock]);
@@ -2199,8 +2202,10 @@ type PreorderAdminDraft = {
 };
 function Preorders() {
   const store = useStore(),
+    location = useLocation(),
+    initialParams = new URLSearchParams(location.search),
     [query, setQuery] = useState(""),
-    [filter, setFilter] = useState("active"),
+    [filter, setFilter] = useState(()=>initialParams.get("status")||"active"),
     [page, setPage] = useState(1),
     [open, setOpen] = useState(""),
     [busy, setBusy] = useState(""),
@@ -2974,10 +2979,12 @@ function downloadOrdersCsv(rows: Order[]) {
 }
 function Orders() {
   const { admin, updateOrder, data, loadAdmin } = useStore(),
+    location = useLocation(),
+    initialParams = new URLSearchParams(location.search),
     [query, setQuery] = useState(""),
-    [orderFilter, setOrderFilter] = useState("all"),
+    [orderFilter, setOrderFilter] = useState(()=>initialParams.get("status")||"all"),
     [paymentFilter, setPaymentFilter] = useState("all"),
-    [dateFilter, setDateFilter] = useState("all"),
+    [dateFilter, setDateFilter] = useState(()=>initialParams.get("date")||"all"),
     [page, setPage] = useState(1),
     [open, setOpen] = useState(""),
     [details, setDetails] = useState<Record<string, AdminOrderDetail>>({}),
