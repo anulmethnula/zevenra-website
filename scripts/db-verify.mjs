@@ -47,8 +47,8 @@ try {
   const checks = {
     orphanVariants:
       "SELECT count(*)::int AS count FROM variants v LEFT JOIN products p ON p.id=v.product_id WHERE p.id IS NULL",
-    blankVariantSkus:
-      "SELECT count(*)::int AS count FROM variants WHERE btrim(COALESCE(sku,''))=''",
+    duplicateNonblankVariantSkus:
+      "SELECT count(*)::int AS count FROM (SELECT sku FROM variants WHERE btrim(COALESCE(sku,''))<>'' GROUP BY sku HAVING count(*)>1) invalid",
     orphanItems:
       "SELECT count(*)::int AS count FROM order_items i LEFT JOIN orders o ON o.order_id=i.order_id WHERE o.order_id IS NULL",
     orphanProductCollections:
