@@ -76,15 +76,32 @@ test("unsafe product image URLs are omitted", async () => {
 test("lookup normalization accepts copied IDs and Sri Lankan phone formats", async () => {
   assert.equal(normalizeOrderIdForLookup("#zev-test-1"), "ZEV-TEST-1");
   assert.equal(normalizeOrderIdForLookup("# zev-test-1 "), "ZEV-TEST-1");
-  for (const phone of ["0740529061", "+94 74 052 9061", "94740529061", "0094740529061"])
+  for (const phone of ["0740529061", "740529061", "94740529061", "+94740529061", "+94 74 052 9061", "0094740529061"])
     assert.equal(normalizeSriLankanPhoneForLookup(phone), "94740529061");
   const seen: Array<[string, string]> = [], handler = createOrderTrackHandler(async (orderId, phone) => { seen.push([orderId, phone]); return stored; });
-  for (const [index, phone] of ["0740529061", "+94 74 052 9061", "0094740529061"].entries()) {
+  const formats=["0740529061", "740529061", "94740529061", "+94740529061", "+94 74 052 9061", "0094740529061"];
+  for (const [index, phone] of formats.entries()) {
     const result = response();
     await handler(request({ orderId: "#zev-test-1", phone }, { origin }, `198.51.101.${index + 1}`), result.res);
     assert.equal(result.state.status, 200);
   }
-  assert.deepEqual(seen, Array(3).fill(["ZEV-TEST-1", "94740529061"]));
+  assert.deepEqual(seen, Array(formats.length).fill(["ZEV-TEST-1", "94740529061"]));
+});
+
+test("a new device with empty storage tracks through the backend only", async () => {
+  const emptyStorage={getItem:()=>null,setItem:()=>undefined,removeItem:()=>undefined};
+  assert.deepEqual(getRecentGuestOrders(emptyStorage),[]);
+  const handler=createOrderTrackHandler(async(orderId,phone)=>orderId===stored.order_id&&phone==="94740529061"?stored:null),result=response();
+  await handler(request({orderId:"  zev-test-1  ",phone:"740529061"},{origin},"198.51.102.1"),result.res);
+  assert.equal(result.state.status,200);
+  assert.equal((result.state.body as {orderId:string}).orderId,stored.order_id);
+});
+
+test("order and phone must match the same database record", async()=>{
+  const handler=createOrderTrackHandler(async(orderId,phone)=>orderId===stored.order_id&&phone==="94740529061"?stored:null),wrongPhone=response(),wrongOrder=response();
+  await handler(request({orderId:stored.order_id,phone:"0740529062"},{origin},"198.51.102.2"),wrongPhone.res);
+  await handler(request({orderId:"ZEV-WRONG",phone:"0740529061"},{origin},"198.51.102.3"),wrongOrder.res);
+  assert.equal(wrongPhone.state.status,404);assert.equal(wrongOrder.state.status,404);assert.deepEqual(wrongPhone.state.body,wrongOrder.state.body);
 });
 
 test("wrong phone and unknown ID return the same generic not-found response", async () => {

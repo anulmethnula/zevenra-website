@@ -354,8 +354,9 @@ export async function findGuestOrder(orderId: string, phone: string) {
        FROM orders o
        WHERE upper(o.order_id)=$1
          AND CASE
-           WHEN regexp_replace(o.phone,'\\D','','g') LIKE '0094%' THEN substring(regexp_replace(o.phone,'\\D','','g') from 3)
-           WHEN regexp_replace(o.phone,'\\D','','g') LIKE '0%' THEN '94' || substring(regexp_replace(o.phone,'\\D','','g') from 2)
+            WHEN regexp_replace(o.phone,'\\D','','g') LIKE '0094%' THEN substring(regexp_replace(o.phone,'\\D','','g') from 3)
+            WHEN regexp_replace(o.phone,'\\D','','g') ~ '^7[0-9]{8}$' THEN '94' || regexp_replace(o.phone,'\\D','','g')
+            WHEN regexp_replace(o.phone,'\\D','','g') LIKE '0%' THEN '94' || substring(regexp_replace(o.phone,'\\D','','g') from 2)
            ELSE regexp_replace(o.phone,'\\D','','g')
          END=$2
        LIMIT 1`,
