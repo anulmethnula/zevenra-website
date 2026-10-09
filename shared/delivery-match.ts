@@ -13,10 +13,10 @@ export function normalizeLocation(value: unknown) {
     .normalize("NFKD")
     .replace(/\p{M}/gu, "")
     .toLowerCase()
-    .replace(/\bcolombo\s+0*([1-9]|1[0-5])\b/g, "colombo $1")
     .replace(/[^a-z0-9]+/g, " ")
     .trim()
-    .replace(/\s+/g, " ");
+    .replace(/\s+/g, " ")
+    .replace(/\bcolombo\s*0*([1-9]|1[0-5])\b/g, "colombo $1");
 }
 
 export function normalizePostalCode(value: unknown) {
