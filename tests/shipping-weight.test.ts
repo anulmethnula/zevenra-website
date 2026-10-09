@@ -13,3 +13,9 @@ test("category defaults support mixed future categories", () => {
 test("missing product and category weight is reported instead of invented", () => {
   assert.deepEqual(calculateShippingWeight([{productId:"jacket",productName:"Jacket",quantity:1}],30),{ready:false,missing:[{productId:"jacket",productName:"Jacket"}]});
 });
+
+test("missing or invalid packaging weight is rejected instead of silently using zero", () => {
+  assert.throws(()=>calculateShippingWeight([{productId:"top",quantity:1,shippingWeightGrams:150}],0),/Packaging weight is not configured/);
+  assert.throws(()=>calculateShippingWeight([{productId:"top",quantity:1,shippingWeightGrams:150}],-10),/Packaging weight is not configured/);
+  assert.throws(()=>calculateShippingWeight([{productId:"top",quantity:1,shippingWeightGrams:150}],30.5),/Packaging weight is not configured/);
+});
