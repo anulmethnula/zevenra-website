@@ -104,7 +104,12 @@ export async function listPreorders(status?: string) {
     where = status ? " WHERE status=$1" : "";
   return (
     await query<Record<string, unknown>>(
-      `SELECT * FROM preorders${where} ORDER BY created_at DESC`,
+      `SELECT request_id,created_at,updated_at,customer_id,customer_name,phone,whatsapp,email,
+              address1,address2,city,district,postal_code,product_id,variant_id,product_name,
+              sku,color,size,quantity,requested_price,confirmed_price,status,batch_id,notes
+         FROM preorders${where}
+        ORDER BY created_at DESC
+        LIMIT 100`,
       values,
     )
   ).rows.map(mapPreorder);

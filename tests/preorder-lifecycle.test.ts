@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
   isPreorderTransitionAllowed,
@@ -37,4 +38,18 @@ test("preorder conversion rejects arbitrary payment method values", () => {
   assert.equal(normalizePreorderPaymentMethod("COD"), "cod");
   assert.equal(normalizePreorderPaymentMethod("bank"), "bank");
   assert.throws(() => normalizePreorderPaymentMethod("crypto"));
+});
+
+test("admin preorder list is bounded and selects only mapped fields", async () => {
+  const source = await readFile(
+    new URL("../api/_data/preorders.ts", import.meta.url),
+    "utf8",
+  );
+  const listQuery = source.slice(
+    source.indexOf("export async function listPreorders"),
+    source.indexOf("export async function updatePreorder"),
+  );
+  assert.doesNotMatch(listQuery, /SELECT\s+\*/i);
+  assert.match(listQuery, /LIMIT 100/);
+  assert.match(listQuery, /request_id,created_at,updated_at/);
 });
