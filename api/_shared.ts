@@ -375,10 +375,12 @@ export const orderSchema = z
     phone: phoneSchema,
     whatsapp: optionalPhoneSchema,
     email: z.string().trim().email().or(z.literal("")).optional(),
-    address1: z.string().trim().min(5).max(180),
+    fulfillmentMethod: z.enum(["flat", "area_group", "pickup"]),
+    pickupLocationId: z.string().trim().max(100).optional(),
+    address1: z.string().trim().max(180).optional(),
     address2: z.string().trim().max(180).optional(),
-    city: z.string().trim().min(2).max(80),
-    district: z.enum(sriLankaDistricts),
+    city: z.string().trim().max(80).optional(),
+    district: z.enum(sriLankaDistricts).optional(),
     postalCode: optionalPostalSchema,
     deliveryNotes: z.string().trim().max(300).optional(),
     paymentMethod: z.enum(["cod", "bank"]),
@@ -398,6 +400,14 @@ export const orderSchema = z
   })
   .strict()
   .superRefine((value, ctx) => {
+    if (value.fulfillmentMethod === "pickup" && !value.pickupLocationId)
+      ctx.addIssue({code:z.ZodIssueCode.custom,path:["pickupLocationId"],message:"Choose a pickup branch."});
+    if (value.fulfillmentMethod !== "pickup") {
+      if (!value.address1 || value.address1.length < 5) ctx.addIssue({code:z.ZodIssueCode.custom,path:["address1"],message:"Enter your delivery address."});
+      if (!value.city || value.city.length < 2) ctx.addIssue({code:z.ZodIssueCode.custom,path:["city"],message:"Enter your town."});
+      if (!value.district) ctx.addIssue({code:z.ZodIssueCode.custom,path:["district"],message:"Choose your district."});
+      if (!value.postalCode || !/^\d{5}$/.test(value.postalCode)) ctx.addIssue({code:z.ZodIssueCode.custom,path:["postalCode"],message:"Enter a valid 5-digit postal code."});
+    }
     if (value.paymentMethod === "bank" && !value.paymentReceiptUrl)
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

@@ -23,6 +23,7 @@ function request(method: string, action: string, headers: Record<string, string>
 }
 
 const validOrder = {
+  fulfillmentMethod: "area_group" as const,
   customerName: "Test Customer",
   phone: "+94770000000",
   email: "",

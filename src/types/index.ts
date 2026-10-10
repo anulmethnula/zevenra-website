@@ -232,6 +232,8 @@ export type GuestTrackedOrder = {
   }>;
 };
 export type CheckoutData = {
+  fulfillmentMethod: "flat" | "area_group" | "pickup";
+  pickupLocationId?: string;
   customerName: string;
   phone: string;
   whatsapp?: string;
@@ -250,6 +252,14 @@ export type CheckoutData = {
 };
 export type Order = {
   orderId: string;
+  fulfillmentMethod?: "flat" | "area_group" | "pickup";
+  deliveryMethodName?: string;
+  deliveryAreaGroupId?: string;
+  deliveryAreaGroupName?: string;
+  pickupLocationId?: string;
+  pickupBranchName?: string;
+  pickupBranchAddress?: string;
+  pickupInstructions?: string;
   createdAt: string;
   customerName: string;
   phone: string;

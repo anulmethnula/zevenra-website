@@ -64,6 +64,7 @@ import {
 } from "../_shared.js";
 import { CourierRateFileError } from "../_data/courier-rate-parser.js";
 import { deleteDiscount, DiscountConflictError, discountDeleteSchema, listDiscounts, saveDiscount } from "../_data/discounts.js";
+import { listFulfillmentConfig, saveFulfillmentConfig } from "../_data/fulfillment.js";
 
 const readActions = new Set([
   "bootstrap",
@@ -86,6 +87,7 @@ const readActions = new Set([
   "listCourierRateCards",
   "previewCourierRateCard",
   "listDiscounts",
+  "getFulfillmentConfig",
 ]);
 const mutationActions = new Set([
   "saveProduct", "setProductStatus", "archiveProduct", "deleteProduct",
@@ -98,6 +100,7 @@ const mutationActions = new Set([
   "validateCourierRateSheet", "confirmCourierRateSheet",
   "setCourierRateCardStatus", "previewDeliveryZoneTemplate", "applyDeliveryZoneTemplate",
   "saveDiscount", "deleteDiscount",
+  "saveFulfillmentConfig",
 ]);
 const allowed = new Set([...readActions, ...mutationActions]);
 
@@ -137,6 +140,10 @@ async function execute(action: string, payload: Record<string, unknown>) {
       return listDeliveryRates();
     case "listDiscounts":
       return listDiscounts();
+    case "getFulfillmentConfig":
+      return listFulfillmentConfig();
+    case "saveFulfillmentConfig":
+      return saveFulfillmentConfig(payload);
     case "saveDiscount":
       return saveDiscount(payload);
     case "deleteDiscount":

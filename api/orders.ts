@@ -29,9 +29,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return json(res, { error: "Invalid request origin" }, 403);
     const raw = body(req),
       source = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
-    const payload = orderSchema.parse(source);
-    if (!payload.postalCode)
+    if (source.fulfillmentMethod !== "pickup" && !/^\d{5}$/.test(String(source.postalCode || "")))
       return json(res, { error: "Enter a valid 5-digit postal code." }, 400);
+    const payload = orderSchema.parse(source);
     const identity = readCustomerSession(req),
       order = await createOrder({
         ...payload,

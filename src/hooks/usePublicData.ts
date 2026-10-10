@@ -12,4 +12,6 @@ export const useRecommendations=(categoryId:string,productId:string)=>useRequest
 export const getSizeChart=(id:string)=>fetchPublic<SizeChart>(`/size-chart?id=${encodeURIComponent(id)}`,{ttlMs:300_000});
 const emptyShopResult=(cached:ShopResponse)=>cached.items.length===0;
 export const useShopProducts=(query:string)=>{const policy=shopSearchPolicy(query);return useRequest<ShopResponse>(`/products?${query}`,{ttlMs:25_000,maxEntries:40,revalidateFresh:policy.revalidateFresh,loadingWhileRevalidate:emptyShopResult,noStore:policy.search});};
-export const useCheckoutConfig=()=>useRequest<{settings:Array<{key:string;value:unknown}>}>("/checkout-config",{ttlMs:15_000});
+export type PublicFulfillmentMethod={type:"flat"|"area_group"|"pickup";displayName:string;fee:number|null;minimumDeliveryDays:number|null;maximumDeliveryDays:number|null};
+export type PublicPickupLocation={id:string;name:string;address:string;instructions:string;sortOrder:number};
+export const useCheckoutConfig=()=>useRequest<{settings:Array<{key:string;value:unknown}>;methods:PublicFulfillmentMethod[];locations:Array<{id:string;district:string;town:string;postcode?:string;aliases:string[]}>;pickupLocations:PublicPickupLocation[]}>("/checkout-config",{ttlMs:15_000});

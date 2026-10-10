@@ -31,6 +31,11 @@ const required = [
   "courier_rate_cards",
   "courier_rate_import_rows",
   "courier_rates",
+  "delivery_methods",
+  "delivery_area_groups",
+  "delivery_area_locations",
+  "delivery_district_defaults",
+  "pickup_locations",
   "discount_codes",
   "site_settings",
   "audit_logs",
@@ -57,8 +62,8 @@ try {
       "SELECT count(*)::int AS count FROM order_items i JOIN orders o ON o.order_id=i.order_id WHERE o.order_status<>'cancelled' AND i.is_preorder=false AND (i.variant_id IS NULL OR NOT EXISTS(SELECT 1 FROM variants v WHERE v.id=i.variant_id))",
     orphanProductCollections:
       "SELECT count(*)::int AS count FROM product_collections pc LEFT JOIN products p ON p.id=pc.product_id LEFT JOIN collections c ON c.id=pc.collection_id WHERE p.id IS NULL OR c.id IS NULL",
-    publishedProductsMissingShippingWeight:
-      "SELECT count(*)::int AS count FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.status='published' AND p.shipping_weight_grams IS NULL AND c.default_shipping_weight_grams IS NULL",
+    invalidConfiguredShippingWeights:
+      "SELECT (SELECT count(*) FROM products WHERE shipping_weight_grams IS NOT NULL AND shipping_weight_grams<=0)+(SELECT count(*) FROM categories WHERE default_shipping_weight_grams IS NOT NULL AND default_shipping_weight_grams<=0) AS count",
     publishedProductsInactiveCategory:
       "SELECT count(*)::int AS count FROM products p JOIN categories c ON c.id=p.category_id WHERE p.status='published' AND c.active IS NOT TRUE",
     publishedProductsWithoutActiveVariant:
@@ -92,20 +97,18 @@ try {
       "SELECT count(*)::int AS count FROM courier_rates r JOIN courier_rate_cards c ON c.id=r.rate_card_id WHERE r.courier_provider_id<>c.courier_provider_id",
     multipleActiveRateCards:
       "SELECT count(*)::int AS count FROM (SELECT courier_provider_id FROM courier_rate_cards WHERE status='active' GROUP BY courier_provider_id HAVING count(*)>1) invalid",
-    packagingWeightMissingOrInvalid:
-      "SELECT CASE WHEN EXISTS(SELECT 1 FROM site_settings WHERE key='packagingWeightGrams' AND (value #>> '{}') ~ '^[0-9]+$' AND (value #>> '{}')::int>0) THEN 0 ELSE 1 END::int AS count",
     enabledCheckoutWithoutPaymentMethod:
       "WITH s AS (SELECT key,lower(value #>> '{}') value FROM site_settings) SELECT CASE WHEN COALESCE((SELECT value='true' FROM s WHERE key='ordersEnabled'),true) AND NOT COALESCE((SELECT value='true' FROM s WHERE key='codEnabled'),false) AND NOT COALESCE((SELECT value='true' FROM s WHERE key='bankEnabled'),(SELECT value='true' FROM s WHERE key='bankTransferEnabled'),false) THEN 1 ELSE 0 END::int AS count",
-    enabledCheckoutWithoutActiveDefaultCourier:
-      "WITH s AS (SELECT key,value #>> '{}' value FROM site_settings), enabled AS (SELECT COALESCE((SELECT lower(value)='true' FROM s WHERE key='ordersEnabled'),true) ok), default_id AS (SELECT COALESCE((SELECT value FROM s WHERE key='defaultCourierProviderId'),'') id) SELECT CASE WHEN (SELECT ok FROM enabled) AND NOT EXISTS(SELECT 1 FROM courier_providers p,default_id d WHERE p.id=d.id AND p.active=true) THEN 1 ELSE 0 END::int AS count",
-    activeZoneCourierWithoutFallback:
-      "WITH s AS (SELECT value #>> '{}' id FROM site_settings WHERE key='defaultCourierProviderId') SELECT CASE WHEN EXISTS(SELECT 1 FROM courier_providers p JOIN s ON s.id=p.id WHERE p.active=true AND p.pricing_mode='zone') AND (SELECT count(*) FROM delivery_rates r JOIN s ON s.id=r.courier_provider_id WHERE r.active=true AND r.fallback=true)<>1 THEN 1 ELSE 0 END::int AS count",
-    activeRateCardWithoutConfiguredDispatchBranch:
-      "SELECT count(*)::int AS count FROM courier_rate_cards c JOIN courier_providers p ON p.id=c.courier_provider_id WHERE c.status='active' AND (btrim(p.dispatch_branch)='' OR NOT EXISTS(SELECT 1 FROM courier_rates r WHERE r.rate_card_id=c.id AND lower(btrim(r.from_branch))=lower(btrim(p.dispatch_branch))))",
+    enabledCheckoutWithoutFulfillmentMethod:
+      "WITH s AS (SELECT COALESCE((SELECT lower(value #>> '{}')='true' FROM site_settings WHERE key='ordersEnabled'),true) enabled) SELECT CASE WHEN (SELECT enabled FROM s) AND NOT EXISTS(SELECT 1 FROM delivery_methods WHERE active) THEN 1 ELSE 0 END::int AS count",
+    duplicateActiveAreaLocations:
+      "SELECT count(*)::int AS count FROM (SELECT lower(btrim(district)),normalized_town,COALESCE(postcode,'') FROM delivery_area_locations WHERE active GROUP BY 1,2,3 HAVING count(*)>1) invalid",
+    invalidActiveFulfillmentConfiguration:
+      "SELECT (SELECT count(*) FROM delivery_methods WHERE active AND type='flat' AND fee IS NULL)+(SELECT CASE WHEN EXISTS(SELECT 1 FROM delivery_methods WHERE active AND type='area_group') AND ((SELECT count(*) FROM delivery_area_groups WHERE active AND fee IS NULL)>0 OR (SELECT count(*) FROM delivery_area_groups WHERE active AND is_fallback)<>1) THEN 1 ELSE 0 END)+(SELECT CASE WHEN EXISTS(SELECT 1 FROM delivery_methods WHERE active AND type='pickup') AND NOT EXISTS(SELECT 1 FROM pickup_locations WHERE active) THEN 1 ELSE 0 END) AS count",
   };
   const failures = [];
   for (const [name, sql] of Object.entries(checks)) {
-    const count = (await pool.query(sql)).rows[0].count;
+    const count = Number((await pool.query(sql)).rows[0].count) || 0;
     console.log(`${name}: ${count}`);
     if (count) failures.push(`${name}=${count}`);
   }

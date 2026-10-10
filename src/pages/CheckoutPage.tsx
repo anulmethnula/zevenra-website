@@ -29,13 +29,13 @@ const schema = z.object({
     .trim()
     .regex(/^[+\d][\d\s-]{8,14}$/, "Enter a valid mobile number."),
   email: z.string().trim().email("Enter a valid email address.").or(z.literal("")).optional(),
-  address1: z.string().trim().min(5, "Enter your delivery address.").max(180),
+  address1: z.string().trim().max(180).optional(),
   address2: z.string().trim().max(180).optional(),
   deliveryNotes: z.string().trim().max(300, "Keep delivery instructions under 300 characters.").optional(),
-  city: z.string().trim().min(2, "Enter your city / area.").max(80),
+  city: z.string().trim().max(80).optional(),
   district: z.enum(districts, {
     errorMap: () => ({ message: "Choose your district." }),
-  }),
+  }).optional(),
   postalCode: z
     .string()
     .trim()
@@ -77,6 +77,8 @@ export default function CheckoutPage() {
   const bankConfigured = Boolean(settings.bankEnabled && settings.bankName.trim() && settings.accountName.trim() && settings.accountNumber.trim());
   const availablePayments = useMemo<PaymentMethod[]>(() => [...(settings.codEnabled ? ["cod" as const] : []), ...(bankConfigured ? ["bank" as const] : [])], [settings.codEnabled, bankConfigured]);
   const [payment, setPayment] = useState<PaymentMethod>(availablePayments[0] || "cod"),
+    [fulfillmentMethod,setFulfillmentMethod]=useState<"flat"|"area_group"|"pickup">("flat"),
+    [pickupLocationId,setPickupLocationId]=useState(""),
     [district, setDistrict] = useState(user?.district || ""),
     [city, setCity] = useState(user?.city || ""),
     [postalCode, setPostalCode] = useState(user?.postalCode || ""),
@@ -97,12 +99,14 @@ export default function CheckoutPage() {
     } | null>(null),
     [discountBusy, setDiscountBusy] = useState(false),
     [discountMessage, setDiscountMessage] = useState(""),
-    [deliveryQuote, setDeliveryQuote] = useState<{fee:number;minimumDeliveryDays:number;maximumDeliveryDays:number}|null>(null),
+    [deliveryQuote, setDeliveryQuote] = useState<{fee:number;minimumDeliveryDays:number|null;maximumDeliveryDays:number|null;methodName?:string;areaGroupName?:string}|null>(null),
     [deliveryQuoteLoading, setDeliveryQuoteLoading] = useState(false),
     [deliveryQuoteError, setDeliveryQuoteError] = useState("");
   useEffect(() => {
     if (!availablePayments.includes(payment) && availablePayments[0]) setPayment(availablePayments[0]);
   }, [availablePayments, payment]);
+  const fulfillmentMethods=useMemo(()=>checkout.data?.methods||[],[checkout.data?.methods]), pickupLocations=checkout.data?.pickupLocations||[];
+  useEffect(()=>{if(fulfillmentMethods.length&&!fulfillmentMethods.some(m=>m.type===fulfillmentMethod)){setFulfillmentMethod(fulfillmentMethods[0].type);setPickupLocationId("");}},[fulfillmentMethods,fulfillmentMethod]);
   const discountItems = useMemo(
       () =>
         cart.items.map(({ productId, variantId, quantity }) => ({
@@ -144,15 +148,16 @@ export default function CheckoutPage() {
   }, [discountCode, discountItems]);
   useEffect(()=>{
     const postalError=postalCodeError(postalCode);
-    if(!settings.deliveryEnabled){setDeliveryQuote({fee:0,minimumDeliveryDays:2,maximumDeliveryDays:4});setDeliveryQuoteError("");setDeliveryQuoteLoading(false);return;}
-    if(!district||city.trim().length<2||postalError||!discountItems.length){setDeliveryQuote(null);setDeliveryQuoteError("");setDeliveryQuoteLoading(false);return;}
+    if(!discountItems.length){setDeliveryQuote(null);return;}
+    if(fulfillmentMethod==="pickup"&&!pickupLocationId){setDeliveryQuote(null);setDeliveryQuoteError("");return;}
+    if(fulfillmentMethod==="area_group"&&(!district||city.trim().length<2||postalError||postalCode.length!==5)){setDeliveryQuote(null);setDeliveryQuoteError("");setDeliveryQuoteLoading(false);return;}
     let current=true;
     const timer=window.setTimeout(()=>{
       setDeliveryQuoteLoading(true);setDeliveryQuoteError("");
-      void api.deliveryQuote({city,district,postalCode,items:discountItems}).then(result=>{if(current)setDeliveryQuote(result);}).catch(reason=>{if(current){setDeliveryQuote(null);setDeliveryQuoteError(reason instanceof Error?reason.message:"Delivery could not be calculated.");}}).finally(()=>{if(current)setDeliveryQuoteLoading(false);});
+      void api.deliveryQuote({fulfillmentMethod,pickupLocationId:fulfillmentMethod==="pickup"?pickupLocationId:undefined,city:fulfillmentMethod==="pickup"?undefined:city,district:fulfillmentMethod==="pickup"?undefined:district||undefined,postalCode:fulfillmentMethod==="pickup"?undefined:postalCode,items:discountItems}).then(result=>{if(current)setDeliveryQuote(result);}).catch(reason=>{if(current){setDeliveryQuote(null);setDeliveryQuoteError(reason instanceof Error?reason.message:"Delivery could not be calculated.");}}).finally(()=>{if(current)setDeliveryQuoteLoading(false);});
     },250);
     return()=>{current=false;window.clearTimeout(timer);};
-  },[city,district,postalCode,discountItems,settings.deliveryEnabled]);
+  },[city,district,postalCode,discountItems,fulfillmentMethod,pickupLocationId]);
   if ((!cart.items.length && !successOrder) || cart.items.some((i) => i.isPreorder)) return <Navigate to="/cart" replace />;
   if (checkout.loading)
     return (
@@ -179,15 +184,15 @@ export default function CheckoutPage() {
   const price = (i: (typeof cart.items)[number]) => cart.live[i.variantId]?.currentPrice ?? i.unitPrice;
   const subtotal = cart.items.reduce((sum, i) => sum + price(i) * i.quantity, 0),
     postalFormatError = postalCodeError(postalCode),
-    addressReady = Boolean(district && city.trim().length >= 2 && !postalFormatError);
-  const deliveryReady = !settings.deliveryEnabled || Boolean(deliveryQuote);
+    addressReady = fulfillmentMethod==="pickup" || Boolean(district && city.trim().length >= 2 && postalCode.length===5 && !postalFormatError);
+  const deliveryReady = Boolean(deliveryQuote);
   const deliveryFee = deliveryQuote?.fee ?? 0,
-    amounts = checkoutAmounts(subtotal, deliveryFee, !settings.deliveryEnabled || (addressReady && deliveryReady), discount?.amount || 0);
+    amounts = checkoutAmounts(subtotal, deliveryFee, addressReady && deliveryReady, discount?.amount || 0);
   const paymentStatus = paymentReadinessMessage({
             city,
             district,
             postalError: postalFormatError,
-            deliveryEnabled: settings.deliveryEnabled,
+            deliveryEnabled: fulfillmentMethod!=="pickup",
             quoteReady: Boolean(deliveryQuote),
           });
   const clearError = (name: string) =>
@@ -291,7 +296,10 @@ export default function CheckoutPage() {
       focusFirst(e);
       return;
     }
-    if (settings.deliveryEnabled && !deliveryQuote) {
+    if(fulfillmentMethod!=="pickup"&&(!parsed.data.address1||parsed.data.address1.length<5||!parsed.data.city||!parsed.data.district||!parsed.data.postalCode)){
+      const e={address1:"Enter a complete Sri Lankan delivery address."};setFieldErrors(e);setError("Please complete the delivery address.");focusFirst(e);return;
+    }
+    if (!deliveryQuote) {
       const e = {
         city: "Delivery is unavailable for these details.",
       };
@@ -304,6 +312,11 @@ export default function CheckoutPage() {
     try {
       const order = await api.createOrder({
         ...parsed.data,
+        fulfillmentMethod,
+        pickupLocationId:fulfillmentMethod==="pickup"?pickupLocationId:undefined,
+        address1:fulfillmentMethod==="pickup"?"":parsed.data.address1||"",
+        city:fulfillmentMethod==="pickup"?"":parsed.data.city||"",
+        district:fulfillmentMethod==="pickup"?"":parsed.data.district||"",
         postalCode: parsed.data.postalCode || "",
         discountCode: discount?.code,
         items: cart.items,
@@ -413,7 +426,21 @@ export default function CheckoutPage() {
                   <Field name="email" label="Email (optional)" type="email" wide autoComplete="email" defaultValue={user?.email || ""} error={fieldErrors.email} onChange={() => clearError("email")} />
                 </div>
               </Section>
-              <Section number="02" title="Delivery address">
+              <Section number="02" title="Fulfilment">
+                {fulfillmentMethods.length > 1 ? <div className="mb-5 grid gap-2 sm:grid-cols-2">
+                  {fulfillmentMethods.map((method) => <label key={method.type} className={`flex min-h-16 cursor-pointer items-center gap-3 border p-3 ${fulfillmentMethod === method.type ? "border-bronze bg-bronze/[.06]" : "border-line"}`}>
+                    <input type="radio" name="fulfillmentChoice" checked={fulfillmentMethod === method.type} onChange={() => { setFulfillmentMethod(method.type); setPickupLocationId(""); setDeliveryQuote(null); }} />
+                    <span><b className="block text-sm">{method.displayName}</b><small className="text-xs text-ink/50">{method.type === "pickup" ? "Free" : method.type === "flat" && method.fee != null ? money(method.fee) : "Calculated from address"}</small></span>
+                  </label>)}
+                </div> : null}
+                {fulfillmentMethod === "pickup" ? <label className="label block">
+                  Pickup branch <i>*</i>
+                  <select className="field mt-1.5" value={pickupLocationId} onChange={(event) => setPickupLocationId(event.target.value)}>
+                    <option value="">Select a branch</option>
+                    {pickupLocations.map((branch) => <option key={branch.id} value={branch.id}>{branch.name} — {branch.address}</option>)}
+                  </select>
+                  {pickupLocationId ? <small className="mt-2 block text-xs text-ink/55">{pickupLocations.find((branch) => branch.id === pickupLocationId)?.instructions}</small> : null}
+                </label> : <>
                 <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
                   <label className="label sm:col-span-2">
                     Country / Region
@@ -471,12 +498,13 @@ export default function CheckoutPage() {
                     }}
                   />
                 </div>
+                </>}
                 <div className="mt-6">
-                  <p className="eyebrow mb-3 text-ink/50">Shipping method</p>
+                  <p className="eyebrow mb-3 text-ink/50">Selected method</p>
                   <div className={`border p-4 ${amounts.ready ? "border-black bg-black/[.025]" : "border-black/10"}`}>
                     <div className="flex items-center justify-between gap-4">
                       <span>
-                        <b className="block text-sm">Standard</b>
+                        <b className="block text-sm">{fulfillmentMethods.find((method) => method.type === fulfillmentMethod)?.displayName || "Fulfilment"}</b>
                         <small className="mt-1 block text-xs text-ink/50">{deliveryQuote ? `${deliveryQuote.minimumDeliveryDays}–${deliveryQuote.maximumDeliveryDays} Business Days` : deliveryQuoteLoading ? "Calculating delivery…" : deliveryQuoteError || "Enter your delivery details to calculate the rate."}</small>
                       </span>
                       {amounts.ready ? <b className="text-sm">{amounts.deliveryFee ? money(amounts.deliveryFee) : "Free"}</b> : null}

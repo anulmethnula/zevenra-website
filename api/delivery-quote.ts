@@ -4,9 +4,11 @@ import { quoteDelivery } from "./_data/orders.js";
 import { body,json,methodNotAllowed,originEnv,rateLimit,sriLankaDistricts,validOrigin } from "./_shared.js";
 
 const schema=z.object({
-  city:z.string().trim().min(2).max(80),
-  district:z.enum(sriLankaDistricts),
-  postalCode:z.string().trim().regex(/^\d{5}$/),
+  fulfillmentMethod:z.enum(["flat","area_group","pickup"]),
+  pickupLocationId:z.string().trim().max(100).optional(),
+  city:z.string().trim().max(80).optional(),
+  district:z.enum(sriLankaDistricts).optional(),
+  postalCode:z.string().trim().regex(/^\d{5}$/).optional(),
   items:z.array(z.object({productId:z.string().min(1),variantId:z.string().min(1),quantity:z.number().int().min(1).max(10)}).strict()).min(1).max(30),
 }).strict();
 

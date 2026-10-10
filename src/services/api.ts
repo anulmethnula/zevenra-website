@@ -129,6 +129,6 @@ export const api = {
       items: data.items,
     };
   },
-  deliveryQuote: (data:{city:string;district:string;postalCode?:string;items:Array<{productId:string;variantId:string;quantity:number}>}) =>
-    demo ? Promise.resolve({fee:siteConfig.deliveryFee,minimumDeliveryDays:2,maximumDeliveryDays:4}) : request<{fee:number;minimumDeliveryDays:number;maximumDeliveryDays:number}>("/delivery-quote",{method:"POST",body:JSON.stringify(data)}),
+  deliveryQuote: (data:{fulfillmentMethod:"flat"|"area_group"|"pickup";pickupLocationId?:string;city?:string;district?:string;postalCode?:string;items:Array<{productId:string;variantId:string;quantity:number}>}) =>
+    demo ? Promise.resolve({fee:siteConfig.deliveryFee,minimumDeliveryDays:2,maximumDeliveryDays:4,fulfillmentMethod:data.fulfillmentMethod,methodName:"Standard Delivery",areaGroupName:"",pickupLocationId:""}) : request<{fee:number;minimumDeliveryDays:number|null;maximumDeliveryDays:number|null;fulfillmentMethod:string;methodName:string;areaGroupName:string;pickupLocationId:string}>("/delivery-quote",{method:"POST",body:JSON.stringify(data)}),
 };

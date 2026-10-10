@@ -12,6 +12,7 @@ import {
   mapSizeChart,
 } from "./mappers.js";
 import { buildPublicCheckoutConfig } from "./public-checkout.js";
+import { publicFulfillmentConfig } from "./fulfillment.js";
 import { addProductSearchConditions, normalizeSearchTokens } from "./product-search.js";
 
 const productSelect = `
@@ -249,8 +250,8 @@ export async function publicStoreBootstrap() {
 }
 
 export async function publicCheckoutConfig(){
-  const [settings,couriers,rates]=await Promise.all([listSettings(),listCouriers(true),listDeliveryRates()]);
-  return buildPublicCheckoutConfig(settings,couriers,rates);
+  const [settings,fulfillment]=await Promise.all([listSettings(),publicFulfillmentConfig()]);
+  return {...buildPublicCheckoutConfig(settings,[],[]),...fulfillment};
 }
 
 type Entity =

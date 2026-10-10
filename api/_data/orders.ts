@@ -5,8 +5,7 @@ import { normalizeSriLankanPhoneForLookup } from "../_order-track-normalization.
 import { receiptAsset } from "../_receipt-asset.js";
 import { mapOrder } from "./mappers.js";
 import { validateDiscount } from "./discounts.js";
-import { calculateShippingWeight } from "../../shared/shipping-weight.js";
-import { resolveDeliveryPricing } from "../../shared/delivery-pricing.js";
+import { resolveFulfillment } from "./fulfillment.js";
 import { paymentMethodAvailable } from "../../shared/payment-availability.js";
 import { enforceOnlineStoreAvailability } from "../../shared/order-source.js";
 
@@ -27,10 +26,12 @@ type OrderInput = {
   phone: string;
   whatsapp?: string;
   email?: string;
-  address1: string;
+  fulfillmentMethod?: "flat" | "area_group" | "pickup";
+  pickupLocationId?: string;
+  address1?: string;
   address2?: string;
-  city: string;
-  district: string;
+  city?: string;
+  district?: string;
   postalCode?: string;
   deliveryNotes?: string;
   paymentMethod: "cod" | "bank";
@@ -88,9 +89,9 @@ async function assertCheckoutPaymentAvailable(
 
 export async function deliverySnapshot(
   client: DatabaseClient,
-  input: Pick<OrderInput, "city" | "district" | "postalCode">,
+  input: Pick<OrderInput, "fulfillmentMethod" | "pickupLocationId" | "city" | "district" | "postalCode">,
   subtotal: number,
-  totalShippingWeightGrams: number,
+  _totalShippingWeightGrams: number,
   enforceStoreAvailability = true,
 ) {
   const settings = (
@@ -105,85 +106,26 @@ export async function deliverySnapshot(
   )
     throw new Error("Online ordering is temporarily unavailable.");
 
-  const defaultId = String(
-    settingValue(settings, "defaultCourierProviderId", ""),
-  );
-  const courier = (
-    await client.query<Record<string, unknown>>(
-      "SELECT * FROM courier_providers WHERE id=$1 AND active=true",
-      [defaultId],
-    )
-  ).rows[0];
-  if (!courier) throw new Error("Online ordering is temporarily unavailable.");
-
-  const pricingMode = String(courier.pricing_mode),
-    weightRows =
-      pricingMode === "zone"
-        ? (
-            await client.query<Record<string, unknown>>(
-              `SELECT r.* FROM courier_rates r
-               JOIN courier_rate_cards card ON card.id=r.rate_card_id
-               WHERE r.courier_provider_id=$1 AND r.active=true AND card.status='active'
-                 AND lower(btrim(r.from_branch))=lower(btrim($2))`,
-              [defaultId, String(courier.dispatch_branch || "")],
-            )
-          ).rows
-        : [],
-    legacyRows =
-      pricingMode === "zone"
-        ? (
-            await client.query<Record<string, unknown>>(
-              "SELECT * FROM delivery_rates WHERE courier_provider_id=$1 AND active=true ORDER BY sort_order,id",
-              [defaultId],
-            )
-          ).rows
-        : [],
-    pricing = resolveDeliveryPricing(
-      {
-        pricingMode,
-        flatRate: Number(courier.flat_rate) || 0,
-      },
-      input,
-      totalShippingWeightGrams,
-      weightRows.map((rate) => ({
-        rateCardId: String(rate.rate_card_id || ""),
-        destinationDistrict: String(rate.destination_district || ""),
-        destinationCity: String(rate.destination_city || ""),
-        firstKgCharge: Number(rate.first_kg_charge),
-        additionalKgCharge: Number(rate.additional_kg_charge),
-      })),
-      legacyRows.map((rate) => ({
-        id: String(rate.id || ""),
-        name: String(rate.name || ""),
-        fee: Number(rate.fee),
-        active: rate.active === true,
-        districts: Array.isArray(rate.districts)
-          ? rate.districts.map(String)
-          : [],
-        cities: Array.isArray(rate.cities) ? rate.cities.map(String) : [],
-        postalCodes: Array.isArray(rate.postal_codes)
-          ? rate.postal_codes.map(String)
-          : [],
-        fallback: rate.fallback === true,
-        sortOrder: Number(rate.sort_order) || 0,
-      })),
-    );
-
+  const pricing=await resolveFulfillment(client,input);
   let fee = pricing.fee;
-  if (!truthy(settingValue(settings, "deliveryEnabled", true))) fee = 0;
   const threshold =
     Number(settingValue(settings, "freeDeliveryThreshold", 0)) || 0;
   if (threshold > 0 && subtotal >= threshold) fee = 0;
 
   return {
-    courierProviderId: String(courier.id),
-    courierName: String(courier.name),
-    pricingMode,
+    courierProviderId: null,
+    courierName: pricing.methodName,
+    pricingMode: pricing.method,
     ratePlan: pricing.ratePlan,
-    zoneName: pricing.zoneName,
+    zoneName: pricing.areaGroupName,
+    method: pricing.method,
+    methodName: pricing.methodName,
+    areaGroupId: pricing.areaGroupId,
+    areaGroupName: pricing.areaGroupName,
+    pickup: pricing.pickup,
     fee,
-    minimumDeliveryDays: Number(courier.minimum_delivery_days) || 2,
-    maximumDeliveryDays: Number(courier.maximum_delivery_days) || 4,
+    minimumDeliveryDays: pricing.minimumDeliveryDays,
+    maximumDeliveryDays: pricing.maximumDeliveryDays,
   };
 }
 
@@ -193,26 +135,10 @@ async function shippingWeightSnapshot(client: DatabaseClient, lines: Line[]) {
       "SELECT value FROM site_settings WHERE key='packagingWeightGrams'",
     )
   ).rows[0];
-  if (!row)
-    throw new Error(
-      "Packaging weight is not configured. Ask an administrator to configure delivery settings.",
-    );
-  const result = calculateShippingWeight(
-    lines.map((line) => ({
-      productId: line.productId,
-      productName: line.productName,
-      quantity: line.quantity,
-      shippingWeightGrams: line.shippingWeightGrams || undefined,
-    })),
-    Number(row.value),
-  );
-  if (!result.ready)
-    throw new Error(
-      `Shipping weight is not configured for: ${result.missing
-        .map((item) => item.productName || item.productId)
-        .join(", ")}.`,
-    );
-  return result;
+  const known=lines.filter(line=>line.shippingWeightGrams>0);
+  const totalProductWeightGrams=known.reduce((sum,line)=>sum+line.shippingWeightGrams*line.quantity,0);
+  const packaging=row&&Number(row.value)>0?Number(row.value):0;
+  return {ready:true,missing:[],totalProductWeightGrams,totalShippingWeightGrams:totalProductWeightGrams+packaging};
 }
 
 async function loadLines(
@@ -346,7 +272,7 @@ export async function createOrder(
       hasPreorder = lines.some((line) => line.isPreorder);
 
     await client.query(
-      `INSERT INTO orders(order_id,customer_id,customer_name,phone,whatsapp,email,address1,address2,city,district,postal_code,delivery_notes,courier_provider_id,courier_name,delivery_pricing_mode,delivery_rate_plan,delivery_zone_name,payment_method,payment_status,payment_reference,payment_receipt_public_id,payment_receipt_resource_type,payment_receipt_format,subtotal,discount_code,discount_amount,discount_type,discount_value,delivery_fee,total,total_product_weight_grams,total_shipping_weight_grams,minimum_delivery_days,maximum_delivery_days,stock_state,order_status,source,has_preorder) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,'pending',$36,$37)`,
+      `INSERT INTO orders(order_id,customer_id,customer_name,phone,whatsapp,email,address1,address2,city,district,postal_code,delivery_notes,courier_provider_id,courier_name,delivery_pricing_mode,delivery_rate_plan,delivery_zone_name,payment_method,payment_status,payment_reference,payment_receipt_public_id,payment_receipt_resource_type,payment_receipt_format,subtotal,discount_code,discount_amount,discount_type,discount_value,delivery_fee,total,total_product_weight_grams,total_shipping_weight_grams,minimum_delivery_days,maximum_delivery_days,stock_state,order_status,source,has_preorder,fulfillment_method,delivery_method_name,delivery_area_group_id,delivery_area_group_name,pickup_location_id,pickup_branch_name,pickup_branch_address,pickup_instructions) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,'pending',$36,$37,$38,$39,$40,$41,$42,$43,$44,$45)`,
       [
         orderId,
         input.customerId || null,
@@ -354,10 +280,10 @@ export async function createOrder(
         input.phone,
         input.whatsapp || "",
         input.email || "",
-        input.address1,
+        input.address1 || "",
         input.address2 || "",
-        input.city,
-        input.district,
+        input.city || "",
+        input.district || "",
         input.postalCode || "",
         input.deliveryNotes || "",
         delivery.courierProviderId,
@@ -386,6 +312,14 @@ export async function createOrder(
         stockState,
         input.source || "web",
         hasPreorder,
+        delivery.method,
+        delivery.methodName,
+        delivery.areaGroupId || null,
+        delivery.areaGroupName,
+        delivery.pickup?.id || null,
+        delivery.pickup?.name || "",
+        delivery.pickup?.address || "",
+        delivery.pickup?.instructions || "",
       ],
     );
     if (discount)
@@ -438,7 +372,7 @@ export async function createOrder(
 }
 
 export async function quoteDelivery(
-  input: Pick<OrderInput, "city" | "district" | "postalCode" | "items">,
+  input: Pick<OrderInput, "fulfillmentMethod" | "pickupLocationId" | "city" | "district" | "postalCode" | "items">,
 ) {
   return withTransaction(async (client) => {
     const lines = await loadLines(client, input as OrderInput, false, false),
@@ -452,6 +386,10 @@ export async function quoteDelivery(
       );
     return {
       fee: delivery.fee,
+      fulfillmentMethod: delivery.method,
+      methodName: delivery.methodName,
+      areaGroupName: delivery.areaGroupName,
+      pickupLocationId: delivery.pickup?.id || "",
       minimumDeliveryDays: delivery.minimumDeliveryDays,
       maximumDeliveryDays: delivery.maximumDeliveryDays,
     };
