@@ -24,8 +24,8 @@ try {
   const slug = catalogue.items?.[0]?.slug;
   if (slug) customerRoutes.push(`/product/${slug}`,`/preorder/${slug}`);
 
-  for (const width of widths) {
-    const context = await browser.newContext({ viewport: { width, height: 900 } });
+  for (const route of [...customerRoutes, ...adminRoutes]) {
+    const context = await browser.newContext({ viewport: { width: widths[0], height: 900 } });
     if (process.env.SESSION_SECRET) {
       await context.addCookies([{ name: "zevenra_session", value: adminSession(process.env.SESSION_SECRET), url: baseURL, httpOnly: true, sameSite: "Strict" }]);
     }
@@ -33,9 +33,11 @@ try {
     const runtimeErrors = [];
     page.on("pageerror", error => runtimeErrors.push(error.message));
     page.on("console", message => { if (message.type() === "error") runtimeErrors.push(message.text()); });
-    for (const route of [...customerRoutes, ...adminRoutes]) {
-      const response = await page.goto(`${baseURL}${route}`, { waitUntil: "domcontentloaded", timeout: 45_000 });
-      await page.waitForTimeout(1_000);
+    const response = await page.goto(`${baseURL}${route}`, { waitUntil: "domcontentloaded", timeout: 45_000 });
+    await page.waitForTimeout(1_000);
+    for (const width of widths) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.waitForTimeout(150);
       const layout = await page.evaluate(() => {
         const viewport = document.documentElement.clientWidth;
         const intentionallyClipped = element => {

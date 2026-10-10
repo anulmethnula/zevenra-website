@@ -22,7 +22,8 @@ export function Seo({
   structuredData?: StructuredData;
 }) {
   useEffect(() => {
-    const state=buildSeoState({title,description,image,imageAlt,noindex,type,path:location.pathname,siteUrl:String(import.meta.env.VITE_PUBLIC_SITE_URL||location.origin)});
+    const searchResults=location.pathname==="/shop"&&new URLSearchParams(location.search).has("q");
+    const state=buildSeoState({title,description,image,imageAlt,noindex:noindex||searchResults,type,path:location.pathname,siteUrl:String(import.meta.env.VITE_PUBLIC_SITE_URL||location.origin)});
     document.title=state.title;
     setMeta('meta[name="description"]',"name","description",state.description);setMeta('meta[name="robots"]',"name","robots",state.robots);
     setMeta('meta[property="og:title"]',"property","og:title",state.title);setMeta('meta[property="og:description"]',"property","og:description",state.description);setMeta('meta[property="og:url"]',"property","og:url",state.canonical);setMeta('meta[property="og:type"]',"property","og:type",state.type);setMeta('meta[property="og:image"]',"property","og:image",state.image);setMeta('meta[property="og:image:alt"]',"property","og:image:alt",state.imageAlt);
