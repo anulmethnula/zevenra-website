@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useStore } from "../features/store/StoreContext";
 import { AdminToasts } from "../components/admin/AdminToasts";
+import { Seo } from "../components/Seo";
 
 const links = [
   ["/admin", Gauge, "Dashboard"],
@@ -103,6 +104,7 @@ export function AdminLayout() {
   if (checking)
     return (
       <div className="grid min-h-dvh place-content-center bg-[#e9e4dc] text-center">
+        <Seo title="Admin" noindex />
         <span className="mx-auto mb-5 h-6 w-6 animate-spin rounded-full border border-black/15 border-t-black" />
         <p className="eyebrow text-black/45">Checking secure admin session…</p>
       </div>
@@ -110,6 +112,7 @@ export function AdminLayout() {
   if (sessionError)
     return (
       <div className="grid min-h-dvh place-content-center bg-[#e9e4dc] px-6 text-center">
+        <Seo title="Admin unavailable" noindex />
         <h1 className="display text-4xl">Admin unavailable.</h1>
         <p className="mt-3 max-w-md text-sm text-black/55">{sessionError}</p>
         <button
@@ -162,6 +165,7 @@ export function AdminLayout() {
   const runCommand = (to: string) => { setCommandOpen(false); setCommandQuery(""); navigate(to); };
   return (
     <div className="admin-shell min-h-dvh">
+      <Seo title={pageLabel} noindex />
       <AdminToasts />
       <aside className="admin-sidebar fixed inset-y-0 left-0 z-40 hidden w-64 flex-col p-6 md:flex">
         {sidebar}

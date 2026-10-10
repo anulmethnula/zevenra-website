@@ -93,6 +93,7 @@ test("authenticated account history never claims guest orders by matching email 
   const source = await readFile(new URL("../api/_data/customers.ts", import.meta.url), "utf8");
   assert.match(source, /WHERE o\.customer_id=\$1 ORDER BY/);
   assert.match(source, /FROM preorders WHERE customer_id=\$1 ORDER BY/);
+  assert.equal((source.match(/LIMIT 100/g)||[]).length,2);
   assert.doesNotMatch(source, /customer_id IS NULL AND lower\([^)]*email/);
 });
 

@@ -8,6 +8,7 @@ import {
   ShieldCheck,
   UserRound,
 } from "lucide-react";
+import { Seo } from "../../components/Seo";
 
 export default function LoginPage() {
   const navigate = useNavigate(),
@@ -72,6 +73,7 @@ export default function LoginPage() {
   }
   return (
     <main className="admin-login">
+      <Seo title="Admin sign in" noindex />
       <section className="admin-login__visual" aria-hidden="true">
         <img src="/brand/hero.jpg" alt="" />
         <div className="admin-login__visual-copy">

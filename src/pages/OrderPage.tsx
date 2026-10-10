@@ -71,7 +71,7 @@ export default function OrderPage() {
   }
   return (
     <main className="container py-8 sm:py-12">
-      <Seo title={`Order ${order.orderId}`} />
+      <Seo title={`Order ${order.orderId}`} noindex />
       <div className="mx-auto min-w-0 max-w-3xl">
         <section className="min-w-0 border border-emerald-950/15 bg-emerald-950/[.045] p-6 text-center sm:p-9">
           <span className="mx-auto grid h-16 w-16 place-items-center rounded-full border border-emerald-900/30 text-emerald-900">

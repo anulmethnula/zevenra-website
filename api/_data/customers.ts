@@ -70,7 +70,7 @@ const orderWithItems = `SELECT o.*,COALESCE((SELECT jsonb_agg(to_jsonb(oi) ORDER
 export async function listCustomerOrders(customerId: string, email?: string) {
   void email;
   const result = await query<Record<string, unknown>>(
-    `${orderWithItems} WHERE o.customer_id=$1 ORDER BY o.created_at DESC`,
+    `${orderWithItems} WHERE o.customer_id=$1 ORDER BY o.created_at DESC LIMIT 100`,
     [customerId],
   );
   return result.rows.map(mapOrder);
@@ -78,7 +78,10 @@ export async function listCustomerOrders(customerId: string, email?: string) {
 export async function listCustomerPreorders(customerId: string, email?: string) {
   void email;
   const result = await query<Record<string, unknown>>(
-    "SELECT * FROM preorders WHERE customer_id=$1 ORDER BY created_at DESC",
+    `SELECT request_id,created_at,updated_at,customer_id,customer_name,phone,whatsapp,email,
+            address1,address2,city,district,postal_code,product_id,variant_id,product_name,
+            sku,color,size,quantity,requested_price,confirmed_price,status,batch_id,notes
+       FROM preorders WHERE customer_id=$1 ORDER BY created_at DESC LIMIT 100`,
     [customerId],
   );
   return result.rows.map(mapPreorder);

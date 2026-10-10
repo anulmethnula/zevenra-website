@@ -92,7 +92,7 @@ export default function AccountPage() {
   }
   return (
     <main className="account-page">
-      <Seo title="My Account" />
+      <Seo title="My Account" noindex />
       <div className="container account-page__inner">
         <p className="eyebrow text-bronze">Private account</p>
         <h1 className="display">

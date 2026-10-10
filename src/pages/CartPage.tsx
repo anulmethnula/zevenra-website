@@ -27,7 +27,7 @@ export default function CartPage() {
     canCheckout = c.items.length > 0 && c.items.every(valid);
   return (
     <div className="container min-h-[70vh] pb-24 pt-36 lg:pt-44">
-      <Seo title="Your Bag" />
+      <Seo title="Your Bag" noindex />
       <p className="eyebrow text-ink/50">Your selection</p>
       {c.hydrationError && (
         <div className="mt-6 flex min-w-0 flex-col items-start gap-3 border border-red-900/20 bg-red-950/[.04] p-4 text-xs text-red-900 sm:flex-row sm:items-center sm:justify-between sm:gap-4">

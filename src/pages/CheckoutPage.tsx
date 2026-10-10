@@ -339,7 +339,7 @@ export default function CheckoutPage() {
   return (
     <>
       <main aria-hidden={Boolean(successOrder)} className="checkout-page min-w-0 bg-paper">
-        <Seo title="Checkout" />
+        <Seo title="Checkout" noindex />
         <div className="mx-auto max-w-[1440px]">
           <form ref={formRef} onSubmit={submit} noValidate className="grid min-w-0 lg:grid-cols-[58%_42%]">
             <aside className="min-w-0 border-b border-black/10 bg-[#f1ede7] p-4 sm:p-7 lg:col-start-2 lg:row-start-1 lg:border-b-0 lg:border-l lg:p-10">

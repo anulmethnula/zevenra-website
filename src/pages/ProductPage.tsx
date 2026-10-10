@@ -50,6 +50,7 @@ export default function ProductPage() {
   if (!product)
     return (
       <div className="container grid min-h-[70vh] place-content-center pt-28 text-center">
+        <Seo title="Piece not found" noindex />
         <h1 className="display text-5xl">{request.error==="Not found"?"Piece not found.":"This piece is temporarily unavailable."}</h1>
         {request.error!=="Not found"&&<button className="btn mx-auto mt-6" onClick={()=>void request.retry()}>Retry</button>}
         <Link to="/shop" className="mt-5 underline">
@@ -82,6 +83,9 @@ export default function ProductPage() {
     ),
     media = galleryMedia.length ? galleryMedia : product.media,
     current = media[activeMedia];
+  const productUrl=`${String(import.meta.env.VITE_PUBLIC_SITE_URL||location.origin).replace(/\/$/,"")}/product/${encodeURIComponent(product.slug)}`,
+    available=product.variants.some(item=>item.active&&item.stock>0),
+    productSchema={"@context":"https://schema.org","@type":"Product",name:product.name,description:product.shortDescription||undefined,image:primaryImage||undefined,url:productUrl,offers:{"@type":"Offer",priceCurrency:"LKR",price:product.price,url:productUrl,availability:`https://schema.org/${available?"InStock":product.preorderEnabled?"PreOrder":"OutOfStock"}`}};
 
   const add = () =>
     variant &&
@@ -123,6 +127,9 @@ export default function ProductPage() {
         title={product.name}
         description={product.shortDescription}
         image={primaryImage}
+        imageAlt={product.name}
+        type="product"
+        structuredData={productSchema}
       />
       <div className="product-page pb-28 pt-[102px] lg:container lg:pt-36">
         <div className="product-detail-grid">

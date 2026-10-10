@@ -90,7 +90,7 @@ export default function CustomerOrdersPage() {
     );
   return (
     <main className="account-page account-orders">
-      <Seo title="My Orders" />
+      <Seo title="My Orders" noindex />
       <div className="container account-page__inner">
         <Link to="/account" className="account-back">
           <ArrowLeft /> My account

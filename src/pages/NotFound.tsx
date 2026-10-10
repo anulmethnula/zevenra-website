@@ -1,7 +1,9 @@
 import { Link } from "react-router-dom";
+import { Seo } from "../components/Seo";
 export default function NotFound() {
   return (
     <main className="container grid min-h-[80vh] place-content-center text-center pt-24">
+      <Seo title="Page not found" noindex />
       <p className="display text-[10rem] leading-none text-bronze/25">404</p>
       <h1 className="display -mt-12 text-5xl">Lost between chapters.</h1>
       <p className="mt-4 text-sm text-ink/55">

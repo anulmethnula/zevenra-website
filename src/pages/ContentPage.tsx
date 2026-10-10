@@ -26,19 +26,19 @@ type CareSection = { title: string; body: string };
 const deliverySections: CareSection[] = [
   {
     title: "Order Confirmation",
-    body: "After you place an order request, we check product availability, selected size and colour, and the expected delivery timeframe. We will confirm these details with you before placing any sourced-on-request order.",
+    body: "Checkout revalidates product availability, selected size, colour, price and the chosen fulfilment method before an order is created. Pre-orders follow the separate confirmation process shown on the product page.",
   },
   {
     title: "Delivery Time",
-    body: "Delivery times can vary depending on the item and source. Your estimated delivery timeframe will be shared with you before your order is finally confirmed.",
+    body: "Any delivery estimate shown at checkout is saved with the order. Actual timing can vary after dispatch.",
   },
   {
     title: "Islandwide Delivery",
-    body: "We deliver across Sri Lanka through selected courier services.",
+    body: "Available checkout options may include flat-rate delivery, area-group delivery and collection from an enabled ZEVENRA branch. Only currently configured options are shown.",
   },
   {
     title: "Delivery Fee",
-    body: "Delivery fees are calculated at checkout or confirmed with you depending on the destination and order.",
+    body: "The server calculates the delivery fee from the active method and destination. Branch collection has no delivery fee.",
   },
   {
     title: "Order Updates",
@@ -86,11 +86,11 @@ const privacySections: CareSection[] = [
   },
   {
     title: "Third-Party Services",
-    body: "Some services used to operate the store may process limited information necessary to provide hosting, communication, delivery or analytics.",
+    body: "The store uses Vercel for hosting, Neon for database storage and Cloudinary for product media and protected payment-receipt storage. Delivery/contact details may be shared with service providers when operationally necessary to fulfil an order.",
   },
   {
-    title: "Cookies / Basic Analytics",
-    body: "The website may use essential browser storage and basic analytics to maintain site functionality and understand general usage.",
+    title: "Cookies and Browser Storage",
+    body: "Essential, HttpOnly session cookies keep signed-in customer and administrator sessions secure. Browser storage keeps the shopping bag, a short list of recent guest order IDs and temporary public catalogue data. The current site does not install advertising or analytics trackers.",
   },
   {
     title: "Data Retention",

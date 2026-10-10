@@ -2,6 +2,7 @@ export type RecentGuestOrder = { orderId: string; createdAt: string };
 
 const storageKey = "zevenra:recent-guest-orders:v1";
 const maxOrders = 5;
+const maxAgeMs = 90 * 24 * 60 * 60 * 1000;
 
 type GuestOrderStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
@@ -17,6 +18,7 @@ export function getRecentGuestOrders(storage: GuestOrderStorage | undefined = br
     if (!Array.isArray(parsed)) return [];
     return parsed
       .filter((value): value is RecentGuestOrder => Boolean(value && typeof value === "object" && typeof (value as RecentGuestOrder).orderId === "string" && typeof (value as RecentGuestOrder).createdAt === "string"))
+      .filter(value=>{const created=Date.parse(value.createdAt);return Number.isFinite(created)&&Date.now()-created<=maxAgeMs;})
       .slice(0, maxOrders)
       .map(({ orderId, createdAt }) => ({ orderId, createdAt }));
   } catch {

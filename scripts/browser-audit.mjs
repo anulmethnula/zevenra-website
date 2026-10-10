@@ -5,11 +5,11 @@ const baseURL = process.env.BROWSER_AUDIT_URL || "http://localhost:3000";
 const executablePath = process.env.CHROME_PATH ||
   "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
 const widths = [320, 360, 390, 430, 768, 1024, 1440];
-const customerRoutes = ["/", "/shop", "/cart", "/checkout", "/track-order", "/account/orders"];
+const customerRoutes = ["/", "/shop", "/cart", "/checkout", "/track-order", "/account/login", "/account/register", "/account", "/account/orders", "/about", "/delivery", "/returns", "/contact", "/privacy", "/terms", "/404"];
 const adminRoutes = [
   "/admin", "/admin/products", "/admin/categories", "/admin/collections",
-  "/admin/orders", "/admin/preorders", "/admin/returns", "/admin/discounts",
-  "/admin/delivery", "/admin/settings",
+  "/admin/products/new", "/admin/orders", "/admin/preorders", "/admin/homepage",
+  "/admin/delivery", "/admin/settings", "/admin/login",
 ];
 
 function adminSession(secret) {
@@ -22,9 +22,9 @@ const failures = [];
 try {
   const catalogue = await fetch(`${baseURL}/api/products?page=1&pageSize=1`).then(response => response.json());
   const slug = catalogue.items?.[0]?.slug;
-  if (slug) customerRoutes.push(`/products/${slug}`);
+  if (slug) customerRoutes.push(`/product/${slug}`,`/preorder/${slug}`);
 
-  await Promise.all(widths.map(async width => {
+  for (const width of widths) {
     const context = await browser.newContext({ viewport: { width, height: 900 } });
     if (process.env.SESSION_SECRET) {
       await context.addCookies([{ name: "zevenra_session", value: adminSession(process.env.SESSION_SECRET), url: baseURL, httpOnly: true, sameSite: "Strict" }]);
@@ -35,7 +35,7 @@ try {
     page.on("console", message => { if (message.type() === "error") runtimeErrors.push(message.text()); });
     for (const route of [...customerRoutes, ...adminRoutes]) {
       const response = await page.goto(`${baseURL}${route}`, { waitUntil: "domcontentloaded", timeout: 45_000 });
-      await page.waitForTimeout(1_500);
+      await page.waitForTimeout(1_000);
       const layout = await page.evaluate(() => {
         const viewport = document.documentElement.clientWidth;
         const intentionallyClipped = element => {
@@ -53,16 +53,19 @@ try {
           const rect = element.getBoundingClientRect();
           return rect.width > 0 && rect.height > 0 && !intentionallyClipped(element) && (rect.right > viewport + 2 || rect.left < -2);
         }).length;
-        return { viewport, scrollWidth: document.documentElement.scrollWidth, offenders, clipped };
+        const unlabeled=[...document.querySelectorAll("input,select,textarea")].filter(element=>!element.getAttribute("aria-label")&&!element.getAttribute("aria-labelledby")&&!element.id&&!element.closest("label")).length;
+        const unnamedButtons=[...document.querySelectorAll("button")].filter(element=>!element.textContent?.trim()&&!element.getAttribute("aria-label")&&!element.getAttribute("aria-labelledby")).length;
+        const missingAlt=[...document.querySelectorAll("img")].filter(element=>!element.hasAttribute("alt")).length;
+        return { viewport, scrollWidth: document.documentElement.scrollWidth, offenders, clipped, unlabeled, unnamedButtons, missingAlt };
       });
       const status = response?.status() || 0;
       const errors = runtimeErrors.splice(0);
-      const ok = status < 400 && layout.scrollWidth <= layout.viewport + 2 && layout.clipped === 0 && errors.length === 0;
+      const ok = status < 400 && layout.scrollWidth <= layout.viewport + 2 && layout.clipped === 0 && layout.unlabeled===0 && layout.unnamedButtons===0 && layout.missingAlt===0 && errors.length === 0;
       console.log(JSON.stringify({ width, route, status, ...layout, errors, ok }));
       if (!ok) failures.push({ width, route, status, ...layout, errors });
     }
     await context.close();
-  }));
+  }
 } finally {
   await browser.close();
 }

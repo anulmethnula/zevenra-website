@@ -1,0 +1,13 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+import type { VercelRequest,VercelResponse } from "@vercel/node";
+import robotsHandler from "../api/robots.ts";
+import { publicOrigin } from "../api/_public-origin.ts";
+import { buildSeoState,defaultSeoImage } from "../src/utils/seo.ts";
+
+test("route SEO clears an old product image with the absolute default",()=>{const product=buildSeoState({title:"Dress",image:"https://res.cloudinary.com/demo/image/upload/dress.jpg",path:"/product/dress",siteUrl:"https://shop.example"}),next=buildSeoState({title:"About",path:"/about",siteUrl:"https://shop.example"});assert.notEqual(next.image,product.image);assert.equal(next.image,`https://shop.example${defaultSeoImage}`);assert.equal(next.imageAlt,"About — ZEVENRA");});
+test("canonical strips query/hash and noindex is explicit",()=>{const state=buildSeoState({title:"Search",path:"/shop?q=dress#results",siteUrl:"https://shop.example/",noindex:true});assert.equal(state.canonical,"https://shop.example/shop");assert.equal(state.robots,"noindex, nofollow");});
+test("production SEO origin ignores an attacker-controlled Host header",()=>{const previous={PUBLIC_SITE_URL:process.env.PUBLIC_SITE_URL,VERCEL_PROJECT_PRODUCTION_URL:process.env.VERCEL_PROJECT_PRODUCTION_URL,VERCEL_ENV:process.env.VERCEL_ENV};process.env.PUBLIC_SITE_URL="https://shop.example";process.env.VERCEL_ENV="production";assert.equal(publicOrigin({headers:{host:"evil.example"}} as VercelRequest),"https://shop.example");for(const [key,value] of Object.entries(previous))if(value===undefined)delete process.env[key];else process.env[key]=value;});
+test("preview robots disallows all crawling",()=>{const previous=process.env.VERCEL_ENV;process.env.VERCEL_ENV="preview";let body="";const res={status(){return res;},setHeader(){return res;},send(value:string){body=value;return res;}} as unknown as VercelResponse;robotsHandler({method:"GET",headers:{host:"preview.example"}} as VercelRequest,res);assert.match(body,/Disallow: \/$/m);assert.doesNotMatch(body,/Sitemap:/);if(previous===undefined)delete process.env.VERCEL_ENV;else process.env.VERCEL_ENV=previous;});
+test("sitemap source includes only public route families and escapes XML",async()=>{const source=await readFile(new URL("../api/sitemap.ts",import.meta.url),"utf8");for(const route of ["/product/","/category/","/collections/"])assert.equal(source.includes(route),true);for(const route of ["/admin","/cart","/checkout","/account","/order/"])assert.equal(source.includes(`paths.add("${route}`),false);assert.match(source,/&quot;/);assert.match(source,/isPreviewDeployment/);});

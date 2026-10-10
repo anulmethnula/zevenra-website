@@ -43,7 +43,7 @@ export default function CustomerLoginPage() {
       title="Welcome back"
       intro="Sign in to see your orders and move through checkout a little faster."
     >
-      <Seo title="Customer Sign In" />
+      <Seo title="Customer Sign In" noindex />
       <form onSubmit={submit} className="account-auth__form">
         <label>
           Email

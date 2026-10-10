@@ -69,7 +69,7 @@ export default function CustomerRegisterPage() {
       title="Create account"
       intro="Save time at checkout and keep your ZEVENRA order history close."
     >
-      <Seo title="Create Account" />
+      <Seo title="Create Account" noindex />
       <form
         onSubmit={submit}
         className="account-auth__form account-auth__form--register"

@@ -88,7 +88,7 @@ export default function PreorderPage() {
   if (done)
     return (
       <main className="container grid min-h-[75vh] place-content-center px-4 py-28 text-center">
-        <Seo title="Pre-order requested" />
+        <Seo title="Pre-order requested" noindex />
         <CheckCircle2 className="mx-auto" size={34} />
         <p className="eyebrow mt-5 text-bronze">Request received</p>
         <h1 className="display mt-3 break-words text-4xl sm:text-5xl">
@@ -113,7 +113,7 @@ export default function PreorderPage() {
     );
   return (
     <main className="container min-w-0 pb-20 pt-28 lg:pt-36">
-      <Seo title={"Pre-order " + product.name} />
+      <Seo title={"Pre-order " + product.name} noindex />
       <Link
         to={"/product/" + product.slug}
         className="inline-flex min-h-11 items-center gap-2 text-xs underline"

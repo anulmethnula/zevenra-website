@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { listCategories,listCollections,listPublishedProductSlugs } from "./_data/catalog.js";
 import { methodNotAllowed } from "./_shared.js";
+import { isPreviewDeployment,publicOrigin } from "./_public-origin.js";
 
 const escapeXml = (value: string) =>
   value.replace(
@@ -19,13 +20,8 @@ const cleanPath = (value: string) => "/" + value.replace(/^\/+|\/+$/g, "");
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "GET") return methodNotAllowed(res, ["GET"]);
   try {
-    const host = String(
-        req.headers["x-forwarded-host"] ||
-          req.headers.host ||
-          "zevenra.vercel.app",
-      ),
-      proto = String(req.headers["x-forwarded-proto"] || "https").split(",")[0],
-      origin = `${proto}://${host}`;
+    const origin=publicOrigin(req);
+    if(isPreviewDeployment()){res.status(200);res.setHeader("Content-Type","application/xml; charset=utf-8");res.setHeader("Cache-Control","private, no-store");return res.send('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>\n');}
     const [productSlugs,categories,collections]=await Promise.all([listPublishedProductSlugs(),listCategories(),listCollections()]);
     const paths = new Set<string>([
       "/",

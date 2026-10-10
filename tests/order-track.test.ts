@@ -174,6 +174,12 @@ test("recent guest orders keep five unique IDs without personal data and query I
   assert.equal(orderIdFromSearch("?orderId=ZEV-TEST-1"), "ZEV-TEST-1");
 });
 
+test("recent guest order IDs expire after ninety days",()=>{
+  const values=new Map<string,string>(),storage={getItem:(key:string)=>values.get(key)||null,setItem:(key:string,value:string)=>{values.set(key,value);},removeItem:(key:string)=>{values.delete(key);}};
+  rememberGuestOrder({orderId:"ZEV-OLD",createdAt:new Date(Date.now()-91*24*60*60*1000).toISOString()},storage);
+  assert.deepEqual(getRecentGuestOrders(storage),[]);
+});
+
 test("PDF helper handles single, long, and multi-page orders", async () => {
   const base = { orderId: "ZEV-PDF-TEST", createdAt: "2026-10-08T10:00:00.000Z", orderStatus: "confirmed", paymentMethod: "cod", paymentStatus: "COD", customerName: "Test Customer", address1: "A very long delivery address that should wrap cleanly without touching the next section or leaving the printable area", address2: "Apartment 12, Building Seven", city: "Colombo", district: "Colombo", postalCode: "00100", deliveryZoneName: "Colombo", subtotal: 8000, deliveryFee: 450, total: 8450 };
   const single = await createOrderPdf({ ...base, items: [{ name: "A single product with an intentionally long descriptive product name that must wrap", color: "Black", size: "M", quantity: 1, unitPrice: 8000 }] });
