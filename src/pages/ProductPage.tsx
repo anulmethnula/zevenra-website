@@ -377,7 +377,7 @@ function ProductGallery({
               width="1200"
               height="1500"
               loading="eager"
-              fetchPriority="high"
+              {...{ fetchpriority: "high" }}
               decoding="async"
               onLoad={(event)=>{setLoadedUrl(current.url);if(import.meta.env.DEV){const entry=performance.getEntriesByName(event.currentTarget.currentSrc).at(-1) as PerformanceResourceTiming|undefined;console.info("product image ready",{requestMs:entry?Math.round(entry.duration):undefined,decodedAtMs:Math.round(performance.now())});}}}
               className="product-gallery__media"
