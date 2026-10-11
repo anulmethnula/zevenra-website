@@ -1,8 +1,9 @@
 import { neon } from "@neondatabase/serverless";
 import { listPublicProducts } from "../api/_data/catalog.ts";
 
-if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required");
-const sql = neon(process.env.DATABASE_URL, { fullResults: true });
+const connectionString=process.env.E2E_DATABASE_URL||process.env.DATABASE_URL;
+if (!connectionString) throw new Error("E2E_DATABASE_URL or DATABASE_URL is required");
+const sql = neon(connectionString, { fullResults: true });
 const cases = [
   { query:"THE CLASSIC FIT", slug:"the-classic-fit" },
   { query:"PORCELAIN BLOOM TWIST TOP", slug:"porcelain-bloom-twist-top" },

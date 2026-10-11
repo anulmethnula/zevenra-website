@@ -225,6 +225,7 @@ export default function ProductPage() {
                 <button
                   className="px-3"
                   onClick={() => setQty(Math.max(1, qty - 1))}
+                  aria-label="Reduce quantity"
                 >
                   <Minus size={15} />
                 </button>
@@ -233,6 +234,7 @@ export default function ProductPage() {
                   className="px-3"
                   disabled={!variant || qty >= quantityLimit}
                   onClick={() => setQty(Math.min(quantityLimit, qty + 1))}
+                  aria-label="Increase quantity"
                 >
                   <Plus size={15} />
                 </button>

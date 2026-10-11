@@ -94,6 +94,9 @@
       ]
     }
   ],
+  "functions": {
+    "api/product-page.ts": { "includeFiles": "dist/index.html" }
+  },
   "rewrites": [
     {
       "source": "/robots.txt",
@@ -110,6 +113,10 @@
     {
       "source": "/api/products/:slug",
       "destination": "/api/products/[slug]"
+    },
+    {
+      "source": "/product/:slug",
+      "destination": "/api/product-page?slug=:slug"
     },
     {
       "source": "/((?!api/).*)",

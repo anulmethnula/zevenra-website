@@ -37,7 +37,7 @@ try {
     await page.waitForTimeout(1_000);
     for (const width of widths) {
       await page.setViewportSize({ width, height: 900 });
-      await page.waitForTimeout(150);
+      await page.waitForTimeout(400);
       const layout = await page.evaluate(() => {
         const viewport = document.documentElement.clientWidth;
         const intentionallyClipped = element => {
@@ -56,7 +56,7 @@ try {
           return rect.width > 0 && rect.height > 0 && !intentionallyClipped(element) && (rect.right > viewport + 2 || rect.left < -2);
         }).length;
         const unlabeled=[...document.querySelectorAll("input,select,textarea")].filter(element=>!element.getAttribute("aria-label")&&!element.getAttribute("aria-labelledby")&&!element.id&&!element.closest("label")).length;
-        const unnamedButtons=[...document.querySelectorAll("button")].filter(element=>!element.textContent?.trim()&&!element.getAttribute("aria-label")&&!element.getAttribute("aria-labelledby")).length;
+        const unnamedButtons=[...document.querySelectorAll("button")].filter(element=>{const rect=element.getBoundingClientRect();return rect.width>0&&rect.height>0&&!element.textContent?.trim()&&!element.getAttribute("aria-label")&&!element.getAttribute("aria-labelledby");}).length;
         const missingAlt=[...document.querySelectorAll("img")].filter(element=>!element.hasAttribute("alt")).length;
         return { viewport, scrollWidth: document.documentElement.scrollWidth, offenders, clipped, unlabeled, unnamedButtons, missingAlt };
       });

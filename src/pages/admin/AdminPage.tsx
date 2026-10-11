@@ -423,6 +423,7 @@ export function Products() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            aria-label="Search products"
             className="field bg-white/55 pl-10"
             placeholder="Search product, category, tag…"
           />
@@ -2549,10 +2550,11 @@ function Preorders() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            aria-label="Search pre-orders"
             placeholder="Search request ID, customer, WhatsApp, product, city…"
           />
         </div>
-        <select value={filter} onChange={(e) => setFilter(e.target.value)}>
+        <select value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Pre-order status filter">
           <option value="active">Active requests</option>
           <option value="all">All requests</option>
           {(
@@ -3483,12 +3485,14 @@ function Orders() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            aria-label="Search orders"
             placeholder="Order ID, customer, phone, email…"
           />
         </div>
         <select
           value={orderFilter}
           onChange={(e) => setOrderFilter(e.target.value)}
+          aria-label="Order status filter"
           className="field bg-white/50"
         >
           <option value="all">All order statuses</option>
@@ -3512,6 +3516,7 @@ function Orders() {
         <select
           value={paymentFilter}
           onChange={(e) => setPaymentFilter(e.target.value)}
+          aria-label="Payment filter"
           className="field bg-white/50"
         >
           <option value="all">All payments</option>
@@ -3523,6 +3528,7 @@ function Orders() {
         <select
           value={dateFilter}
           onChange={(e) => setDateFilter(e.target.value)}
+          aria-label="Order date filter"
           className="field bg-white/50"
         >
           <option value="all">Any date</option>

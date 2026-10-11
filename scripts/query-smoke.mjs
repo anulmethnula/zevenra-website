@@ -1,7 +1,7 @@
 import { neon } from "@neondatabase/serverless";
 
-const connectionString=process.env.DATABASE_URL;
-if(!connectionString){console.error("FAIL configuration: DATABASE_URL is required");process.exit(1);}
+const connectionString=process.env.E2E_DATABASE_URL||process.env.DATABASE_URL;
+if(!connectionString){console.error("FAIL configuration: E2E_DATABASE_URL or DATABASE_URL is required");process.exit(1);}
 const sql=neon(connectionString,{fullResults:true});
 const run=async(text,values=[])=>{try{return await sql.query(text,values);}catch(error){if(!/connection|timeout|fetch failed|ECONNRESET|socket|terminated/i.test(error instanceof Error?error.message:String(error)))throw error;return sql.query(text,values);}};
 const checks=[],planReports=[];

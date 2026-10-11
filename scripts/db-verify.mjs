@@ -6,10 +6,11 @@ import ws from "ws";
 neonConfig.webSocketConstructor = ws;
 
 const connectionString =
+  process.env.E2E_DATABASE_URL ||
   process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
 if (!connectionString)
   throw new Error(
-    "Set DATABASE_URL_UNPOOLED or DATABASE_URL before verification.",
+    "Set E2E_DATABASE_URL, DATABASE_URL_UNPOOLED or DATABASE_URL before verification.",
   );
 const required = [
   "products",

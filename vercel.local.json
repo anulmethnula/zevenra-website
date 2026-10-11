@@ -4,6 +4,7 @@
     { "source": "/robots.txt", "destination": "/api/robots" },
     { "source": "/sitemap.xml", "destination": "/api/sitemap" },
     { "source": "/api/admin/:action", "destination": "/api/admin/[action]" },
-    { "source": "/api/products/:slug", "destination": "/api/products/[slug]" }
+    { "source": "/api/products/:slug", "destination": "/api/products/[slug]" },
+    { "source": "/product/:slug", "destination": "/api/product-page?slug=:slug" }
   ]
 }

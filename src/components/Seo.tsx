@@ -29,7 +29,7 @@ export function Seo({
     setMeta('meta[property="og:title"]',"property","og:title",state.title);setMeta('meta[property="og:description"]',"property","og:description",state.description);setMeta('meta[property="og:url"]',"property","og:url",state.canonical);setMeta('meta[property="og:type"]',"property","og:type",state.type);setMeta('meta[property="og:image"]',"property","og:image",state.image);setMeta('meta[property="og:image:alt"]',"property","og:image:alt",state.imageAlt);
     setMeta('meta[name="twitter:card"]',"name","twitter:card","summary_large_image");setMeta('meta[name="twitter:title"]',"name","twitter:title",state.title);setMeta('meta[name="twitter:description"]',"name","twitter:description",state.description);setMeta('meta[name="twitter:image"]',"name","twitter:image",state.image);
     let canonical=document.querySelector<HTMLLinkElement>('link[rel="canonical"]');if(!canonical){canonical=document.createElement("link");canonical.rel="canonical";document.head.appendChild(canonical);}canonical.href=state.canonical;
-    document.querySelectorAll('script[data-zevenra-seo="route"]').forEach(node=>node.remove());
+    document.querySelectorAll('script[data-zevenra-seo="route"],script[data-zevenra-seo="server"]').forEach(node=>node.remove());
     if(structuredData){const script=document.createElement("script");script.type="application/ld+json";script.dataset.zevenraSeo="route";script.text=JSON.stringify(structuredData).replace(/</g,"\\u003c");document.head.appendChild(script);}
     return()=>{document.querySelectorAll('script[data-zevenra-seo="route"]').forEach(node=>node.remove());};
   }, [title,description,image,imageAlt,noindex,type,structuredData]);

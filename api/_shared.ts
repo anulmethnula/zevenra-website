@@ -380,7 +380,7 @@ export const orderSchema = z
     address1: z.string().trim().max(180).optional(),
     address2: z.string().trim().max(180).optional(),
     city: z.string().trim().max(80).optional(),
-    district: z.enum(sriLankaDistricts).optional(),
+    district: z.enum(sriLankaDistricts).or(z.literal("")).optional(),
     postalCode: optionalPostalSchema,
     deliveryNotes: z.string().trim().max(300).optional(),
     paymentMethod: z.enum(["cod", "bank"]),

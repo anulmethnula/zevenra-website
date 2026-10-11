@@ -15,8 +15,8 @@ let pool: Pool | undefined;
 let httpQuery: ReturnType<typeof neon<false, true>> | undefined;
 
 function connectionString() {
-  const value = process.env.DATABASE_URL;
-  if (!value) throw new ConfigurationError("DATABASE_URL");
+  const value = process.env.E2E_DATABASE_URL || process.env.DATABASE_URL;
+  if (!value) throw new ConfigurationError("E2E_DATABASE_URL or DATABASE_URL");
   return value;
 }
 
