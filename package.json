@@ -21,7 +21,7 @@
     "test:discounts": "node --import tsx --test tests/discounts.test.ts",
     "test:delivery-settings": "node --import tsx --test tests/delivery-settings.test.ts",
     "test:delivery-matching": "node --import tsx --test tests/delivery-matching.test.ts",
-    "test:fulfillment": "node --import tsx --test tests/fulfillment.test.ts",
+    "test:fulfillment": "node --import tsx --test tests/fulfillment.test.ts tests/fulfillment-config.test.ts",
     "test:shipping-weight": "node --import tsx --test tests/shipping-weight.test.ts",
     "test:delivery-weight-fee": "node --import tsx --test tests/delivery-weight-fee.test.ts",
     "test:checkout-config": "node --import tsx --test tests/checkout-config.test.ts",

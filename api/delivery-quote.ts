@@ -22,7 +22,10 @@ export default async function handler(req:VercelRequest,res:VercelResponse){
   }catch(error){
     const message=error instanceof Error?error.message:"";
     if(error instanceof Error&&error.name==="ZodError")return json(res,{error:"Enter a valid Sri Lankan district and 5-digit postal code."},400);
-    if(/not configured|temporarily unavailable|delivery is not configured/i.test(message))return json(res,{error:"Delivery is not configured for this address."},400);
+    if(message==="FULFILLMENT_METHOD_UNAVAILABLE")return json(res,{error:"The selected delivery method is no longer available. Refresh checkout and choose another method."},409);
+    if(message==="PICKUP_LOCATION_UNAVAILABLE")return json(res,{error:"The selected pickup branch is no longer available."},409);
+    if(message==="DELIVERY_ADDRESS_INVALID")return json(res,{error:"Enter a valid Sri Lankan district and 5-digit postal code."},400);
+    if(message==="DELIVERY_AREA_UNAVAILABLE")return json(res,{error:"Delivery is not available for this address."},400);
     if(/no longer available|quantity/i.test(message))return json(res,{error:"Review the items in your bag."},409);
     console.error("delivery quote failed",error);
     return json(res,{error:"Delivery could not be calculated."},500);

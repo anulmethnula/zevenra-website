@@ -64,7 +64,7 @@ import {
 } from "../_shared.js";
 import { CourierRateFileError } from "../_data/courier-rate-parser.js";
 import { deleteDiscount, DiscountConflictError, discountDeleteSchema, listDiscounts, saveDiscount } from "../_data/discounts.js";
-import { listFulfillmentConfig, saveFulfillmentConfig } from "../_data/fulfillment.js";
+import { FulfillmentConfigError, listFulfillmentConfig, saveFulfillmentConfig } from "../_data/fulfillment.js";
 
 const readActions = new Set([
   "bootstrap",
@@ -286,6 +286,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         : (body(req) as Record<string, unknown>);
     return json(res, await execute(action, payload));
   } catch (error) {
+    if (error instanceof FulfillmentConfigError)
+      return json(res, { error: error.message }, 400);
     if (error instanceof DiscountConflictError)
       return json(res, { error: error.message }, 409);
     if (error instanceof CourierRateFileError || error instanceof DeliveryZoneTemplateError)

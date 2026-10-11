@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Banknote, Check, CheckCircle2, ChevronDown, ShoppingBag, Upload, WalletCards, X } from "lucide-react";
+import { Banknote, Check, CheckCircle2, ChevronDown, CircleAlert, ShoppingBag, Upload, WalletCards, X } from "lucide-react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { z } from "zod";
 import { Seo } from "../components/Seo";
@@ -15,6 +15,7 @@ import { checkoutAmounts } from "../utils/checkoutAmounts";
 import { paymentReadinessMessage, postalCodeError } from "../utils/checkoutValidation";
 import { rememberGuestOrder } from "../utils/guestOrders";
 import { useCheckoutConfig } from "../hooks/usePublicData";
+import { selectActiveFulfillment, type CheckoutFulfillmentType } from "../utils/checkoutFulfillment";
 
 const districts = ["Ampara", "Anuradhapura", "Badulla", "Batticaloa", "Colombo", "Galle", "Gampaha", "Hambantota", "Jaffna", "Kalutara", "Kandy", "Kegalle", "Kilinochchi", "Kurunegala", "Mannar", "Matale", "Matara", "Monaragala", "Mullaitivu", "Nuwara Eliya", "Polonnaruwa", "Puttalam", "Ratnapura", "Trincomalee", "Vavuniya"] as const;
 const schema = z.object({
@@ -77,7 +78,7 @@ export default function CheckoutPage() {
   const bankConfigured = Boolean(settings.bankEnabled && settings.bankName.trim() && settings.accountName.trim() && settings.accountNumber.trim());
   const availablePayments = useMemo<PaymentMethod[]>(() => [...(settings.codEnabled ? ["cod" as const] : []), ...(bankConfigured ? ["bank" as const] : [])], [settings.codEnabled, bankConfigured]);
   const [payment, setPayment] = useState<PaymentMethod>(availablePayments[0] || "cod"),
-    [fulfillmentMethod,setFulfillmentMethod]=useState<"flat"|"area_group"|"pickup">("flat"),
+    [fulfillmentMethod,setFulfillmentMethod]=useState<CheckoutFulfillmentType|null>(null),
     [pickupLocationId,setPickupLocationId]=useState(""),
     [district, setDistrict] = useState(user?.district || ""),
     [city, setCity] = useState(user?.city || ""),
@@ -101,12 +102,18 @@ export default function CheckoutPage() {
     [discountMessage, setDiscountMessage] = useState(""),
     [deliveryQuote, setDeliveryQuote] = useState<{fee:number;minimumDeliveryDays:number|null;maximumDeliveryDays:number|null;methodName?:string;areaGroupName?:string}|null>(null),
     [deliveryQuoteLoading, setDeliveryQuoteLoading] = useState(false),
-    [deliveryQuoteError, setDeliveryQuoteError] = useState("");
+    [deliveryQuoteError, setDeliveryQuoteError] = useState(""),
+    [toast,setToast]=useState("");
   useEffect(() => {
     if (!availablePayments.includes(payment) && availablePayments[0]) setPayment(availablePayments[0]);
   }, [availablePayments, payment]);
   const fulfillmentMethods=useMemo(()=>checkout.data?.methods||[],[checkout.data?.methods]), pickupLocations=checkout.data?.pickupLocations||[];
-  useEffect(()=>{if(fulfillmentMethods.length&&!fulfillmentMethods.some(m=>m.type===fulfillmentMethod)){setFulfillmentMethod(fulfillmentMethods[0].type);setPickupLocationId("");}},[fulfillmentMethods,fulfillmentMethod]);
+  useEffect(()=>{
+    const next=selectActiveFulfillment(fulfillmentMethods,fulfillmentMethod);
+    setDeliveryQuote(null);setDeliveryQuoteError("");setDeliveryQuoteLoading(false);
+    if(next!==fulfillmentMethod){setFulfillmentMethod(next);setPickupLocationId("");}
+  },[fulfillmentMethods,fulfillmentMethod]);
+  useEffect(()=>{if(!checkout.loading&&!checkout.error&&!fulfillmentMethods.length)setToast("Delivery is temporarily unavailable. Please contact us.");},[checkout.error,checkout.loading,fulfillmentMethods.length]);
   const discountItems = useMemo(
       () =>
         cart.items.map(({ productId, variantId, quantity }) => ({
@@ -147,6 +154,7 @@ export default function CheckoutPage() {
     };
   }, [discountCode, discountItems]);
   useEffect(()=>{
+    if(!fulfillmentMethod||!fulfillmentMethods.some(method=>method.type===fulfillmentMethod)){setDeliveryQuote(null);setDeliveryQuoteError("");setDeliveryQuoteLoading(false);return;}
     const postalError=postalCodeError(postalCode);
     if(!discountItems.length){setDeliveryQuote(null);return;}
     if(fulfillmentMethod==="pickup"&&!pickupLocationId){setDeliveryQuote(null);setDeliveryQuoteError("");return;}
@@ -154,10 +162,10 @@ export default function CheckoutPage() {
     let current=true;
     const timer=window.setTimeout(()=>{
       setDeliveryQuoteLoading(true);setDeliveryQuoteError("");
-      void api.deliveryQuote({fulfillmentMethod,pickupLocationId:fulfillmentMethod==="pickup"?pickupLocationId:undefined,city:fulfillmentMethod==="pickup"?undefined:city,district:fulfillmentMethod==="pickup"?undefined:district||undefined,postalCode:fulfillmentMethod==="pickup"?undefined:postalCode,items:discountItems}).then(result=>{if(current)setDeliveryQuote(result);}).catch(reason=>{if(current){setDeliveryQuote(null);setDeliveryQuoteError(reason instanceof Error?reason.message:"Delivery could not be calculated.");}}).finally(()=>{if(current)setDeliveryQuoteLoading(false);});
+      void api.deliveryQuote({fulfillmentMethod,pickupLocationId:fulfillmentMethod==="pickup"?pickupLocationId:undefined,city:fulfillmentMethod==="pickup"?undefined:city,district:fulfillmentMethod==="pickup"?undefined:district||undefined,postalCode:fulfillmentMethod==="pickup"?undefined:postalCode,items:discountItems}).then(result=>{if(current)setDeliveryQuote(result);}).catch(reason=>{if(current){const message=reason instanceof Error?reason.message:"Delivery could not be calculated.";setDeliveryQuote(null);setDeliveryQuoteError(message);setToast(message);}}).finally(()=>{if(current)setDeliveryQuoteLoading(false);});
     },250);
     return()=>{current=false;window.clearTimeout(timer);};
-  },[city,district,postalCode,discountItems,fulfillmentMethod,pickupLocationId]);
+  },[city,district,postalCode,discountItems,fulfillmentMethod,fulfillmentMethods,pickupLocationId]);
   if ((!cart.items.length && !successOrder) || cart.items.some((i) => i.isPreorder)) return <Navigate to="/cart" replace />;
   if (checkout.loading)
     return (
@@ -218,7 +226,8 @@ export default function CheckoutPage() {
     } catch (reason) {
       setReceiptUrl("");
       setReceiptName("");
-      setError(reason instanceof Error ? reason.message : "Could not upload the payment receipt.");
+      const message=reason instanceof Error ? reason.message : "Could not upload the payment receipt.";
+      setError(message);setToast(message);
     } finally {
       setReceiptBusy(false);
     }
@@ -242,7 +251,8 @@ export default function CheckoutPage() {
       }
     } catch (reason) {
       setDiscount(null);
-      setDiscountMessage(reason instanceof Error ? reason.message : "This discount code is not available.");
+      const message=reason instanceof Error ? reason.message : "This discount code is not available.";
+      setDiscountMessage(message);setToast(message);
     } finally {
       setDiscountBusy(false);
     }
@@ -256,6 +266,7 @@ export default function CheckoutPage() {
     event.preventDefault();
     setError("");
     setFieldErrors({});
+    if(!fulfillmentMethod){const message="Delivery is temporarily unavailable. Please contact us.";setError(message);setToast(message);return;}
     if (!settings.storeOpen || !settings.ordersEnabled) {
       setError("Online ordering is temporarily unavailable. Please contact us for assistance.");
       return;
@@ -329,15 +340,17 @@ export default function CheckoutPage() {
       cart.clear();
       setSuccessOrder(order);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "We could not submit your order. Your cart and details are still here—please try again.");
+      const message=reason instanceof Error ? reason.message : "We could not submit your order. Your cart and details are still here—please try again.";
+      setError(message);setToast(message);
     } finally {
       setBusy(false);
     }
   }
   const stockReady = cart.items.every((item) => stockFor(item.productId, item.variantId) >= item.quantity),
-    placeDisabled = Boolean(successOrder) || busy || receiptBusy || !amounts.ready || !stockReady || (payment === "bank" && !receiptUrl) || !availablePayments.length || !settings.storeOpen || !settings.ordersEnabled;
+    placeDisabled = Boolean(successOrder) || busy || receiptBusy || !fulfillmentMethod || !amounts.ready || !stockReady || (payment === "bank" && !receiptUrl) || !availablePayments.length || !settings.storeOpen || !settings.ordersEnabled;
   return (
     <>
+      <CustomerToast message={toast} dismiss={()=>setToast("")} />
       <main aria-hidden={Boolean(successOrder)} className="checkout-page min-w-0 bg-paper">
         <Seo title="Checkout" noindex />
         <div className="mx-auto max-w-[1440px]">
@@ -427,6 +440,7 @@ export default function CheckoutPage() {
                 </div>
               </Section>
               <Section number="02" title="Fulfilment">
+                {!fulfillmentMethods.length?<div role="alert" className="mb-5 border border-red-900/20 bg-red-950/[.06] p-4 text-sm text-red-950">Delivery is temporarily unavailable. Please contact us.</div>:null}
                 {fulfillmentMethods.length > 1 ? <div className="mb-5 grid gap-2 sm:grid-cols-2">
                   {fulfillmentMethods.map((method) => <label key={method.type} className={`flex min-h-16 cursor-pointer items-center gap-3 border p-3 ${fulfillmentMethod === method.type ? "border-bronze bg-bronze/[.06]" : "border-line"}`}>
                     <input type="radio" name="fulfillmentChoice" checked={fulfillmentMethod === method.type} onChange={() => { setFulfillmentMethod(method.type); setPickupLocationId(""); setDeliveryQuote(null); }} />
@@ -504,8 +518,8 @@ export default function CheckoutPage() {
                   <div className={`border p-4 ${amounts.ready ? "border-black bg-black/[.025]" : "border-black/10"}`}>
                     <div className="flex items-center justify-between gap-4">
                       <span>
-                        <b className="block text-sm">{fulfillmentMethods.find((method) => method.type === fulfillmentMethod)?.displayName || "Fulfilment"}</b>
-                        <small className="mt-1 block text-xs text-ink/50">{deliveryQuote ? `${deliveryQuote.minimumDeliveryDays}–${deliveryQuote.maximumDeliveryDays} Business Days` : deliveryQuoteLoading ? "Calculating delivery…" : deliveryQuoteError || "Enter your delivery details to calculate the rate."}</small>
+                        <b className="block text-sm">{fulfillmentMethods.find((method) => method.type === fulfillmentMethod)?.displayName || "No delivery method available"}</b>
+                        <small className="mt-1 block text-xs text-ink/50">{deliveryQuote ? deliveryQuote.minimumDeliveryDays&&deliveryQuote.maximumDeliveryDays?`${deliveryQuote.minimumDeliveryDays}–${deliveryQuote.maximumDeliveryDays} Business Days`:fulfillmentMethod==="pickup"?"Ready for collection":"Delivery available" : deliveryQuoteLoading ? "Calculating delivery…" : deliveryQuoteError || (fulfillmentMethod?"Enter your delivery details to calculate the rate.":"Please contact us for assistance.")}</small>
                       </span>
                       {amounts.ready ? <b className="text-sm">{amounts.deliveryFee ? money(amounts.deliveryFee) : "Free"}</b> : null}
                     </div>
@@ -588,6 +602,9 @@ export default function CheckoutPage() {
       {successOrder && <OrderSuccessModal order={successOrder} viewOrder={() => navigate(`/order/${successOrder.orderId}`)} continueShopping={() => navigate("/shop")} />}
     </>
   );
+}
+function CustomerToast({message,dismiss}:{message:string;dismiss:()=>void}){
+  return <AnimatePresence>{message?<motion.div role="alert" aria-live="assertive" initial={{opacity:0,y:-12}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}} className="fixed inset-x-3 top-3 z-[1000] mx-auto flex max-w-lg items-start gap-3 border border-red-900/20 bg-[#fff8f5] p-4 text-red-950 shadow-2xl sm:top-5"><CircleAlert size={19} className="mt-0.5 shrink-0"/><p className="min-w-0 flex-1 text-sm leading-5">{message}</p><button type="button" aria-label="Dismiss notification" onClick={dismiss}><X size={17}/></button></motion.div>:null}</AnimatePresence>;
 }
 function OrderSuccessModal({ order, viewOrder, continueShopping }: { order: Order; viewOrder: () => void; continueShopping: () => void }) {
   const dialogRef = useRef<HTMLDivElement>(null),

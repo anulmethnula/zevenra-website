@@ -48,6 +48,16 @@ async function seed(){
 }
 async function waitForServer(){for(let attempt=0;attempt<60;attempt++){try{const response=await fetch(`${baseURL}/api/products?page=1&pageSize=1`);if(response.ok)return;}catch{}await delay(500);}throw new Error("Local application server did not become ready.");}
 function cart(){return [{productId,variantId,slug,name:"E2E Checkout Piece",image:"/brand/og-image.jpg",color:"Black",size:"M",quantity:1,unitPrice:6500,sku:`${prefix}sku`,maxStock:10}];}
+async function configureFulfillment(){
+  const context=await browser.newContext({viewport:{width:390,height:844}});await context.addCookies([{name:"zevenra_session",value:adminSession(sessionSecret),url:baseURL,httpOnly:true,sameSite:"Strict"}]);const page=await context.newPage();await page.goto(`${baseURL}/admin/delivery`,{waitUntil:"domcontentloaded"});
+  const flat=page.locator("article").filter({hasText:"Flat Rate Delivery"}),area=page.locator("article").filter({hasText:"Area Group Delivery"}).first(),pickup=page.locator("article").filter({hasText:"Collect From Branch"}).first();
+  await flat.getByRole("checkbox").uncheck();await area.getByRole("checkbox").uncheck();await pickup.getByRole("checkbox").uncheck();await page.getByRole("button",{name:"Save delivery settings"}).click();
+  const errorToast=page.getByRole("alert").filter({hasText:"Disable online orders before disabling every fulfillment method."});await errorToast.waitFor();const errorBox=await errorToast.boundingBox();assert(errorBox&&errorBox.x>=0&&errorBox.y>=0&&errorBox.x+errorBox.width<=390,"Admin error toast is not visible in the mobile viewport");
+  await flat.getByRole("checkbox").check();await flat.getByLabel("Display name").fill("Domex");await flat.getByLabel("Flat fee (LKR)").fill("425");await flat.getByLabel("Min days").fill("2");await flat.getByLabel("Max days").fill("3");await pickup.getByRole("checkbox").check();await page.getByRole("button",{name:"Save delivery settings"}).click();await page.getByRole("status").filter({hasText:"Delivery settings saved."}).waitFor();await context.close();console.log("verified safe admin validation and visible mobile toast; configured Domex flat rate");
+}
+async function verifyCheckoutToast(viewport){
+  const context=await browser.newContext({viewport});await context.addInitScript(items=>localStorage.setItem("zevenra-cart-v1",JSON.stringify(items)),cart());await context.route("**/api/delivery-quote",route=>route.fulfill({status:500,contentType:"application/json",body:JSON.stringify({error:"Test delivery failure"})}));const page=await context.newPage();await page.goto(`${baseURL}/checkout`,{waitUntil:"domcontentloaded"});const toast=page.getByRole("alert").filter({hasText:"Test delivery failure"});await toast.waitFor();const box=await toast.boundingBox();assert(box&&box.x>=0&&box.y>=0&&box.x+box.width<=viewport.width&&box.y+box.height<=viewport.height,"Checkout toast is outside the viewport");await toast.getByRole("button",{name:"Dismiss notification"}).click();await context.close();
+}
 async function checkout({payment,fulfillment,phone}){
   const context=await browser.newContext({viewport:{width:1280,height:900}});await context.addInitScript(items=>localStorage.setItem("zevenra-cart-v1",JSON.stringify(items)),cart());
   if(payment==="bank"){
@@ -60,7 +70,7 @@ async function checkout({payment,fulfillment,phone}){
   if(fulfillment==="pickup"){
     await page.locator("label").filter({hasText:"E2E Pickup"}).first().click();await page.locator("select").filter({has:page.locator(`option[value="${pickupId}"]`)}).first().selectOption(pickupId);
   }else{
-    await page.locator("label").filter({hasText:"E2E Flat Delivery"}).first().click();await page.locator('[name="address1"]').first().fill("1 Browser Test Lane");await page.locator('[name="city"]').first().fill("Colombo");await page.locator('[name="district"]').first().selectOption("Colombo");await page.locator('[name="postalCode"]').first().fill("00100");
+    await page.locator("label").filter({hasText:"Domex"}).first().click();await page.locator('[name="address1"]').first().fill("1 Browser Test Lane");await page.locator('[name="city"]').first().fill("Moratuwa");await page.locator('[name="district"]').first().selectOption("Colombo");await page.locator('[name="postalCode"]').first().fill("10400");await page.getByText("Domex",{exact:true}).last().waitFor();await page.getByText("2–3 Business Days",{exact:true}).waitFor();await page.getByText(/LKR\s*425/).last().waitFor();
   }
   if(payment==="bank"){
     await page.getByText("Bank Transfer",{exact:true}).click();await page.locator('[name="paymentReference"]').fill("E2E-TRANSFER");await page.locator('input[type="file"]').setInputFiles({name:"receipt.png",mimeType:"image/png",buffer:Buffer.from("e2e receipt")});await page.getByText("Receipt uploaded",{exact:true}).waitFor();
@@ -82,8 +92,10 @@ try{
     :spawn("vercel",["dev","--local-config","vercel.local.json","--listen","3000"],{env:childEnv,stdio:["ignore","pipe","pipe"]});
   server.stdout.on("data",data=>process.stdout.write(data));server.stderr.on("data",data=>process.stderr.write(data));await waitForServer();
   browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH||"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"});
+  await configureFulfillment();
+  await verifyCheckoutToast({width:390,height:844});await verifyCheckoutToast({width:1280,height:900});console.log("verified accessible checkout toast on mobile and desktop");
   const metadata=await (await fetch(`${baseURL}/product/${slug}`)).text();assert(metadata.includes("E2E Checkout Piece — ZEVENRA")&&metadata.includes('og:type" content="product"')&&metadata.includes("schema.org/InStock"),"Non-JS product metadata is incomplete");console.log("verified non-JS product metadata");
-  const cod=await checkout({payment:"cod",fulfillment:"flat",phone:"0771111111"});assert(cod.fulfillmentMethod==="flat"&&cod.paymentMethod==="cod","COD/flat snapshots are incorrect");await advanceLifecycle(cod.orderId,"cod");console.log(`verified COD flat-delivery lifecycle ${cod.orderId}`);
+  const cod=await checkout({payment:"cod",fulfillment:"flat",phone:"0771111111"});assert(cod.fulfillmentMethod==="flat"&&cod.paymentMethod==="cod"&&Number(cod.deliveryFee)===425&&cod.deliveryMethodName==="Domex","COD/flat snapshots are incorrect");await advanceLifecycle(cod.orderId,"cod");console.log(`verified Domex LKR 425 Moratuwa lifecycle ${cod.orderId}`);
   const bank=await checkout({payment:"bank",fulfillment:"pickup",phone:"0772222222"});assert(bank.fulfillmentMethod==="pickup"&&bank.paymentMethod==="bank","Bank/pickup snapshots are incorrect");await advanceLifecycle(bank.orderId,"bank");console.log(`verified bank pickup lifecycle ${bank.orderId}`);
   const rows=(await query("SELECT order_id,order_status,payment_status,stock_state,fulfillment_method,payment_receipt_public_id,total_product_weight_grams,total_shipping_weight_grams FROM orders WHERE order_id=ANY($1::text[]) ORDER BY order_id",[createdOrders])).rows,bankRow=rows.find(row=>row.order_id===bank.orderId);assert(rows.length===2&&rows.every(row=>row.order_status==="delivered"&&row.stock_state==="fulfilled")&&bankRow?.payment_receipt_public_id==="zevenra/payment-receipts/e2e-receipt","Database lifecycle snapshots are incorrect");console.log("browser checkout/payment/fulfillment E2E passed");
 }finally{

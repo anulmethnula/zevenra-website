@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Save, Search } from "lucide-react";
 import { adminApi } from "../../services/adminApi";
+import { adminToast } from "../../components/admin/AdminToasts";
 
 type Method={type:"flat"|"area_group"|"pickup";displayName:string;active:boolean;fee:number|null;minimumDeliveryDays:number|null;maximumDeliveryDays:number|null;sortOrder:number};
 type Group={id:string;name:string;fee:number|null;active:boolean;fallback:boolean;sortOrder:number};
@@ -12,13 +13,13 @@ const titles={flat:"Flat Rate Delivery",area_group:"Area Group Delivery",pickup:
 
 export default function DeliveryAdminPage(){
  const [config,setConfig]=useState<Config|null>(null),[busy,setBusy]=useState(false),[message,setMessage]=useState(""),[search,setSearch]=useState(""),[manage,setManage]=useState(false);
- useEffect(()=>{void adminApi.get<Config>("getFulfillmentConfig").then(setConfig).catch(e=>setMessage(e instanceof Error?e.message:"Could not load delivery settings."));},[]);
+ useEffect(()=>{void adminApi.get<Config>("getFulfillmentConfig").then(setConfig).catch(e=>{const text=e instanceof Error?e.message:"Could not load delivery settings.";setMessage(text);adminToast(text,"error");});},[]);
  const filtered=useMemo(()=>{const q=search.toLocaleLowerCase();return(config?.locations||[]).filter(l=>!q||`${l.town} ${l.district} ${l.postcode||""}`.toLocaleLowerCase().includes(q));},[config,search]);
  if(!config)return <div className="admin-card p-5">{message||"Loading delivery settings…"}</div>;
  const updateMethod=(type:Method["type"],patch:Partial<Method>)=>setConfig({...config,methods:config.methods.map(m=>m.type===type?{...m,...patch}:m)});
  const updateGroup=(id:string,patch:Partial<Group>)=>setConfig({...config,groups:config.groups.map(g=>g.id===id?{...g,...patch}:g)});
  const updatePickup=(id:string,patch:Partial<Pickup>)=>setConfig({...config,pickupLocations:config.pickupLocations.map(p=>p.id===id?{...p,...patch}:p)});
- async function save(){setBusy(true);setMessage("");try{setConfig(await adminApi.post<Config>("saveFulfillmentConfig",config));setMessage("Delivery settings saved.");}catch(e){setMessage(e instanceof Error?e.message:"Could not save delivery settings.");}finally{setBusy(false);}}
+ async function save(){setBusy(true);setMessage("");try{setConfig(await adminApi.post<Config>("saveFulfillmentConfig",config));setMessage("Delivery settings saved.");adminToast("Delivery settings saved.");}catch(e){const text=e instanceof Error?e.message:"Could not save delivery settings.";setMessage(text);adminToast(text,"error");}finally{setBusy(false);}}
  return <div className="space-y-5 pb-24">
   <header><p className="admin-kicker">Delivery methods</p><h1 className="text-2xl font-semibold">Simple fulfilment</h1><p className="mt-2 max-w-2xl text-sm text-black/55">Enable any combination. Checkout shows only active methods and the server calculates the final fee.</p></header>
   {message?<p className="border border-amber-300 bg-amber-50 p-3 text-sm">{message}</p>:null}
