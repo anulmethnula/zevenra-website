@@ -60,7 +60,7 @@ type Line = {
   unitPrice: number;
   lineTotal: number;
   isPreorder: boolean;
-  shippingWeightGrams: number;
+  shippingWeightGrams: number | null;
 };
 
 const orderWithItems = `SELECT o.*,COALESCE((SELECT jsonb_agg(to_jsonb(oi) ORDER BY oi.id) FROM order_items oi WHERE oi.order_id=o.order_id),'[]') AS items,(SELECT count(*)::int FROM order_returns r WHERE r.order_id=o.order_id) AS return_count FROM orders o`;
@@ -91,7 +91,7 @@ export async function deliverySnapshot(
   client: DatabaseClient,
   input: Pick<OrderInput, "fulfillmentMethod" | "pickupLocationId" | "city" | "district" | "postalCode">,
   subtotal: number,
-  _totalShippingWeightGrams: number,
+  _totalShippingWeightGrams: number | null,
   enforceStoreAvailability = true,
 ) {
   const settings = (
@@ -135,9 +135,10 @@ async function shippingWeightSnapshot(client: DatabaseClient, lines: Line[]) {
       "SELECT value FROM site_settings WHERE key='packagingWeightGrams'",
     )
   ).rows[0];
-  const known=lines.filter(line=>line.shippingWeightGrams>0);
-  const totalProductWeightGrams=known.reduce((sum,line)=>sum+line.shippingWeightGrams*line.quantity,0);
-  const packaging=row&&Number(row.value)>0?Number(row.value):0;
+  const packaging=row&&Number(row.value)>0?Number(row.value):null;
+  if(packaging==null||lines.some(line=>line.shippingWeightGrams==null))
+    return {ready:false,missing:[],totalProductWeightGrams:null,totalShippingWeightGrams:null};
+  const totalProductWeightGrams=lines.reduce((sum,line)=>sum+line.shippingWeightGrams!*line.quantity,0);
   return {ready:true,missing:[],totalProductWeightGrams,totalShippingWeightGrams:totalProductWeightGrams+packaging};
 }
 
@@ -185,7 +186,7 @@ async function loadLines(
       lineTotal: unitPrice * quantity,
       isPreorder,
       shippingWeightGrams:
-        resolvedShippingWeight == null ? 0 : Number(resolvedShippingWeight),
+        resolvedShippingWeight == null ? null : Number(resolvedShippingWeight),
     });
   }
   return lines;

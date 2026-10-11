@@ -97,6 +97,12 @@ test("authenticated account history never claims guest orders by matching email 
   assert.doesNotMatch(source, /customer_id IS NULL AND lower\([^)]*email/);
 });
 
+test("production runtime database code uses DATABASE_URL only", async () => {
+  const source = await readFile(new URL("../api/_db.ts", import.meta.url), "utf8");
+  assert.match(source, /process\.env\.DATABASE_URL/);
+  assert.doesNotMatch(source, /E2E_DATABASE_URL/);
+});
+
 test("admin internal error is logged and sanitized", async () => {
   process.env.SESSION_SECRET = "test-session-secret";
   process.env.ADMIN_USERNAME = "owner";

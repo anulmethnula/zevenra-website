@@ -33,15 +33,17 @@ async function seed(){
   await query("DELETE FROM pickup_locations WHERE id=$1",[pickupId]);
   previousSettings=(await query("SELECT key,value,updated_at FROM site_settings WHERE key=ANY($1::text[])",[settingsKeys])).rows;
   previousMethods=(await query("SELECT type,display_name,active,fee,minimum_delivery_days,maximum_delivery_days,sort_order FROM delivery_methods ORDER BY type")).rows;
-  await query("INSERT INTO categories(id,name,slug,description,active,default_shipping_weight_grams) VALUES($1,'E2E Test','e2e-test','Browser-only fixture',true,250)",[categoryId]);
-  await query("INSERT INTO products(id,slug,name,short_description,description,price,category_id,media,status,shipping_weight_grams) VALUES($1,$2,'E2E Checkout Piece','Test-only checkout product','Removed after E2E',6500,$3,$4::jsonb,'draft',250)",[productId,slug,categoryId,JSON.stringify([{type:"image",url:"/brand/og-image.jpg",alt:"E2E Checkout Piece"}])]);
+  await query("INSERT INTO categories(id,name,slug,description,active) VALUES($1,'E2E Test','e2e-test','Browser-only fixture',true)",[categoryId]);
+  await query("INSERT INTO products(id,slug,name,short_description,description,price,category_id,media,status) VALUES($1,$2,'E2E Checkout Piece','Test-only checkout product','Removed after E2E',6500,$3,$4::jsonb,'draft')",[productId,slug,categoryId,JSON.stringify([{type:"image",url:"/brand/og-image.jpg",alt:"E2E Checkout Piece"}])]);
   await query("INSERT INTO variants(id,product_id,sku,color,size,stock,active) VALUES($1,$2,$3,'Black','M',10,true)",[variantId,productId,`${prefix}sku`]);
   await query("UPDATE products SET status='published' WHERE id=$1",[productId]);
   await query("UPDATE delivery_methods SET active=false,updated_at=now()");
   await query("UPDATE delivery_methods SET display_name='E2E Flat Delivery',active=true,fee=350,minimum_delivery_days=2,maximum_delivery_days=4,sort_order=1,updated_at=now() WHERE type='flat'");
   await query("UPDATE delivery_methods SET display_name='E2E Pickup',active=true,fee=0,minimum_delivery_days=1,maximum_delivery_days=1,sort_order=2,updated_at=now() WHERE type='pickup'");
   await query("INSERT INTO pickup_locations(id,name,address,instructions,active,sort_order) VALUES($1,'E2E Test Branch','1 Test Lane, Colombo','Bring the order ID.',true,1)",[pickupId]);
-  const settings={brandName:"ZEVENRA E2E",storeOpen:true,ordersEnabled:true,codEnabled:true,bankEnabled:true,bankTransferEnabled:true,bankName:"E2E Bank",bankAccountName:"ZEVENRA Test",bankAccountNumber:"0000000000",bankBranch:"Test Branch",bankInstructions:"Test transfer only.",packagingWeightGrams:50};
+  const published=(await query("SELECT p.status,p.shipping_weight_grams,c.default_shipping_weight_grams FROM products p JOIN categories c ON c.id=p.category_id WHERE p.id=$1",[productId])).rows[0];
+  assert(published?.status==="published"&&published.shipping_weight_grams==null&&published.default_shipping_weight_grams==null,"Publishing without shipping weights failed");
+  const settings={brandName:"ZEVENRA E2E",storeOpen:true,ordersEnabled:true,codEnabled:true,bankEnabled:true,bankTransferEnabled:true,bankName:"E2E Bank",bankAccountName:"ZEVENRA Test",bankAccountNumber:"0000000000",bankBranch:"Test Branch",bankInstructions:"Test transfer only."};
   for(const [key,value] of Object.entries(settings))await query("INSERT INTO site_settings(key,value,updated_at) VALUES($1,$2::jsonb,now()) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=now()",[key,JSON.stringify(value)]);
 }
 async function waitForServer(){for(let attempt=0;attempt<60;attempt++){try{const response=await fetch(`${baseURL}/api/products?page=1&pageSize=1`);if(response.ok)return;}catch{}await delay(500);}throw new Error("Local application server did not become ready.");}
@@ -73,8 +75,8 @@ async function advanceLifecycle(orderId,paymentMethod){
 }
 
 try{
-  await seed();console.log("seeded test-only fixtures");
-  const childEnv={...process.env,E2E_DATABASE_URL:connectionString,SESSION_SECRET:sessionSecret,ADMIN_USERNAME:"e2e-admin",ADMIN_PASSWORD_HASH:"e2e-unused",ALLOWED_ORIGIN:baseURL,CLOUDINARY_CLOUD_NAME:cloudName,PUBLIC_SITE_URL:baseURL,VERCEL_ENV:"development",CI:"1"};delete childEnv.DATABASE_URL;delete childEnv.DATABASE_URL_UNPOOLED;
+  await seed();console.log("seeded weight-optional test-only fixtures");
+  const childEnv={...process.env,DATABASE_URL:connectionString,SESSION_SECRET:sessionSecret,ADMIN_USERNAME:"e2e-admin",ADMIN_PASSWORD_HASH:"e2e-unused",ALLOWED_ORIGIN:baseURL,CLOUDINARY_CLOUD_NAME:cloudName,PUBLIC_SITE_URL:baseURL,VERCEL_ENV:"development",CI:"1"};delete childEnv.E2E_DATABASE_URL;delete childEnv.DATABASE_URL_UNPOOLED;
   server=process.platform==="win32"
     ?spawn(process.execPath,[path.join(process.env.APPDATA,"npm","node_modules","vercel","dist","vc.js"),"dev","--local-config","vercel.local.json","--listen","3000"],{env:childEnv,stdio:["ignore","pipe","pipe"]})
     :spawn("vercel",["dev","--local-config","vercel.local.json","--listen","3000"],{env:childEnv,stdio:["ignore","pipe","pipe"]});

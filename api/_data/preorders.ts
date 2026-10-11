@@ -2,7 +2,6 @@ import { randomBytes } from "node:crypto";
 import { query, withTransaction } from "../_db.js";
 import { normalizeSriLankanPhoneForLookup } from "../_order-track-normalization.js";
 import { mapOrder, mapPreorder } from "./mappers.js";
-import { calculateShippingWeight } from "../../shared/shipping-weight.js";
 import {
   isPreorderTransitionAllowed,
   normalizePreorderPaymentMethod,
@@ -228,30 +227,21 @@ export async function convertPreorderToOrder(input: Record<string, unknown>) {
           "SELECT value FROM site_settings WHERE key='packagingWeightGrams'",
         )
       ).rows[0];
-    if (!packaging) throw new Error("Packaging weight is not configured.");
-
-    const shippingWeight = calculateShippingWeight(
-      [
-        {
-          productId: String(preorder.product_id),
-          productName: String(preorder.product_name),
-          quantity: Number(preorder.quantity),
-          shippingWeightGrams:
-            product?.shipping_weight_grams == null
-              ? undefined
-              : Number(product.shipping_weight_grams),
-          categoryDefaultShippingWeightGrams:
-            product?.default_shipping_weight_grams == null
-              ? undefined
-              : Number(product.default_shipping_weight_grams),
-        },
-      ],
-      Number(packaging.value),
-    );
-    if (!shippingWeight.ready)
-      throw new Error(
-        `Shipping weight is not configured for: ${preorder.product_name}.`,
-      );
+    const resolvedWeight =
+      product?.shipping_weight_grams ?? product?.default_shipping_weight_grams;
+    const packagingWeight = packaging && Number(packaging.value) > 0
+      ? Number(packaging.value)
+      : null;
+    const productWeight = resolvedWeight == null
+      ? null
+      : Number(resolvedWeight) * Number(preorder.quantity);
+    const shippingWeight = {
+      totalProductWeightGrams: productWeight,
+      totalShippingWeightGrams:
+        productWeight == null || packagingWeight == null
+          ? null
+          : productWeight + packagingWeight,
+    };
 
     const price = Number(preorder.confirmed_price),
       subtotal = price * Number(preorder.quantity),
@@ -311,7 +301,7 @@ export async function convertPreorderToOrder(input: Record<string, unknown>) {
         preorder.quantity,
         price,
         price * Number(preorder.quantity),
-        shippingWeight.totalProductWeightGrams / Number(preorder.quantity),
+        resolvedWeight == null ? null : Number(resolvedWeight),
       ],
     );
     await client.query(
