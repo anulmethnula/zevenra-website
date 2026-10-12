@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { FulfillmentConfigError, resolveFulfillment, validateFulfillmentConfig } from "../api/_data/fulfillment.ts";
-import { selectActiveFulfillment } from "../src/utils/checkoutFulfillment.ts";
+import { clearCheckoutToastSource, selectActiveFulfillment } from "../src/utils/checkoutFulfillment.ts";
 
 const method=(type:"flat"|"area_group"|"pickup",active=false)=>({type,displayName:type,active,fee:type==="flat"?425:null,minimumDeliveryDays:type==="pickup"?null:2,maximumDeliveryDays:type==="pickup"?null:3,sortOrder:1});
 const config=(patch:Record<string,unknown>={})=>({methods:[method("flat",true),method("area_group"),method("pickup")],groups:[],locations:[],districtDefaults:[],pickupLocations:[],...patch});
@@ -35,6 +35,16 @@ test("selected fulfillment stays valid and deterministically falls back",()=>{
   assert.equal(selectActiveFulfillment(methods,"pickup"),"pickup");
   assert.equal(selectActiveFulfillment(methods,"area_group"),"flat");
   assert.equal(selectActiveFulfillment([],"flat"),null);
+});
+
+test("successful pickup quote clears an old delivery toast only",()=>{
+  const oldDelivery={source:"delivery" as const,message:"Enter a valid Sri Lankan district and 5-digit postal code."};
+  const afterMethodChange=clearCheckoutToastSource(oldDelivery,"delivery");
+  assert.equal(afterMethodChange,null);
+  const pickupFailure={source:"delivery" as const,message:"Temporary pickup quote failure"};
+  assert.equal(clearCheckoutToastSource(pickupFailure,"delivery"),null);
+  const unrelated={source:"receipt" as const,message:"Receipt upload failed"};
+  assert.deepEqual(clearCheckoutToastSource(unrelated,"delivery"),unrelated);
 });
 
 test("checkout config and checkout notifications are never stale or hidden",async()=>{

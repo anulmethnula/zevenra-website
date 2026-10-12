@@ -15,7 +15,7 @@ import { checkoutAmounts } from "../utils/checkoutAmounts";
 import { paymentReadinessMessage, postalCodeError } from "../utils/checkoutValidation";
 import { rememberGuestOrder } from "../utils/guestOrders";
 import { useCheckoutConfig } from "../hooks/usePublicData";
-import { selectActiveFulfillment, type CheckoutFulfillmentType } from "../utils/checkoutFulfillment";
+import { clearCheckoutToastSource, selectActiveFulfillment, type CheckoutFulfillmentType, type CheckoutToast } from "../utils/checkoutFulfillment";
 
 const districts = ["Ampara", "Anuradhapura", "Badulla", "Batticaloa", "Colombo", "Galle", "Gampaha", "Hambantota", "Jaffna", "Kalutara", "Kandy", "Kegalle", "Kilinochchi", "Kurunegala", "Mannar", "Matale", "Matara", "Monaragala", "Mullaitivu", "Nuwara Eliya", "Polonnaruwa", "Puttalam", "Ratnapura", "Trincomalee", "Vavuniya"] as const;
 const schema = z.object({
@@ -103,7 +103,7 @@ export default function CheckoutPage() {
     [deliveryQuote, setDeliveryQuote] = useState<{fee:number;minimumDeliveryDays:number|null;maximumDeliveryDays:number|null;methodName?:string;areaGroupName?:string}|null>(null),
     [deliveryQuoteLoading, setDeliveryQuoteLoading] = useState(false),
     [deliveryQuoteError, setDeliveryQuoteError] = useState(""),
-    [toast,setToast]=useState("");
+    [toast,setToast]=useState<CheckoutToast|null>(null);
   useEffect(() => {
     if (!availablePayments.includes(payment) && availablePayments[0]) setPayment(availablePayments[0]);
   }, [availablePayments, payment]);
@@ -111,9 +111,10 @@ export default function CheckoutPage() {
   useEffect(()=>{
     const next=selectActiveFulfillment(fulfillmentMethods,fulfillmentMethod);
     setDeliveryQuote(null);setDeliveryQuoteError("");setDeliveryQuoteLoading(false);
+    setToast(current=>clearCheckoutToastSource(current,"delivery"));
     if(next!==fulfillmentMethod){setFulfillmentMethod(next);setPickupLocationId("");}
   },[fulfillmentMethods,fulfillmentMethod]);
-  useEffect(()=>{if(!checkout.loading&&!checkout.error&&!fulfillmentMethods.length)setToast("Delivery is temporarily unavailable. Please contact us.");},[checkout.error,checkout.loading,fulfillmentMethods.length]);
+  useEffect(()=>{if(!checkout.loading&&!checkout.error&&!fulfillmentMethods.length)setToast({source:"delivery",message:"Delivery is temporarily unavailable. Please contact us."});},[checkout.error,checkout.loading,fulfillmentMethods.length]);
   const discountItems = useMemo(
       () =>
         cart.items.map(({ productId, variantId, quantity }) => ({
@@ -161,8 +162,8 @@ export default function CheckoutPage() {
     if(fulfillmentMethod==="area_group"&&(!district||city.trim().length<2||postalError||postalCode.length!==5)){setDeliveryQuote(null);setDeliveryQuoteError("");setDeliveryQuoteLoading(false);return;}
     let current=true;
     const timer=window.setTimeout(()=>{
-      setDeliveryQuoteLoading(true);setDeliveryQuoteError("");
-      void api.deliveryQuote({fulfillmentMethod,pickupLocationId:fulfillmentMethod==="pickup"?pickupLocationId:undefined,city:fulfillmentMethod==="pickup"?undefined:city,district:fulfillmentMethod==="pickup"?undefined:district||undefined,postalCode:fulfillmentMethod==="pickup"?undefined:postalCode,items:discountItems}).then(result=>{if(current)setDeliveryQuote(result);}).catch(reason=>{if(current){const message=reason instanceof Error?reason.message:"Delivery could not be calculated.";setDeliveryQuote(null);setDeliveryQuoteError(message);setToast(message);}}).finally(()=>{if(current)setDeliveryQuoteLoading(false);});
+      setDeliveryQuoteLoading(true);setDeliveryQuoteError("");setToast(value=>clearCheckoutToastSource(value,"delivery"));
+      void api.deliveryQuote({fulfillmentMethod,pickupLocationId:fulfillmentMethod==="pickup"?pickupLocationId:undefined,city:fulfillmentMethod==="pickup"?undefined:city,district:fulfillmentMethod==="pickup"?undefined:district||undefined,postalCode:fulfillmentMethod==="pickup"?undefined:postalCode,items:discountItems}).then(result=>{if(current){setDeliveryQuote(result);setToast(value=>clearCheckoutToastSource(value,"delivery"));}}).catch(reason=>{if(current){const message=reason instanceof Error?reason.message:"Delivery could not be calculated.";setDeliveryQuote(null);setDeliveryQuoteError(message);setToast({source:"delivery",message});}}).finally(()=>{if(current)setDeliveryQuoteLoading(false);});
     },250);
     return()=>{current=false;window.clearTimeout(timer);};
   },[city,district,postalCode,discountItems,fulfillmentMethod,fulfillmentMethods,pickupLocationId]);
@@ -227,7 +228,7 @@ export default function CheckoutPage() {
       setReceiptUrl("");
       setReceiptName("");
       const message=reason instanceof Error ? reason.message : "Could not upload the payment receipt.";
-      setError(message);setToast(message);
+      setError(message);setToast({source:"receipt",message});
     } finally {
       setReceiptBusy(false);
     }
@@ -252,7 +253,7 @@ export default function CheckoutPage() {
     } catch (reason) {
       setDiscount(null);
       const message=reason instanceof Error ? reason.message : "This discount code is not available.";
-      setDiscountMessage(message);setToast(message);
+      setDiscountMessage(message);setToast({source:"discount",message});
     } finally {
       setDiscountBusy(false);
     }
@@ -266,7 +267,7 @@ export default function CheckoutPage() {
     event.preventDefault();
     setError("");
     setFieldErrors({});
-    if(!fulfillmentMethod){const message="Delivery is temporarily unavailable. Please contact us.";setError(message);setToast(message);return;}
+    if(!fulfillmentMethod){const message="Delivery is temporarily unavailable. Please contact us.";setError(message);setToast({source:"delivery",message});return;}
     if (!settings.storeOpen || !settings.ordersEnabled) {
       setError("Online ordering is temporarily unavailable. Please contact us for assistance.");
       return;
@@ -341,7 +342,7 @@ export default function CheckoutPage() {
       setSuccessOrder(order);
     } catch (reason) {
       const message=reason instanceof Error ? reason.message : "We could not submit your order. Your cart and details are still here—please try again.";
-      setError(message);setToast(message);
+      setError(message);setToast({source:"submit",message});
     } finally {
       setBusy(false);
     }
@@ -350,7 +351,7 @@ export default function CheckoutPage() {
     placeDisabled = Boolean(successOrder) || busy || receiptBusy || !fulfillmentMethod || !amounts.ready || !stockReady || (payment === "bank" && !receiptUrl) || !availablePayments.length || !settings.storeOpen || !settings.ordersEnabled;
   return (
     <>
-      <CustomerToast message={toast} dismiss={()=>setToast("")} />
+      <CustomerToast message={toast?.message||""} dismiss={()=>setToast(null)} />
       <main aria-hidden={Boolean(successOrder)} className="checkout-page min-w-0 bg-paper">
         <Seo title="Checkout" noindex />
         <div className="mx-auto max-w-[1440px]">
@@ -443,13 +444,13 @@ export default function CheckoutPage() {
                 {!fulfillmentMethods.length?<div role="alert" className="mb-5 border border-red-900/20 bg-red-950/[.06] p-4 text-sm text-red-950">Delivery is temporarily unavailable. Please contact us.</div>:null}
                 {fulfillmentMethods.length > 1 ? <div className="mb-5 grid gap-2 sm:grid-cols-2">
                   {fulfillmentMethods.map((method) => <label key={method.type} className={`flex min-h-16 cursor-pointer items-center gap-3 border p-3 ${fulfillmentMethod === method.type ? "border-bronze bg-bronze/[.06]" : "border-line"}`}>
-                    <input type="radio" name="fulfillmentChoice" checked={fulfillmentMethod === method.type} onChange={() => { setFulfillmentMethod(method.type); setPickupLocationId(""); setDeliveryQuote(null); }} />
+                    <input type="radio" name="fulfillmentChoice" checked={fulfillmentMethod === method.type} onChange={() => { setToast(current=>clearCheckoutToastSource(current,"delivery")); setFulfillmentMethod(method.type); setPickupLocationId(""); setDeliveryQuote(null); }} />
                     <span><b className="block text-sm">{method.displayName}</b><small className="text-xs text-ink/50">{method.type === "pickup" ? "Free" : method.type === "flat" && method.fee != null ? money(method.fee) : "Calculated from address"}</small></span>
                   </label>)}
                 </div> : null}
                 {fulfillmentMethod === "pickup" ? <label className="label block">
                   Pickup branch <i>*</i>
-                  <select className="field mt-1.5" value={pickupLocationId} onChange={(event) => setPickupLocationId(event.target.value)}>
+                  <select className="field mt-1.5" value={pickupLocationId} onChange={(event) => {setToast(current=>clearCheckoutToastSource(current,"delivery"));setPickupLocationId(event.target.value);}}>
                     <option value="">Select a branch</option>
                     {pickupLocations.map((branch) => <option key={branch.id} value={branch.id}>{branch.name} — {branch.address}</option>)}
                   </select>
