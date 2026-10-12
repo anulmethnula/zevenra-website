@@ -8,14 +8,15 @@ import { useHomepageData } from "../hooks/usePublicData";
 import "../styles/hero-cta.css";
 
 const defaultDesktopVideo = "/media/hero-desktop-v1.mp4";
-const defaultMobileVideo = "/media/hero-mobile-v2.mp4";
+const defaultMobileVideo = "/media/hero-mobile-v3.mp4";
 const heroPoster = "/media/hero-poster-v1.webp";
-const mobileHeroPoster = "/media/hero-mobile-poster-v2.webp";
+const mobileHeroPoster = "/media/hero-mobile-poster-v3.webp";
 const legacyHeroVideo = "/media/hero-final-v2.mp4";
 const legacyMobileVideo = "/media/hero-mobile-v1.mp4";
+const previousMobileVideo = "/media/hero-mobile-v2.mp4";
 
 const optimizedSource = (value: string | undefined, fallback: string) =>
-  !value || value === legacyHeroVideo || value === legacyMobileVideo ? fallback : value;
+  !value || value === legacyHeroVideo || value === legacyMobileVideo || value === previousMobileVideo ? fallback : value;
 
 function prefersReducedMotion() {
   return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
