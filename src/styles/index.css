@@ -66,16 +66,17 @@ textarea.field{padding-block:1rem}
 .header-actions{z-index:3;display:flex;grid-column:3;justify-content:flex-end;gap:2px}
 .nav-icon{position:relative;display:flex;width:42px;min-width:42px;height:42px;align-items:center;justify-content:center;color:#fff}
 .bag-count{position:absolute;top:1px;right:-1px;display:grid;min-width:17px;height:17px;place-items:center;border-radius:99px;background:var(--bronze);color:#fff;font-size:8px}
-.mobile-menu{position:fixed;z-index:80;inset:0;display:flex;flex-direction:column;overflow-y:auto;background:#0a0a09;color:var(--paper);padding:22px}
+.mobile-menu{position:fixed;z-index:80;inset:0;display:flex;flex-direction:column;overflow-x:hidden;overflow-y:auto;background:#0a0a09;color:var(--paper);padding:clamp(16px,5vw,22px)}
 .mobile-menu__top{display:flex;align-items:center;justify-content:space-between}
 .mobile-menu__top img{width:164px;height:42px;object-fit:contain}
 .mobile-menu__top button{display:grid;width:48px;height:48px;place-items:center}
-.mobile-menu nav{margin:auto 0;padding:36px 0}
-.mobile-menu nav>div>a{display:grid;grid-template-columns:30px minmax(0,1fr) 28px;align-items:center;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.13);font-family:Italiana,serif;font-size:clamp(2rem,11vw,4rem);line-height:.95;letter-spacing:-.02em}
+.mobile-menu nav{margin:auto 0;padding:clamp(22px,6vh,36px) 0}
+.mobile-menu nav>div>a{display:grid;grid-template-columns:clamp(24px,8vw,30px) minmax(0,1fr) 24px;align-items:center;padding:clamp(9px,2.7vw,12px) 0;border-bottom:1px solid rgba(255,255,255,.13);font-family:Italiana,serif;font-size:clamp(1.6rem,8.25vw,2.25rem);line-height:.9;letter-spacing:-.02em}
+.mobile-menu nav>div>a svg{width:clamp(17px,5vw,21px);height:auto;justify-self:end}
 .mobile-menu nav span{font-family:'DM Sans';font-size:8px;color:#bc9369;letter-spacing:.18em}
-.mobile-subcategories{margin-left:30px;padding:8px 0 12px;border-bottom:1px solid rgba(255,255,255,.13)}
+.mobile-subcategories{margin-left:clamp(24px,8vw,30px);padding:7px 0 10px;border-bottom:1px solid rgba(255,255,255,.13)}
 .mobile-subcategories a{display:block;padding:8px 0;color:rgba(255,255,255,.55);font-size:9px;letter-spacing:.2em}
-.mobile-menu__foot{display:flex;flex-wrap:wrap;gap:22px;padding-top:20px;border-top:1px solid rgba(255,255,255,.14);font-size:8px;letter-spacing:.2em}
+.mobile-menu__foot{display:grid;grid-template-columns:repeat(3,minmax(0,max-content));justify-content:space-between;gap:12px clamp(12px,4vw,22px);padding-top:18px;border-top:1px solid rgba(255,255,255,.14);font-size:clamp(8px,2.2vw,9px);line-height:1.35;letter-spacing:.16em}
 
 /* Home */
 .home-hero{position:relative;height:100svh;min-height:min(620px,100svh);overflow:hidden;background:#080807}
