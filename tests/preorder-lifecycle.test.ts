@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { preorderConversionSchema } from "../api/_shared.ts";
 import {
   isPreorderTransitionAllowed,
   normalizePreorderPaymentMethod,
@@ -22,6 +23,13 @@ test("preorder conversion requires a complete address and exact postal code", ()
   assert.equal(preorderDeliveryAddressReady({ ...valid, postalCode: "100" }), false);
   assert.equal(preorderDeliveryAddressReady({ ...valid, postalCode: "0010A" }), false);
   assert.equal(preorderDeliveryAddressReady({ ...valid, address1: "" }), false);
+});
+
+test("preorder conversion requires explicit fulfillment and a branch for pickup",()=>{
+  assert.equal(preorderConversionSchema.safeParse({requestId:"PRE-1",paymentMethod:"cod"}).success,false);
+  assert.equal(preorderConversionSchema.safeParse({requestId:"PRE-1",paymentMethod:"cod",fulfillmentMethod:"flat"}).success,true);
+  assert.equal(preorderConversionSchema.safeParse({requestId:"PRE-1",paymentMethod:"bank",fulfillmentMethod:"pickup"}).success,false);
+  assert.equal(preorderConversionSchema.safeParse({requestId:"PRE-1",paymentMethod:"bank",fulfillmentMethod:"pickup",pickupLocationId:"branch"}).success,true);
 });
 
 test("confirmed preorder price must be a positive whole LKR amount", () => {

@@ -1,18 +1,18 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createOrder } from "./_data/orders.js";
+import { durableRateLimit } from "./_rate-limit.js";
 import {
   body,
   json,
   methodNotAllowed,
   orderSchema,
   originEnv,
-  rateLimit,
   readCustomerSession,
   validOrigin,
 } from "./_shared.js";
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return methodNotAllowed(res, ["POST"]);
-  const throttle = rateLimit(req, "orders", 10, 10 * 60 * 1000);
+  const throttle = await durableRateLimit(req, "orders", 10, 10 * 60 * 1000);
   if (throttle.limited) {
     res.setHeader("Retry-After", String(throttle.retryAfter));
     return json(

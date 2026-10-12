@@ -5,13 +5,13 @@ import {
   normalizeOrderIdForLookup,
   normalizeSriLankanPhoneForLookup,
 } from "./_order-track-normalization.js";
+import { durableRateLimit } from "./_rate-limit.js";
 import {
   body,
   json,
   methodNotAllowed,
   orderTrackSchema,
   originEnv,
-  rateLimit,
   validOrigin,
 } from "./_shared.js";
 
@@ -81,7 +81,7 @@ function safeOrder(row: Record<string, unknown>) {
 export function createOrderTrackHandler(findOrder: FindOrder = findGuestOrder) {
   return async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method !== "POST") return methodNotAllowed(res, ["POST"]);
-    const throttle = rateLimit(req, "order-track", 10, 10 * 60 * 1000);
+    const throttle = await durableRateLimit(req, "order-track", 10, 10 * 60 * 1000);
     if (throttle.limited) {
       res.setHeader("Retry-After", String(throttle.retryAfter));
       return json(res, { error: "Too many tracking attempts. Please wait and try again." }, 429);

@@ -9,7 +9,7 @@ import {
   preorderActiveStatuses,
   resolvePreorderConfirmedPrice,
 } from "../../shared/preorder-lifecycle.js";
-import { deliverySnapshot } from "./orders.js";
+import { assertPaymentMethodAvailable, deliverySnapshot } from "./orders.js";
 
 const orderWithItems = `SELECT o.*,COALESCE((SELECT jsonb_agg(to_jsonb(oi) ORDER BY oi.id) FROM order_items oi WHERE oi.order_id=o.order_id),'[]') AS items FROM orders o`;
 const newId = (prefix: string) =>
@@ -204,7 +204,8 @@ export async function convertPreorderToOrder(input: Record<string, unknown>) {
       );
     if (Number(preorder.confirmed_price) <= 0)
       throw new Error("Confirmed selling price is required before conversion.");
-    if (!preorderDeliveryAddressReady({
+    const fulfillmentMethod=String(input.fulfillmentMethod||"") as "flat"|"area_group"|"pickup";
+    if (fulfillmentMethod!=="pickup"&&!preorderDeliveryAddressReady({
       address1: preorder.address1,
       city: preorder.city,
       district: preorder.district,
@@ -214,8 +215,9 @@ export async function convertPreorderToOrder(input: Record<string, unknown>) {
         "Complete the delivery address with a valid 5-digit postal code before conversion.",
       );
 
-    const paymentMethod = normalizePreorderPaymentMethod(input.paymentMethod),
-      product = (
+    const paymentMethod = normalizePreorderPaymentMethod(input.paymentMethod);
+    await assertPaymentMethodAvailable(client,paymentMethod);
+    const product = (
         await client.query<Record<string, unknown>>(
           `SELECT p.shipping_weight_grams,c.default_shipping_weight_grams
            FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.id=$1`,
@@ -248,6 +250,8 @@ export async function convertPreorderToOrder(input: Record<string, unknown>) {
       delivery = await deliverySnapshot(
         client,
         {
+          fulfillmentMethod,
+          pickupLocationId:String(input.pickupLocationId||"")||undefined,
           district: String(preorder.district),
           city: String(preorder.city),
           postalCode: String(preorder.postal_code || ""),
@@ -259,7 +263,7 @@ export async function convertPreorderToOrder(input: Record<string, unknown>) {
       fee = delivery.fee,
       orderId = newId("ZEV");
     await client.query(
-      `INSERT INTO orders(order_id,customer_id,customer_name,phone,whatsapp,email,address1,address2,city,district,postal_code,courier_provider_id,courier_name,delivery_pricing_mode,delivery_rate_plan,delivery_zone_name,payment_method,payment_status,subtotal,delivery_fee,total,total_product_weight_grams,total_shipping_weight_grams,minimum_delivery_days,maximum_delivery_days,stock_state,order_status,source,has_preorder) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,'not_applicable','pending','preorder',true)`,
+      `INSERT INTO orders(order_id,customer_id,customer_name,phone,whatsapp,email,address1,address2,city,district,postal_code,courier_provider_id,courier_name,delivery_pricing_mode,delivery_rate_plan,delivery_zone_name,payment_method,payment_status,subtotal,delivery_fee,total,total_product_weight_grams,total_shipping_weight_grams,minimum_delivery_days,maximum_delivery_days,stock_state,order_status,source,has_preorder,fulfillment_method,delivery_method_name,delivery_area_group_id,delivery_area_group_name,pickup_location_id,pickup_branch_name,pickup_branch_address,pickup_instructions) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,'not_applicable','pending','preorder',true,$26,$27,$28,$29,$30,$31,$32,$33)`,
       [
         orderId,
         preorder.customer_id,
@@ -267,11 +271,11 @@ export async function convertPreorderToOrder(input: Record<string, unknown>) {
         preorder.phone,
         preorder.whatsapp,
         preorder.email,
-        preorder.address1,
-        preorder.address2,
-        preorder.city,
-        preorder.district,
-        preorder.postal_code,
+        fulfillmentMethod==="pickup"?"":preorder.address1,
+        fulfillmentMethod==="pickup"?"":preorder.address2,
+        fulfillmentMethod==="pickup"?"":preorder.city,
+        fulfillmentMethod==="pickup"?"":preorder.district,
+        fulfillmentMethod==="pickup"?"":preorder.postal_code,
         delivery.courierProviderId,
         delivery.courierName,
         delivery.pricingMode,
@@ -286,6 +290,14 @@ export async function convertPreorderToOrder(input: Record<string, unknown>) {
         shippingWeight.totalShippingWeightGrams,
         delivery.minimumDeliveryDays,
         delivery.maximumDeliveryDays,
+        delivery.method,
+        delivery.methodName,
+        delivery.areaGroupId||null,
+        delivery.areaGroupName,
+        delivery.pickup?.id||null,
+        delivery.pickup?.name||"",
+        delivery.pickup?.address||"",
+        delivery.pickup?.instructions||"",
       ],
     );
     await client.query(

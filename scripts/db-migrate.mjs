@@ -6,13 +6,13 @@ import ws from "ws";
 
 neonConfig.webSocketConstructor = ws;
 
-const connectionString =
-  process.env.E2E_DATABASE_URL ||
-  process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
+const connectionString = process.env.E2E_DATABASE_URL;
 if (!connectionString)
   throw new Error(
-    "Set E2E_DATABASE_URL, DATABASE_URL_UNPOOLED or DATABASE_URL before running migrations.",
+    "E2E_DATABASE_URL is required. This command refuses to migrate DATABASE_URL.",
   );
+if(connectionString===process.env.DATABASE_URL||connectionString===process.env.DATABASE_URL_UNPOOLED)
+  throw new Error("E2E_DATABASE_URL must be isolated from production database URLs.");
 const pool = new Pool({ connectionString, max: 1 });
 try {
   const directory = path.resolve("database/migrations"),

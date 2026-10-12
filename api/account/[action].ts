@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { randomUUID } from "node:crypto";
+import { durableRateLimit } from "../_rate-limit.js";
 import {
   createCustomer,
   getCustomerByEmail,
@@ -19,7 +20,6 @@ import {
   json,
   makeCustomerSession,
   originEnv,
-  rateLimit,
   readCustomerSession,
   validOrigin,
   verifyCustomerPassword,
@@ -31,19 +31,8 @@ type RouteHandler = {
   run: (req: VercelRequest, res: VercelResponse) => Promise<VercelResponse>;
 };
 
-const loginAttempts = new Map<string, { count: number; reset: number }>(),
-  LOGIN_WINDOW = 15 * 60 * 1000,
+const LOGIN_WINDOW = 15 * 60 * 1000,
   LOGIN_LIMIT = 10;
-function loginLimited(key: string) {
-  const now = Date.now(),
-    entry = loginAttempts.get(key);
-  if (!entry || entry.reset <= now) {
-    loginAttempts.set(key, { count: 1, reset: now + LOGIN_WINDOW });
-    return false;
-  }
-  entry.count += 1;
-  return entry.count > LOGIN_LIMIT;
-}
 
 const ROUTES: Record<string, RouteHandler> = {
   register: {
@@ -52,7 +41,7 @@ const ROUTES: Record<string, RouteHandler> = {
       const config = originEnv();
       if (!validOrigin(req, config))
         return json(res, { error: "Invalid request origin" }, 403);
-      const throttle = rateLimit(req, "customer-register", 5, 60 * 60 * 1000);
+      const throttle = await durableRateLimit(req, "customer-register", 5, 60 * 60 * 1000);
       if (throttle.limited) {
         res.setHeader("Retry-After", String(throttle.retryAfter));
         return json(
@@ -102,17 +91,15 @@ const ROUTES: Record<string, RouteHandler> = {
       const config = originEnv();
       if (!validOrigin(req, config))
         return json(res, { error: "Invalid request origin" }, 403);
-      const ip = String(
-        req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown",
-      )
-        .split(",")[0]
-        .trim();
-      if (loginLimited(ip))
+      const throttle=await durableRateLimit(req,"customer-login",LOGIN_LIMIT,LOGIN_WINDOW);
+      if (throttle.limited) {
+        res.setHeader("Retry-After",String(throttle.retryAfter));
         return json(
           res,
           { error: "Too many sign-in attempts. Please try again later." },
           429,
         );
+      }
       const input = customerLoginSchema.parse(body(req));
       const customer = (await getCustomerByEmail(
         input.email,
@@ -146,7 +133,6 @@ const ROUTES: Record<string, RouteHandler> = {
           }),
         ),
       );
-      loginAttempts.delete(ip);
       return json(res, { user: safeCustomer(customer) });
     },
   },

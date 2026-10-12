@@ -2,7 +2,8 @@ import { randomBytes } from "node:crypto";
 import type { DatabaseClient } from "../_db.js";
 import { withTransaction } from "../_db.js";
 import { normalizeSriLankanPhoneForLookup } from "../_order-track-normalization.js";
-import { receiptAsset } from "../_receipt-asset.js";
+import { receiptAsset, verifyReceiptAsset } from "../_receipt-asset.js";
+import { cloudinaryEnv } from "../_shared.js";
 import { mapOrder } from "./mappers.js";
 import { validateDiscount } from "./discounts.js";
 import { resolveFulfillment } from "./fulfillment.js";
@@ -72,19 +73,26 @@ const settingValue = (
 const truthy = (value: unknown) =>
   value === true || String(value).toLowerCase() === "true";
 
-async function assertCheckoutPaymentAvailable(
+export async function assertPaymentMethodAvailable(
   client: DatabaseClient,
-  input: Pick<OrderInput, "paymentMethod" | "source">,
+  paymentMethod: OrderInput["paymentMethod"],
 ) {
-  if (input.source && input.source !== "web") return;
   const settings = (
     await client.query<{ key: string; value: unknown }>(
       "SELECT key,value FROM site_settings WHERE key=ANY($1::text[])",
       [["codEnabled", "bankEnabled", "bankTransferEnabled"]],
     )
   ).rows;
-  if (!paymentMethodAvailable(settings, input.paymentMethod))
+  if (!paymentMethodAvailable(settings, paymentMethod))
     throw new Error("PAYMENT_METHOD_UNAVAILABLE");
+}
+
+async function assertCheckoutPaymentAvailable(
+  client: DatabaseClient,
+  input: Pick<OrderInput, "paymentMethod" | "source">,
+) {
+  if (input.source && input.source !== "web") return;
+  await assertPaymentMethodAvailable(client,input.paymentMethod);
 }
 
 export async function deliverySnapshot(
@@ -205,6 +213,9 @@ export async function createOrder(
     requireReceipt?: boolean;
   } = {},
 ) {
+  const asset=input.paymentMethod==="bank"&&options.requireReceipt!==false
+    ?await verifyReceiptAsset(input.paymentReceiptUrl,cloudinaryEnv())
+    :receiptAsset(input.paymentReceiptUrl);
   return withTransaction(async (client) => {
     await assertCheckoutPaymentAvailable(client, input);
     const lines = await loadLines(client, input, options.trustProvidedPrice),
@@ -220,7 +231,6 @@ export async function createOrder(
         shippingWeight.totalShippingWeightGrams,
         enforceOnlineStoreAvailability(input.source),
       ),
-      asset = receiptAsset(input.paymentReceiptUrl),
       orderId = newOrderId();
 
     if (input.discountCode && !discount) throw new Error("DISCOUNT_INVALID");

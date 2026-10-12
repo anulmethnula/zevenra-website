@@ -1,16 +1,16 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { cloudinarySignature } from "./_cloudinary-signature.js";
+import { durableRateLimit } from "./_rate-limit.js";
 import {
   cloudinaryEnv,
   json,
   methodNotAllowed,
-  rateLimit,
   validOrigin,
 } from "./_shared.js";
 
-export default function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return methodNotAllowed(res, ["POST"]);
-  const throttle = rateLimit(req, "receipt-sign", 10, 10 * 60 * 1000);
+  const throttle = await durableRateLimit(req, "receipt-sign", 10, 10 * 60 * 1000);
   if (throttle.limited) {
     res.setHeader("Retry-After", String(throttle.retryAfter));
     return json(

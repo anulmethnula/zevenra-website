@@ -41,6 +41,7 @@ const required = [
   "site_settings",
   "audit_logs",
   "schema_migrations",
+  "request_rate_limits",
 ];
 const pool = new Pool({ connectionString, max: 1 });
 try {
@@ -123,6 +124,10 @@ try {
       .sort(),
     missingMigrations = expected.filter((version) => !applied.has(version));
   console.log("migrations:", migrations.rows.map((row) => row.version).join(", "));
+  const integrityFunction=String((await pool.query("SELECT pg_get_functiondef('check_published_product_integrity()'::regprocedure) definition")).rows[0]?.definition||"");
+  const weightOptional=!/shipping_weight_grams|default_shipping_weight_grams/.test(integrityFunction);
+  console.log("weightOptionalProductIntegrity:",weightOptional);
+  if(!weightOptional)failures.push("check_published_product_integrity still requires shipping weights");
   if (missingMigrations.length)
     failures.push(`missingMigrations=${missingMigrations.join(",")}`);
   if (failures.length)

@@ -505,6 +505,15 @@ export const preorderSchema = z
     quantity: z.number().int().min(1).max(5),
   })
   .strict();
+export const preorderConversionSchema = z.object({
+  requestId: z.string().trim().min(1).max(100),
+  paymentMethod: z.enum(["cod", "bank"]),
+  fulfillmentMethod: z.enum(["flat", "area_group", "pickup"]),
+  pickupLocationId: z.string().trim().max(100).optional(),
+}).strict().superRefine((value,ctx)=>{
+  if(value.fulfillmentMethod==="pickup"&&!value.pickupLocationId)
+    ctx.addIssue({code:z.ZodIssueCode.custom,path:["pickupLocationId"],message:"Choose a pickup branch."});
+});
 export const manualOrderSchema = z
   .object({
     source: z.enum(["instagram", "whatsapp", "manual"]),

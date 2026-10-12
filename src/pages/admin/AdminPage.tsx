@@ -261,8 +261,8 @@ function Dashboard() {
       {stats?.missingShippingWeights?.length ? (
         <section className="mt-6 overflow-hidden rounded-2xl border border-amber-800/20 bg-amber-50/70">
           <div className="border-b border-amber-800/15 p-4 sm:p-5">
-            <h2 className="text-sm font-semibold text-amber-950">Shipping weights required before checkout</h2>
-            <p className="mt-1 text-xs leading-5 text-amber-900/70">These published products have neither a product weight nor a category default. Add an authoritative value; do not estimate.</p>
+            <h2 className="text-sm font-semibold text-amber-950">Optional shipping weights are incomplete</h2>
+            <p className="mt-1 text-xs leading-5 text-amber-900/70">These published products have neither a product weight nor a category default. Checkout is unaffected; add an authoritative value only when available.</p>
           </div>
           <div className="divide-y divide-amber-800/10">
             {stats.missingShippingWeights.map((product) => (
@@ -2217,6 +2217,7 @@ type PreorderAdminDraft = {
   district: string;
   postalCode: string;
 };
+type PreorderFulfillmentConfig={methods:Array<{type:"flat"|"area_group"|"pickup";displayName:string;active:boolean}>;pickupLocations:Array<{id:string;name:string;address:string;active:boolean}>};
 function Preorders() {
   const store = useStore(),
     location = useLocation(),
@@ -2228,9 +2229,12 @@ function Preorders() {
     [busy, setBusy] = useState(""),
     [message, setMessage] = useState(""),
     [drafts, setDrafts] = useState<Record<string, PreorderAdminDraft>>({}),
+    [fulfillment,setFulfillment]=useState<PreorderFulfillmentConfig|null>(null),
+    [conversion,setConversion]=useState<Record<string,{method:"flat"|"area_group"|"pickup";pickupLocationId:string}>>({}),
     pageSize = 20,
     batchTarget = 6,
     batchMinimum = 5;
+  useEffect(()=>{void adminApi.get<PreorderFulfillmentConfig>("getFulfillmentConfig").then(setFulfillment).catch(reason=>setMessage(reason instanceof Error?reason.message:"Could not load fulfillment settings."));},[]);
   const labels: Record<PreorderStatus, string> = {
     new: "New request",
     contacted: "Customer contacted",
@@ -2404,7 +2408,10 @@ function Preorders() {
   }
   async function convert(item: PreorderRequest, paymentMethod: "cod" | "bank") {
     const draft = draftFor(item);
-    if (!draft.address1.trim() || !draft.city.trim() || !draft.district)
+    const activeMethods=(fulfillment?.methods||[]).filter(method=>method.active),selected=conversion[item.requestId]||{method:activeMethods.length===1?activeMethods[0].type:"" as "flat",pickupLocationId:""};
+    if(!selected.method)return setMessage("Choose a fulfillment method before converting this pre-order.");
+    if(selected.method==="pickup"&&!selected.pickupLocationId)return setMessage("Choose an active pickup branch before converting this pre-order.");
+    if (selected.method!=="pickup"&&(!draft.address1.trim() || !draft.city.trim() || !draft.district))
       return setMessage(
         "Complete the delivery address and district before converting this pre-order.",
       );
@@ -2441,6 +2448,8 @@ function Preorders() {
       const order = await adminApi.post<Order>("convertPreorderToOrder", {
         requestId: item.requestId,
         paymentMethod,
+        fulfillmentMethod:selected.method,
+        pickupLocationId:selected.method==="pickup"?selected.pickupLocationId:undefined,
       });
       await store.loadAdmin();
       setMessage(
@@ -2739,6 +2748,8 @@ function Preorders() {
                     )}
                     {item.status === "ready" && (
                       <div className="grid gap-2">
+                        <label className="label">Fulfillment<select className="field mt-1" value={conversion[item.requestId]?.method||((fulfillment?.methods||[]).filter(method=>method.active).length===1?(fulfillment?.methods||[]).find(method=>method.active)?.type:"")||""} onChange={event=>setConversion(current=>({...current,[item.requestId]:{method:event.target.value as "flat"|"area_group"|"pickup",pickupLocationId:""}}))}><option value="">Choose method</option>{(fulfillment?.methods||[]).filter(method=>method.active).map(method=><option key={method.type} value={method.type}>{method.displayName}</option>)}</select></label>
+                        {(conversion[item.requestId]?.method||((fulfillment?.methods||[]).filter(method=>method.active).length===1?(fulfillment?.methods||[]).find(method=>method.active)?.type:""))==="pickup"?<label className="label">Pickup branch<select className="field mt-1" value={conversion[item.requestId]?.pickupLocationId||""} onChange={event=>setConversion(current=>({...current,[item.requestId]:{method:"pickup",pickupLocationId:event.target.value}}))}><option value="">Choose branch</option>{(fulfillment?.pickupLocations||[]).filter(branch=>branch.active).map(branch=><option key={branch.id} value={branch.id}>{branch.name} — {branch.address}</option>)}</select></label>:null}
                         <button
                           disabled={busy === item.requestId || finalPrice <= 0}
                           onClick={() => void convert(item, "cod")}

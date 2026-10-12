@@ -59,6 +59,7 @@ import {
   body,
   json,
   manualOrderSchema,
+  preorderConversionSchema,
   validOrigin,
   validSession,
 } from "../_shared.js";
@@ -127,7 +128,7 @@ async function execute(action: string, payload: Record<string, unknown>) {
     case "listHomepageSections":
       return listHomepageSections();
     case "listOrders":
-      return listOrders();
+      return listOrders(Number(payload.page)||1,Number(payload.pageSize)||100);
     case "getOrder":
       return getOrder(String(payload.orderId || payload.id || ""));
     case "listPreorders":
@@ -195,7 +196,7 @@ async function execute(action: string, payload: Record<string, unknown>) {
     case "createPreorderBatch":
       return createPreorderBatch();
     case "convertPreorderToOrder":
-      return convertPreorderToOrder(payload);
+      return convertPreorderToOrder(preorderConversionSchema.parse(payload));
     case "createManualOrder":
       return createOrder(
         {

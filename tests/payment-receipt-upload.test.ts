@@ -2,12 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { cloudinarySignature } from "../api/_cloudinary-signature.ts";
 import { authenticatedReceiptDownloadUrl } from "../api/_receipt-access-url.ts";
-import { receiptAsset } from "../api/_receipt-asset.ts";
+import { receiptAsset,verifyReceiptAsset } from "../api/_receipt-asset.ts";
 import { uploadPaymentReceipt } from "../src/services/paymentReceiptUpload.ts";
 
 const allowed=["image/jpeg","image/png","image/webp","image/heic","image/heif","application/pdf"];
 const signed={timestamp:1,folder:"zevenra/payment-receipts",type:"authenticated" as const,signature:"signed",apiKey:"key",cloudName:"cloud",maxBytes:15_000_000,allowed};
-const uploaded={secure_url:"https://res.cloudinary.com/cloud/image/authenticated/v1/zevenra/payment-receipts/receipt.jpg",type:"authenticated"};
+const uploaded={secure_url:"https://res.cloudinary.com/cloud/image/authenticated/v1/zevenra/payment-receipts/receipt.jpg",type:"authenticated",resource_type:"image",format:"jpg",bytes:7};
 
 function mockFetch(upload:Response|Error=new Response(JSON.stringify(uploaded),{status:200})){
   const calls:Array<{input:RequestInfo|URL;init?:RequestInit}>=[];
@@ -38,5 +38,9 @@ test("parses signed raw authenticated delivery URLs",()=>{assert.deepEqual(recei
 test("rejects receipt URLs for the wrong cloud",()=>{assert.throws(()=>receiptAsset("https://res.cloudinary.com/other/image/authenticated/v1/zevenra/payment-receipts/test.png","cloud"),/Invalid payment receipt URL/);});
 test("rejects public upload delivery URLs",()=>{assert.throws(()=>receiptAsset("https://res.cloudinary.com/cloud/image/upload/v1/zevenra/payment-receipts/test.png","cloud"),/Invalid payment receipt URL/);});
 test("rejects receipt URLs outside the protected folder",()=>{assert.throws(()=>receiptAsset("https://res.cloudinary.com/cloud/image/authenticated/v1/other/test.png","cloud"),/Invalid payment receipt URL/);});
+test("rejects nested receipt folders",()=>{assert.throws(()=>receiptAsset("https://res.cloudinary.com/cloud/image/authenticated/v1/zevenra/payment-receipts/nested/test.png","cloud"),/Invalid payment receipt URL/);});
+test("rejects video and arbitrary raw receipt assets",()=>{assert.throws(()=>receiptAsset("https://res.cloudinary.com/cloud/video/authenticated/v1/zevenra/payment-receipts/test.mp4","cloud"),/Invalid payment receipt URL/);assert.throws(()=>receiptAsset("https://res.cloudinary.com/cloud/raw/authenticated/v1/zevenra/payment-receipts/test.zip","cloud"),/Invalid payment receipt URL/);});
 test("rejects malformed signed delivery components",()=>{assert.throws(()=>receiptAsset("https://res.cloudinary.com/cloud/image/authenticated/s--bad!/v1/zevenra/payment-receipts/test.png","cloud"),/Invalid payment receipt URL/);});
+test("server metadata verification rejects oversized, mismatched, and unavailable assets",async()=>{const config={CLOUDINARY_CLOUD_NAME:"cloud",CLOUDINARY_API_KEY:"key",CLOUDINARY_API_SECRET:"secret"},url=uploaded.secure_url;const response=(body:unknown,status=200)=>async()=>new Response(JSON.stringify(body),{status});await assert.rejects(verifyReceiptAsset(url,config,response({...uploaded,bytes:15_000_001}) as typeof fetch),/Invalid payment receipt URL/);await assert.rejects(verifyReceiptAsset(url,config,response({...uploaded,format:"png"}) as typeof fetch),/Invalid payment receipt URL/);await assert.rejects(verifyReceiptAsset(url,config,response({},404) as typeof fetch),/Invalid payment receipt URL/);});
+test("server metadata verification accepts the exact authenticated receipt",async()=>{const config={CLOUDINARY_CLOUD_NAME:"cloud",CLOUDINARY_API_KEY:"key",CLOUDINARY_API_SECRET:"secret"},request=(async()=>new Response(JSON.stringify(uploaded),{status:200})) as typeof fetch;assert.deepEqual(await verifyReceiptAsset(uploaded.secure_url,config,request),{publicId:"zevenra/payment-receipts/receipt",resourceType:"image",format:"jpg"});});
 test("authorized admin access remains an expiring authenticated signed download",()=>{const access=authenticatedReceiptDownloadUrl({payment_receipt_public_id:"zevenra/payment-receipts/receipt",payment_receipt_resource_type:"image",payment_receipt_format:"jpg"},{cloudName:"cloud",apiKey:"key",apiSecret:"test-secret"},1700000000),url=new URL(access.url);assert.equal(url.pathname,"/v1_1/cloud/image/download");assert.equal(url.searchParams.get("type"),"authenticated");assert.equal(url.searchParams.get("public_id"),"zevenra/payment-receipts/receipt");assert.equal(url.searchParams.get("format"),"jpg");assert.ok(url.searchParams.get("signature"));assert.equal(access.expiresAt,1700000300);});

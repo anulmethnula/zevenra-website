@@ -313,10 +313,12 @@ export async function createOrder(
   });
 }
 
-export async function listOrders() {
+export async function listOrders(page=1,pageSize=100) {
+  const safePage=Math.max(1,Math.floor(page)||1),safePageSize=Math.min(100,Math.max(1,Math.floor(pageSize)||100));
   return (
     await query<Record<string, unknown>>(
-      `${orderWithItems} ORDER BY o.created_at DESC`,
+      `${orderWithItems} ORDER BY o.created_at DESC LIMIT $1 OFFSET $2`,
+      [safePageSize,(safePage-1)*safePageSize],
     )
   ).rows.map(mapOrder);
 }
@@ -352,7 +354,7 @@ export async function findGuestOrder(orderId: string, phone: string) {
           'imageUrl',(SELECT media.value->>'url' FROM jsonb_array_elements(COALESCE(p.media,'[]'::jsonb)) WITH ORDINALITY media(value,ordinality) WHERE media.value->>'type'='image' ORDER BY media.ordinality LIMIT 1)
         ) ORDER BY oi.id) FROM order_items oi LEFT JOIN products p ON p.id=oi.product_id AND p.status='published' WHERE oi.order_id=o.order_id),'[]') AS items
        FROM orders o
-       WHERE upper(o.order_id)=$1
+       WHERE o.order_id=$1
          AND CASE
             WHEN regexp_replace(o.phone,'\\D','','g') LIKE '0094%' THEN substring(regexp_replace(o.phone,'\\D','','g') from 3)
             WHEN regexp_replace(o.phone,'\\D','','g') ~ '^7[0-9]{8}$' THEN '94' || regexp_replace(o.phone,'\\D','','g')

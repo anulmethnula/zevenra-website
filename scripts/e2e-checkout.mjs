@@ -8,7 +8,9 @@ import { chromium } from "playwright";
 const connectionString=process.env.E2E_DATABASE_URL;
 if(!connectionString)throw new Error("E2E_DATABASE_URL is required. Refusing to use DATABASE_URL for destructive E2E testing.");
 const localEnv=await readFile(".env.local","utf8").catch(()=>""),localValue=name=>{const line=localEnv.split(/\r?\n/).find(item=>item.startsWith(`${name}=`));return line?line.slice(name.length+1).trim().replace(/^(['"])(.*)\1$/,"$2"):"";},sessionSecret=localValue("SESSION_SECRET")||"e2e-session-secret",cloudName=localValue("CLOUDINARY_CLOUD_NAME")||"e2e-cloud";
-const sql=neon(connectionString,{fullResults:true}),baseURL="http://localhost:3000",prefix="e2e-checkout-",productId=`${prefix}product`,variantId=`${prefix}variant`,categoryId=`${prefix}category`,pickupId=`${prefix}pickup`,slug=`${prefix}product`,settingsKeys=["brandName","storeOpen","ordersEnabled","codEnabled","bankEnabled","bankTransferEnabled","bankName","bankAccountName","bankAccountNumber","bankBranch","bankInstructions","packagingWeightGrams"],createdOrders=[];
+const mainDatabase=process.env.DATABASE_URL||localValue("DATABASE_URL");
+if(mainDatabase&&connectionString===mainDatabase)throw new Error("E2E_DATABASE_URL must not equal DATABASE_URL. Refusing destructive E2E testing.");
+const sql=neon(connectionString,{fullResults:true}),baseURL=process.env.E2E_BASE_URL||"http://localhost:3100",listenPort=new URL(baseURL).port||"3100",prefix="e2e-checkout-",productId=`${prefix}product`,variantId=`${prefix}variant`,categoryId=`${prefix}category`,pickupId=`${prefix}pickup`,slug=`${prefix}product`,settingsKeys=["brandName","storeOpen","ordersEnabled","codEnabled","bankEnabled","bankTransferEnabled","bankName","bankAccountName","bankAccountNumber","bankBranch","bankInstructions","packagingWeightGrams"],createdOrders=[];
 let browser,server,previousSettings=[],previousMethods=[];
 const query=(text,values=[])=>sql.query(text,values);
 const assert=(condition,message)=>{if(!condition)throw new Error(message);};
@@ -62,7 +64,7 @@ async function checkout({payment,fulfillment,phone}){
   const context=await browser.newContext({viewport:{width:1280,height:900}});await context.addInitScript(items=>localStorage.setItem("zevenra-cart-v1",JSON.stringify(items)),cart());
   if(payment==="bank"){
     await context.route("**/api/payment-receipt-sign",route=>route.fulfill({status:200,contentType:"application/json",body:JSON.stringify({timestamp:1,folder:"zevenra/payment-receipts",type:"authenticated",signature:"e2e",apiKey:"e2e",cloudName,maxBytes:5_000_000,allowed:["image/png"]})}));
-    await context.route("https://api.cloudinary.com/**",route=>route.fulfill({status:200,contentType:"application/json",body:JSON.stringify({secure_url:`https://res.cloudinary.com/${cloudName}/image/authenticated/v1/zevenra/payment-receipts/e2e-receipt.png`,type:"authenticated"})}));
+    await context.route("https://api.cloudinary.com/**",route=>route.fulfill({status:200,contentType:"application/json",body:JSON.stringify({secure_url:`https://res.cloudinary.com/${cloudName}/image/authenticated/v1/zevenra/payment-receipts/e2e-receipt.png`,type:"authenticated",resource_type:"image",format:"png",bytes:11})}));
   }
   const page=await context.newPage(),errors=[];page.on("pageerror",error=>errors.push(error.message));
   await page.goto(`${baseURL}/checkout`,{waitUntil:"domcontentloaded"});await page.getByRole("heading",{name:"Checkout",exact:true}).waitFor();
@@ -86,10 +88,10 @@ async function advanceLifecycle(orderId,paymentMethod){
 
 try{
   await seed();console.log("seeded weight-optional test-only fixtures");
-  const childEnv={...process.env,DATABASE_URL:connectionString,SESSION_SECRET:sessionSecret,ADMIN_USERNAME:"e2e-admin",ADMIN_PASSWORD_HASH:"e2e-unused",ALLOWED_ORIGIN:baseURL,CLOUDINARY_CLOUD_NAME:cloudName,PUBLIC_SITE_URL:baseURL,VERCEL_ENV:"development",CI:"1"};delete childEnv.E2E_DATABASE_URL;delete childEnv.DATABASE_URL_UNPOOLED;
+  const childEnv={...process.env,DATABASE_URL:connectionString,SESSION_SECRET:sessionSecret,ADMIN_USERNAME:"e2e-admin",ADMIN_PASSWORD_HASH:"e2e-unused",ALLOWED_ORIGIN:baseURL,CLOUDINARY_CLOUD_NAME:cloudName,CLOUDINARY_API_KEY:"e2e-key",CLOUDINARY_API_SECRET:"e2e-secret",PUBLIC_SITE_URL:baseURL,VERCEL_ENV:"development",E2E_ALLOW_RECEIPT_METADATA_FIXTURE:"1",CI:"1"};delete childEnv.E2E_DATABASE_URL;delete childEnv.DATABASE_URL_UNPOOLED;
   server=process.platform==="win32"
-    ?spawn(process.execPath,[path.join(process.env.APPDATA,"npm","node_modules","vercel","dist","vc.js"),"dev","--local-config","vercel.local.json","--listen","3000"],{env:childEnv,stdio:["ignore","pipe","pipe"]})
-    :spawn("vercel",["dev","--local-config","vercel.local.json","--listen","3000"],{env:childEnv,stdio:["ignore","pipe","pipe"]});
+    ?spawn(process.execPath,[path.join(process.env.APPDATA,"npm","node_modules","vercel","dist","vc.js"),"dev","--local-config","vercel.local.json","--listen",listenPort],{env:childEnv,stdio:["ignore","pipe","pipe"]})
+    :spawn("vercel",["dev","--local-config","vercel.local.json","--listen",listenPort],{env:childEnv,stdio:["ignore","pipe","pipe"]});
   server.stdout.on("data",data=>process.stdout.write(data));server.stderr.on("data",data=>process.stderr.write(data));await waitForServer();
   browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH||"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"});
   await configureFulfillment();

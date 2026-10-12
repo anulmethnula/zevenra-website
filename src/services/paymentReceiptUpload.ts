@@ -32,11 +32,14 @@ export async function uploadPaymentReceipt(file: File): Promise<string> {
   const result = (await response.json()) as {
     secure_url?: string;
     type?:string;
+    resource_type?:string;
+    format?:string;
+    bytes?:number;
     error?: { message?: string };
   };
   if(!response.ok){const message=result.error?.message||"";if(/file size|too large/i.test(message))throw new Error("This receipt file is too large. Try a smaller file.");if(/invalid|format|file type/i.test(message))throw new Error("Upload a valid image or PDF receipt.");throw new Error("Receipt upload failed. Please try again.");}
   const secureUrl=result.secure_url;let authenticated=false;
-  try{const url=new URL(secureUrl||""),parts=url.pathname.split("/").filter(Boolean);authenticated=url.protocol==="https:"&&url.hostname==="res.cloudinary.com"&&parts[0]===signed.cloudName&&["image","raw","video"].includes(parts[1]||"")&&parts[2]==="authenticated"&&result.type==="authenticated";}catch{/* Invalid upload response. */}
+  try{const url=new URL(secureUrl||""),parts=url.pathname.split("/").filter(Boolean),resource=parts[1],format=String(result.format||"").toLowerCase();authenticated=url.protocol==="https:"&&url.hostname==="res.cloudinary.com"&&parts[0]===signed.cloudName&&["image","raw"].includes(resource||"")&&parts[2]==="authenticated"&&result.type==="authenticated"&&result.resource_type===resource&&Number(result.bytes)>0&&Number(result.bytes)<=signed.maxBytes&&(resource==="raw"?format==="pdf":["jpg","jpeg","png","webp","heic","heif","pdf"].includes(format));}catch{/* Invalid upload response. */}
   if(!authenticated||!secureUrl)throw new Error("Receipt upload failed. Please try again.");
   return secureUrl;
 }
