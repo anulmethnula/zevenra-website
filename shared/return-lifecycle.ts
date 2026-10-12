@@ -24,7 +24,7 @@ export function validateReturnRequest(
   requested: Array<{ orderItemId: number; quantity: number }>,
   requireFullOrder = false,
 ) {
-  const purchasedById = new Map(purchased.map((item) => [item.id, item.quantity]));
+  const purchasedById = new Map(purchased.map((item) => [Number(item.id), Number(item.quantity)]));
   const seen = new Set<number>();
   for (const item of requested) {
     if (!Number.isInteger(item.orderItemId) || !purchasedById.has(item.orderItemId))
@@ -41,8 +41,8 @@ export function validateReturnRequest(
     if (requested.length !== purchased.length)
       throw new Error("Courier RTO must include the complete shipped order.");
     for (const item of purchased) {
-      const returned = requested.find((row) => row.orderItemId === item.id);
-      if (!returned || returned.quantity !== item.quantity)
+      const returned = requested.find((row) => row.orderItemId === Number(item.id));
+      if (!returned || returned.quantity !== Number(item.quantity))
         throw new Error("Courier RTO must include the complete shipped order.");
     }
   }

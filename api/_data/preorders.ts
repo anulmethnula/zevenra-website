@@ -317,7 +317,7 @@ export async function convertPreorderToOrder(input: Record<string, unknown>) {
       ],
     );
     await client.query(
-      "UPDATE preorders SET status='converted',converted_order_id=$2,notes=concat_ws(' | ',nullif(notes,''),$3),updated_at=now() WHERE request_id=$1",
+      "UPDATE preorders SET status='converted',converted_order_id=$2,notes=concat_ws(' | ',nullif(notes,''),$3::text),updated_at=now() WHERE request_id=$1",
       [input.requestId, orderId, `Converted to ${orderId}`],
     );
     await client.query(

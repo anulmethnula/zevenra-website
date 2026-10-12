@@ -78,3 +78,5 @@ test("return validation rejects duplicate, unknown, and excessive item quantitie
     /exceeds the quantity purchased/,
   );
 });
+
+test("return validation normalizes PostgreSQL bigint IDs",()=>assert.doesNotThrow(()=>validateReturnRequest([{id:"42" as unknown as number,quantity:2}],[{orderItemId:42,quantity:1}])));
