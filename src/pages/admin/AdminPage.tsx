@@ -258,22 +258,6 @@ function Dashboard() {
         Revenue shows delivered product value only. Delivery fees are shown
         separately, so shipping charges are not mixed into product sales.
       </p>
-      {stats?.missingShippingWeights?.length ? (
-        <section className="mt-6 overflow-hidden rounded-2xl border border-amber-800/20 bg-amber-50/70">
-          <div className="border-b border-amber-800/15 p-4 sm:p-5">
-            <h2 className="text-sm font-semibold text-amber-950">Optional shipping weights are incomplete</h2>
-            <p className="mt-1 text-xs leading-5 text-amber-900/70">These published products have neither a product weight nor a category default. Checkout is unaffected; add an authoritative value only when available.</p>
-          </div>
-          <div className="divide-y divide-amber-800/10">
-            {stats.missingShippingWeights.map((product) => (
-              <Link key={product.id} to={`/admin/products/${product.id}`} className="flex min-h-12 items-center justify-between gap-3 px-4 py-3 text-xs hover:bg-amber-100/60 sm:px-5">
-                <span className="min-w-0 break-words font-medium">{product.name}</span>
-                <span className="shrink-0 text-amber-900/60">{product.category}</span>
-              </Link>
-            ))}
-          </div>
-        </section>
-      ) : null}
       <div className="mt-6 grid gap-5 xl:grid-cols-2">
         <Panel title="Top selling products">
           {stats?.topProducts?.length ? (
@@ -613,7 +597,6 @@ function Categories() {
     featured: false,
     showInNavigation: kind === "main",
     showOnHomepage: false,
-    defaultShippingWeightGrams: undefined,
     parentId: kind === "sub" ? main[0]?.id : undefined,
     sortOrder: store.data.categories.length + 1,
   });
@@ -680,8 +663,6 @@ function CategoryCard({
     );
   async function submit() {
     if (!draft.name.trim()) return setStatus("Name is required.");
-    if (draft.defaultShippingWeightGrams != null && (!Number.isInteger(draft.defaultShippingWeightGrams) || draft.defaultShippingWeightGrams <= 0))
-      return setStatus("Default shipping weight must be a whole number greater than zero, or left blank.");
     if (draft.parentId === draft.id)
       return setStatus("A category cannot be its own parent.");
     setBusy(true);
@@ -740,11 +721,6 @@ function CategoryCard({
           value={String(draft.sortOrder)}
           onChange={(value) => change("sortOrder", Number(value) || 0)}
         />
-        <Field
-          label="Default shipping weight (g)"
-          value={draft.defaultShippingWeightGrams == null ? "" : String(draft.defaultShippingWeightGrams)}
-          onChange={(value) => change("defaultShippingWeightGrams", value ? Number(value) : undefined)}
-        />
         <UploadField
           label="Category image (optional)"
           value={draft.imageUrl}
@@ -760,9 +736,6 @@ function CategoryCard({
         <p className="mt-3 border-l-2 border-[#96724f] pl-3 text-xs text-black/50">
           Storefront path: {parent.name} → {draft.name || "Subcategory"}
         </p>
-      )}
-      {!draft.defaultShippingWeightGrams && (
-        <p role="alert" className="mt-3 border-l-2 border-amber-700 pl-3 text-xs leading-5 text-amber-900">No default shipping weight is configured. Products in this category need their own override before weight-based delivery can be calculated.</p>
       )}
       {childCount > 0 && !draft.parentId && (
         <p className="mt-3 text-xs text-amber-900">
@@ -4262,7 +4235,7 @@ function Media() {
 }
 type SettingsSection="brand"|"payments"|"delivery"|"store";
 const settingsSections:SettingsSection[]=["brand","payments","delivery","store"];
-const settingsSectionKeys={brand:["brandName","tagline","announcement","whatsapp","phone","email","instagram","tiktok"],payments:["codEnabled","bankEnabled","bankName","accountName","accountNumber","branch"],delivery:["deliveryEnabled","freeDeliveryThreshold","packagingWeightGrams"],store:["storeOpen","ordersEnabled","defaultTitle","defaultDescription"]} as const;
+const settingsSectionKeys={brand:["brandName","tagline","announcement","whatsapp","phone","email","instagram","tiktok"],payments:["codEnabled","bankEnabled","bankName","accountName","accountNumber","branch"],delivery:["deliveryEnabled","freeDeliveryThreshold"],store:["storeOpen","ordersEnabled","defaultTitle","defaultDescription"]} as const;
 const settingsSectionLabels:Record<SettingsSection,string>={brand:"Brand & contact settings",payments:"Payment settings",delivery:"Delivery settings",store:"Store settings"};
 function SectionSave({section,label,busy,status,save}:{section:SettingsSection;label:string;busy:boolean;status:string;save:(section:SettingsSection)=>Promise<void>}){return <div className="mt-5 border-t border-black/10 pt-4"><button type="button" className="btn btn-dark min-h-11 w-full justify-center" disabled={busy} onClick={()=>void save(section)}>{busy?"Saving…":label}</button>{status&&<p className={`mt-3 text-xs ${status.endsWith("saved.")?"text-emerald-800":"text-red-800"}`} role="status">{status}</p>}</div>}
 function ExplicitSettings({ focus }: { focus: string }) {
@@ -4304,15 +4277,8 @@ function ExplicitSettings({ focus }: { focus: string }) {
       return setStatus(current=>({...current,brand:"Enter a valid phone number."}));
     if (section==="brand"&&(!validUrl(draft.instagram) || !validUrl(draft.tiktok)))
       return setStatus(current=>({...current,brand:"Instagram and TikTok must be valid http(s) URLs or left blank."}));
-    if (section==="delivery"&&(
-      !Number.isFinite(draft.freeDeliveryThreshold) ||
-      draft.freeDeliveryThreshold < 0 ||
-      draft.packagingWeightGrams == null ||
-      !Number.isFinite(draft.packagingWeightGrams) ||
-      !Number.isInteger(draft.packagingWeightGrams) ||
-      draft.packagingWeightGrams <= 0
-    ))
-      return setStatus(current=>({...current,delivery:"Packaging weight must be a whole number greater than zero, and delivery amounts cannot be negative."}));
+    if (section==="delivery"&&(!Number.isFinite(draft.freeDeliveryThreshold) || draft.freeDeliveryThreshold < 0))
+      return setStatus(current=>({...current,delivery:"Delivery amounts cannot be negative."}));
     if (section==="store"&&draft.ordersEnabled && !s.data.settings.codEnabled && !s.data.settings.bankEnabled)
       return setStatus(current=>({...current,store:"Save an enabled payment method before enabling online orders."}));
     if (section==="payments"&&
@@ -4443,12 +4409,6 @@ function ExplicitSettings({ focus }: { focus: string }) {
             value={String(draft.freeDeliveryThreshold)}
             onChange={(v) => change("delivery", "freeDeliveryThreshold", Number(v))}
           />
-          <Field
-            label="Packaging weight (g)"
-            value={draft.packagingWeightGrams == null ? "" : String(draft.packagingWeightGrams)}
-            onChange={(v) => change("delivery", "packagingWeightGrams", v === "" ? undefined : Number(v))}
-          />
-          {draft.packagingWeightGrams == null && <p role="alert" className="mt-2 border-l-2 border-amber-700 pl-3 text-xs leading-5 text-amber-900">Packaging weight is not configured. Weight-based delivery cannot be calculated until it is saved.</p>}
           <p className="mt-2 text-xs leading-5 text-black/45">
             Courier prices and delivery zones are managed separately so changing
             courier companies never changes your store settings.

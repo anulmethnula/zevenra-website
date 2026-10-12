@@ -217,34 +217,6 @@ export async function convertPreorderToOrder(input: Record<string, unknown>) {
 
     const paymentMethod = normalizePreorderPaymentMethod(input.paymentMethod);
     await assertPaymentMethodAvailable(client,paymentMethod);
-    const product = (
-        await client.query<Record<string, unknown>>(
-          `SELECT p.shipping_weight_grams,c.default_shipping_weight_grams
-           FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.id=$1`,
-          [preorder.product_id],
-        )
-      ).rows[0],
-      packaging = (
-        await client.query<{ value: unknown }>(
-          "SELECT value FROM site_settings WHERE key='packagingWeightGrams'",
-        )
-      ).rows[0];
-    const resolvedWeight =
-      product?.shipping_weight_grams ?? product?.default_shipping_weight_grams;
-    const packagingWeight = packaging && Number(packaging.value) > 0
-      ? Number(packaging.value)
-      : null;
-    const productWeight = resolvedWeight == null
-      ? null
-      : Number(resolvedWeight) * Number(preorder.quantity);
-    const shippingWeight = {
-      totalProductWeightGrams: productWeight,
-      totalShippingWeightGrams:
-        productWeight == null || packagingWeight == null
-          ? null
-          : productWeight + packagingWeight,
-    };
-
     const price = Number(preorder.confirmed_price),
       subtotal = price * Number(preorder.quantity),
       delivery = await deliverySnapshot(
@@ -257,7 +229,6 @@ export async function convertPreorderToOrder(input: Record<string, unknown>) {
           postalCode: String(preorder.postal_code || ""),
         },
         subtotal,
-        shippingWeight.totalShippingWeightGrams,
         false,
       ),
       fee = delivery.fee,
@@ -286,8 +257,8 @@ export async function convertPreorderToOrder(input: Record<string, unknown>) {
         subtotal,
         fee,
         subtotal + fee,
-        shippingWeight.totalProductWeightGrams,
-        shippingWeight.totalShippingWeightGrams,
+        null,
+        null,
         delivery.minimumDeliveryDays,
         delivery.maximumDeliveryDays,
         delivery.method,
@@ -313,7 +284,7 @@ export async function convertPreorderToOrder(input: Record<string, unknown>) {
         preorder.quantity,
         price,
         price * Number(preorder.quantity),
-        resolvedWeight == null ? null : Number(resolvedWeight),
+        null,
       ],
     );
     await client.query(

@@ -64,8 +64,6 @@ try {
       "SELECT count(*)::int AS count FROM order_items i JOIN orders o ON o.order_id=i.order_id WHERE o.order_status<>'cancelled' AND i.is_preorder=false AND (i.variant_id IS NULL OR NOT EXISTS(SELECT 1 FROM variants v WHERE v.id=i.variant_id))",
     orphanProductCollections:
       "SELECT count(*)::int AS count FROM product_collections pc LEFT JOIN products p ON p.id=pc.product_id LEFT JOIN collections c ON c.id=pc.collection_id WHERE p.id IS NULL OR c.id IS NULL",
-    invalidConfiguredShippingWeights:
-      "SELECT (SELECT count(*) FROM products WHERE shipping_weight_grams IS NOT NULL AND shipping_weight_grams<=0)+(SELECT count(*) FROM categories WHERE default_shipping_weight_grams IS NOT NULL AND default_shipping_weight_grams<=0) AS count",
     publishedProductsInactiveCategory:
       "SELECT count(*)::int AS count FROM products p JOIN categories c ON c.id=p.category_id WHERE p.status='published' AND c.active IS NOT TRUE",
     publishedProductsWithoutActiveVariant:
@@ -85,8 +83,6 @@ try {
       "SELECT count(*)::int AS count FROM orders WHERE subtotal-COALESCE(discount_amount,0)+delivery_fee<>total",
     invalidStockStates:
       "SELECT count(*)::int AS count FROM orders WHERE stock_state NOT IN ('reserved','fulfilled','restored','not_applicable')",
-    invalidWeightSnapshots:
-      "SELECT count(*)::int AS count FROM orders WHERE (total_product_weight_grams IS NULL) <> (total_shipping_weight_grams IS NULL) OR (total_product_weight_grams IS NOT NULL AND total_shipping_weight_grams < total_product_weight_grams)",
     invalidDeliveryEstimateSnapshots:
       "SELECT count(*)::int AS count FROM orders WHERE (minimum_delivery_days IS NULL) <> (maximum_delivery_days IS NULL) OR (minimum_delivery_days IS NOT NULL AND (minimum_delivery_days <= 0 OR maximum_delivery_days < minimum_delivery_days))",
     excessiveReturns:
@@ -124,10 +120,6 @@ try {
       .sort(),
     missingMigrations = expected.filter((version) => !applied.has(version));
   console.log("migrations:", migrations.rows.map((row) => row.version).join(", "));
-  const integrityFunction=String((await pool.query("SELECT pg_get_functiondef('check_published_product_integrity()'::regprocedure) definition")).rows[0]?.definition||"");
-  const weightOptional=!/shipping_weight_grams|default_shipping_weight_grams/.test(integrityFunction);
-  console.log("weightOptionalProductIntegrity:",weightOptional);
-  if(!weightOptional)failures.push("check_published_product_integrity still requires shipping weights");
   if (missingMigrations.length)
     failures.push(`missingMigrations=${missingMigrations.join(",")}`);
   if (failures.length)

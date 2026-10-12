@@ -61,7 +61,6 @@ type Line = {
   unitPrice: number;
   lineTotal: number;
   isPreorder: boolean;
-  shippingWeightGrams: number | null;
 };
 
 const orderWithItems = `SELECT o.*,COALESCE((SELECT jsonb_agg(to_jsonb(oi) ORDER BY oi.id) FROM order_items oi WHERE oi.order_id=o.order_id),'[]') AS items,(SELECT count(*)::int FROM order_returns r WHERE r.order_id=o.order_id) AS return_count FROM orders o`;
@@ -99,7 +98,6 @@ export async function deliverySnapshot(
   client: DatabaseClient,
   input: Pick<OrderInput, "fulfillmentMethod" | "pickupLocationId" | "city" | "district" | "postalCode">,
   subtotal: number,
-  _totalShippingWeightGrams: number | null,
   enforceStoreAvailability = true,
 ) {
   const settings = (
@@ -137,19 +135,6 @@ export async function deliverySnapshot(
   };
 }
 
-async function shippingWeightSnapshot(client: DatabaseClient, lines: Line[]) {
-  const row = (
-    await client.query<{ value: unknown }>(
-      "SELECT value FROM site_settings WHERE key='packagingWeightGrams'",
-    )
-  ).rows[0];
-  const packaging=row&&Number(row.value)>0?Number(row.value):null;
-  if(packaging==null||lines.some(line=>line.shippingWeightGrams==null))
-    return {ready:false,missing:[],totalProductWeightGrams:null,totalShippingWeightGrams:null};
-  const totalProductWeightGrams=lines.reduce((sum,line)=>sum+line.shippingWeightGrams!*line.quantity,0);
-  return {ready:true,missing:[],totalProductWeightGrams,totalShippingWeightGrams:totalProductWeightGrams+packaging};
-}
-
 async function loadLines(
   client: DatabaseClient,
   input: OrderInput,
@@ -163,7 +148,7 @@ async function loadLines(
     ids.add(item.variantId);
     const row = (
       await client.query<Record<string, unknown>>(
-        `SELECT v.*,p.name AS product_name,p.price,p.status,p.preorder_enabled,p.shipping_weight_grams,c.default_shipping_weight_grams FROM variants v JOIN products p ON p.id=v.product_id LEFT JOIN categories c ON c.id=p.category_id WHERE v.id=$1 AND v.product_id=$2 AND v.active=true${lockRows ? " FOR UPDATE OF v,p" : ""}`,
+        `SELECT v.*,p.name AS product_name,p.price,p.status,p.preorder_enabled FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=$1 AND v.product_id=$2 AND v.active=true${lockRows ? " FOR UPDATE OF v,p" : ""}`,
         [item.variantId, item.productId],
       )
     ).rows[0];
@@ -180,8 +165,6 @@ async function loadLines(
       trustProvidedPrice && Number(item.unitPrice) > 0
         ? Number(item.unitPrice)
         : Number(row.price);
-    const resolvedShippingWeight =
-      row.shipping_weight_grams ?? row.default_shipping_weight_grams;
     lines.push({
       productId: String(row.product_id),
       variantId: String(row.id),
@@ -193,8 +176,6 @@ async function loadLines(
       unitPrice,
       lineTotal: unitPrice * quantity,
       isPreorder,
-      shippingWeightGrams:
-        resolvedShippingWeight == null ? null : Number(resolvedShippingWeight),
     });
   }
   return lines;
@@ -220,7 +201,6 @@ export async function createOrder(
     await assertCheckoutPaymentAvailable(client, input);
     const lines = await loadLines(client, input, options.trustProvidedPrice),
       subtotal = lines.reduce((sum, line) => sum + line.lineTotal, 0),
-      shippingWeight = await shippingWeightSnapshot(client, lines),
       discount = input.discountCode
         ? await validateDiscount(client, input.discountCode, subtotal, true)
         : null,
@@ -228,7 +208,6 @@ export async function createOrder(
         client,
         input,
         subtotal,
-        shippingWeight.totalShippingWeightGrams,
         enforceOnlineStoreAvailability(input.source),
       ),
       orderId = newOrderId();
@@ -316,8 +295,8 @@ export async function createOrder(
         discount?.value || 0,
         delivery.fee,
         total,
-        shippingWeight.totalProductWeightGrams,
-        shippingWeight.totalShippingWeightGrams,
+        null,
+        null,
         delivery.minimumDeliveryDays,
         delivery.maximumDeliveryDays,
         stockState,
@@ -354,7 +333,7 @@ export async function createOrder(
           line.unitPrice,
           line.lineTotal,
           line.isPreorder,
-          line.shippingWeightGrams,
+          null,
         ],
       );
 
@@ -365,8 +344,6 @@ export async function createOrder(
         JSON.stringify({
           total,
           deliveryZone: delivery.zoneName,
-          totalShippingWeightGrams:
-            shippingWeight.totalShippingWeightGrams,
         }),
       ],
     );
@@ -388,12 +365,10 @@ export async function quoteDelivery(
   return withTransaction(async (client) => {
     const lines = await loadLines(client, input as OrderInput, false, false),
       subtotal = lines.reduce((sum, line) => sum + line.lineTotal, 0),
-      shippingWeight = await shippingWeightSnapshot(client, lines),
       delivery = await deliverySnapshot(
         client,
         input,
         subtotal,
-        shippingWeight.totalShippingWeightGrams,
       );
     return {
       fee: delivery.fee,

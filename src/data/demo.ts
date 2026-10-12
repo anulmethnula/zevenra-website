@@ -394,7 +394,6 @@ export const settings: SiteSettings = {
   deliveryEnabled: true,
   deliveryFee: 450,
   freeDeliveryThreshold: 15000,
-  packagingWeightGrams: 30,
   defaultCourierProviderId: legacyCourierId,
   currency: "LKR",
   storeOpen: true,

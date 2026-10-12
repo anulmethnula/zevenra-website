@@ -28,16 +28,9 @@ export async function saveSettings(patch: Record<string, unknown>) {
     throw new Error("Brand name is required.");
   if (
     Number(next.deliveryFlatFee ?? next.deliveryFee ?? 0) < 0 ||
-    Number(next.freeDeliveryThreshold ?? 0) < 0 ||
-    Number(next.packagingWeightGrams ?? 0) < 0
+    Number(next.freeDeliveryThreshold ?? 0) < 0
   )
     throw new Error("Delivery amounts cannot be negative.");
-  if (
-    patch.packagingWeightGrams !== undefined &&
-    (!Number.isInteger(Number(patch.packagingWeightGrams)) ||
-      Number(patch.packagingWeightGrams) <= 0)
-  )
-    throw new Error("Packaging weight must be a whole number greater than zero.");
 
   const ordersEnabled = isTrue(next.ordersEnabled ?? true),
     codEnabled = isTrue(next.codEnabled),
