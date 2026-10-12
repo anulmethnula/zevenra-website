@@ -12,7 +12,7 @@ import { api } from "../services/api";
 import { uploadPaymentReceipt } from "../services/paymentReceiptUpload";
 import type { Order, PaymentMethod } from "../types";
 import { checkoutAmounts } from "../utils/checkoutAmounts";
-import { paymentReadinessMessage, postalCodeError } from "../utils/checkoutValidation";
+import { deliveryAddressReady, hydrateUntouchedDeliveryAddress, paymentReadinessMessage, postalCodeError, type DeliveryAddress } from "../utils/checkoutValidation";
 import { rememberGuestOrder } from "../utils/guestOrders";
 import { useCheckoutConfig } from "../hooks/usePublicData";
 import { clearCheckoutToastSource, selectActiveFulfillment, type CheckoutFulfillmentType, type CheckoutToast } from "../utils/checkoutFulfillment";
@@ -53,6 +53,7 @@ export default function CheckoutPage() {
   const cart = useCart(),
     navigate = useNavigate(),
     formRef = useRef<HTMLFormElement>(null),
+    addressTouched=useRef<Record<keyof DeliveryAddress,boolean>>({address1:false,city:false,district:false,postalCode:false}),
     { data } = useStore(),
     checkout = useCheckoutConfig(),
     { user } = useCustomerAuth(),
@@ -80,6 +81,7 @@ export default function CheckoutPage() {
   const [payment, setPayment] = useState<PaymentMethod>(availablePayments[0] || "cod"),
     [fulfillmentMethod,setFulfillmentMethod]=useState<CheckoutFulfillmentType|null>(null),
     [pickupLocationId,setPickupLocationId]=useState(""),
+    [address1,setAddress1]=useState(user?.address1||""),
     [district, setDistrict] = useState(user?.district || ""),
     [city, setCity] = useState(user?.city || ""),
     [postalCode, setPostalCode] = useState(user?.postalCode || ""),
@@ -104,6 +106,11 @@ export default function CheckoutPage() {
     [deliveryQuoteLoading, setDeliveryQuoteLoading] = useState(false),
     [deliveryQuoteError, setDeliveryQuoteError] = useState(""),
     [toast,setToast]=useState<CheckoutToast|null>(null);
+  useEffect(()=>{
+    const profile={address1:user?.address1||"",city:user?.city||"",district:user?.district||"",postalCode:user?.postalCode||""};
+    const current={address1,city,district,postalCode},next=hydrateUntouchedDeliveryAddress(current,profile,addressTouched.current);
+    if(next.address1!==address1)setAddress1(next.address1);if(next.city!==city)setCity(next.city);if(next.district!==district)setDistrict(next.district);if(next.postalCode!==postalCode)setPostalCode(next.postalCode);
+  },[address1,city,district,postalCode,user?.address1,user?.city,user?.district,user?.postalCode]);
   useEffect(() => {
     if (!availablePayments.includes(payment) && availablePayments[0]) setPayment(availablePayments[0]);
   }, [availablePayments, payment]);
@@ -193,11 +200,13 @@ export default function CheckoutPage() {
   const price = (i: (typeof cart.items)[number]) => cart.live[i.variantId]?.currentPrice ?? i.unitPrice;
   const subtotal = cart.items.reduce((sum, i) => sum + price(i) * i.quantity, 0),
     postalFormatError = postalCodeError(postalCode),
-    addressReady = fulfillmentMethod==="pickup" || Boolean(district && city.trim().length >= 2 && postalCode.length===5 && !postalFormatError);
+    addressReady = deliveryAddressReady({address1,city,district,postalCode}),
+    pickupReady=fulfillmentMethod==="pickup"&&Boolean(pickupLocations.some(branch=>branch.id===pickupLocationId)&&deliveryQuote);
   const deliveryReady = Boolean(deliveryQuote);
   const deliveryFee = deliveryQuote?.fee ?? 0,
-    amounts = checkoutAmounts(subtotal, deliveryFee, addressReady && deliveryReady, discount?.amount || 0);
+    amounts = checkoutAmounts(subtotal, deliveryFee, fulfillmentMethod==="pickup"?pickupReady:addressReady&&deliveryReady, discount?.amount || 0);
   const paymentStatus = paymentReadinessMessage({
+            address1,
             city,
             district,
             postalError: postalFormatError,
@@ -293,6 +302,10 @@ export default function CheckoutPage() {
     const raw = Object.fromEntries(new FormData(event.currentTarget)),
       parsed = schema.safeParse({
         ...raw,
+        address1:fulfillmentMethod==="pickup"?"":address1,
+        city:fulfillmentMethod==="pickup"?"":city,
+        district:fulfillmentMethod==="pickup"?undefined:district||undefined,
+        postalCode:fulfillmentMethod==="pickup"?"":postalCode,
         paymentMethod: payment,
         paymentReceiptUrl: payment === "bank" ? receiptUrl : undefined,
         paymentReference: payment === "bank" ? String(raw.paymentReference || "") : undefined,
@@ -461,15 +474,16 @@ export default function CheckoutPage() {
                     Country / Region
                     <input className="field mt-1.5 bg-black/[.03]" value="Sri Lanka" readOnly />
                   </label>
-                  <Field name="address1" label="Address" required wide autoComplete="address-line1" defaultValue={user?.address1 || ""} error={fieldErrors.address1} onChange={() => clearError("address1")} />
+                  <Field name="address1" label="Address" required wide autoComplete="address-line1" value={address1} error={fieldErrors.address1} onChange={(value) => {addressTouched.current.address1=true;setAddress1(value);clearError("address1");}} />
                   <Field
                     name="city"
                     label="City / Area"
                     required
                     autoComplete="address-level2"
-                    defaultValue={user?.city || ""}
+                    value={city}
                     error={fieldErrors.city}
                     onChange={(value) => {
+                      addressTouched.current.city=true;
                       setCity(value);
                       clearError("city");
                     }}
@@ -484,6 +498,7 @@ export default function CheckoutPage() {
                       className={`field mt-1.5 ${fieldErrors.district ? "border-red-700" : ""}`}
                       value={district}
                       onChange={(event) => {
+                        addressTouched.current.district=true;
                         setDistrict(event.target.value);
                         clearError("district");
                       }}
@@ -508,6 +523,7 @@ export default function CheckoutPage() {
                     error={(postalTouched ? postalFormatError : "") || fieldErrors.postalCode}
                     onBlur={() => setPostalTouched(true)}
                     onChange={(value) => {
+                      addressTouched.current.postalCode=true;
                       setPostalCode(value);
                       clearError("postalCode");
                     }}
