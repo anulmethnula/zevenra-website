@@ -39,6 +39,17 @@
 .home-hero .home-hero__cta:focus-visible { outline: 2px solid #fffaf0; outline-offset: 3px; }
 
 @media (max-width: 767px) {
+  .home-hero__poster,
+  .home-hero__video {
+    object-position: 50% center;
+    filter: none;
+    transform: none;
+  }
+
+  .home-hero__shade {
+    background: linear-gradient(180deg, rgba(0, 0, 0, .035), transparent 58%, rgba(0, 0, 0, .18));
+  }
+
   .home-hero .home-hero__cta {
     bottom: max(28px, env(safe-area-inset-bottom));
     left: 20px;
