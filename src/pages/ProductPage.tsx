@@ -20,6 +20,7 @@ import { Seo } from "../components/Seo";
 import type { Media, SizeChart } from "../types";
 import { getSizeChart, useProduct, useRecommendations } from "../hooks/usePublicData";
 import { cloudinaryImage, cloudinarySrcSet } from "../utils/cloudinary";
+import { preferredProductVariant, productSizeGroups } from "../utils/productVariants";
 
 export default function ProductPage() {
   const { slug } = useParams(),
@@ -38,8 +39,9 @@ export default function ProductPage() {
   const touchStart = useRef<number | null>(null);
 
   useEffect(() => {
-    setColor(product?.variants.find((v) => v.active)?.color || "");
-    setSize("");
+    const preferred=product?preferredProductVariant(product.variants,Boolean(product.preorderEnabled)):undefined;
+    setColor(preferred?.color||product?.variants.find((v) => v.active)?.color||"");
+    setSize(preferred?.size||"");
     setQty(1);
     setGuide(false);
     setChart(null);
@@ -63,6 +65,7 @@ export default function ProductPage() {
       ...new Set(product.variants.filter((v) => v.active).map((v) => v.color)),
     ],
     options = product.variants.filter((v) => v.active && v.color === color),
+    sizeGroups = productSizeGroups(options,Boolean(product.preorderEnabled)),
     variant = options.find((v) => v.size === size),
     sold =
       product.variants.filter((v) => v.active).every((v) => v.stock < 1) &&
@@ -170,7 +173,7 @@ export default function ProductPage() {
                   key={c}
                   onClick={() => {
                     setColor(c);
-                    setSize("");
+                    setSize(preferredProductVariant(product.variants.filter((variant)=>variant.color===c),Boolean(product.preorderEnabled))?.size||"");
                     setQty(1);
                   }}
                   className={`min-h-12 border px-5 text-xs ${color === c ? "border-ink bg-ink text-paper" : "border-line"}`}
@@ -193,24 +196,9 @@ export default function ProductPage() {
                   </button>
                 )}
               </div>
-              <div className="flex flex-wrap gap-2">
-                {options.map((v) => {
-                  const canChoose = v.stock > 0 || product.preorderEnabled;
-                  return (
-                    <button
-                      key={v.id}
-                      disabled={!canChoose}
-                      onClick={() => {
-                        setSize(v.size);
-                        setQty(1);
-                      }}
-                      className={`min-h-12 min-w-14 border px-4 text-xs ${size === v.size ? "border-ink bg-ink text-paper" : "border-line"} disabled:opacity-25 disabled:line-through`}
-                    >
-                      {v.size}
-                      {v.stock < 1 && product.preorderEnabled ? " · PRE" : ""}
-                    </button>
-                  );
-                })}
+              <div className="grid gap-5">
+                {sizeGroups.available.length>0&&<div><p className="mb-2 text-[10px] font-semibold tracking-[.16em] text-ink/70">AVAILABLE NOW</p><div className="flex flex-wrap gap-2">{sizeGroups.available.map((v)=><button key={v.id} onClick={()=>{setSize(v.size);setQty(1);}} className={`min-h-12 min-w-14 border px-4 text-xs font-semibold ${size===v.size?"border-ink bg-ink text-paper":"border-ink bg-white text-ink"}`}>{v.size}</button>)}</div></div>}
+                {sizeGroups.preorder.length>0&&<div><p className="mb-2 text-[10px] font-semibold tracking-[.16em] text-ink/45">PRE-ORDER</p><div className="flex flex-wrap gap-2">{sizeGroups.preorder.map((v)=><button key={v.id} onClick={()=>{setSize(v.size);setQty(1);}} className={`min-h-12 min-w-14 border px-4 text-xs ${size===v.size?"border-bronze bg-bronze/10 text-ink":"border-bronze/35 text-ink/60"}`}>{v.size}</button>)}</div><p className="mt-2 text-xs leading-5 text-ink/50">Available to order now. Delivery will take longer.</p></div>}
               </div>
               {selectedPreorder && (
                 <p className="mt-3 border-l-2 border-bronze pl-3 text-xs leading-5 text-ink/60">
@@ -244,7 +232,7 @@ export default function ProductPage() {
                   to={`/preorder/${product.slug}?variant=${encodeURIComponent(variant.id)}&quantity=${qty}`}
                   className="btn btn-dark flex-1"
                 >
-                  Pre-order
+                  PRE-ORDER
                 </Link>
               ) : (
                 <button
@@ -256,9 +244,7 @@ export default function ProductPage() {
                     ? "Sold out"
                     : !size
                       ? "Select a size"
-                      : maxAdd < 1
-                        ? "Already in bag"
-                        : "Add to bag"}
+                      : "ADD TO BAG"}
                 </button>
               )}
             </div>
@@ -306,7 +292,7 @@ export default function ProductPage() {
             to={`/preorder/${product.slug}?variant=${encodeURIComponent(variant.id)}&quantity=${qty}`}
             className="btn btn-dark w-full"
           >
-            Pre-order · {money(product.price)}
+            PRE-ORDER
           </Link>
         ) : (
           <button
@@ -318,9 +304,7 @@ export default function ProductPage() {
               ? "Sold out"
               : !size
                 ? "Select a size"
-                : maxAdd < 1
-                  ? "Already in bag"
-                  : `Add to bag · ${money(product.price)}`}
+                : "ADD TO BAG"}
           </button>
         )}
       </div>
