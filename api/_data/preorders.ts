@@ -74,6 +74,7 @@ export async function quotePreorderClaim(input:Record<string,unknown>){
 }
 
 export async function createPreorder(input: Record<string, unknown>) {
+  const receipt=await verifyReceiptAsset(String(input.paymentReceiptUrl||""),cloudinaryEnv());
   return withTransaction(async (client) => {
     await assertPaymentMethodAvailable(client,"bank");
     const product = (
@@ -118,9 +119,9 @@ export async function createPreorder(input: Record<string, unknown>) {
         "You already have an active pre-order request for this size. Contact ZEVENRA if you want to change it.",
       );
 
-    const requestId = newId("PRE"), payment=createPreorderClaimToken(),
+    const requestId = newId("PRE"),
       result = await client.query<Record<string, unknown>>(
-        `INSERT INTO preorders(request_id,customer_id,customer_name,phone,whatsapp,email,address1,address2,city,district,postal_code,product_id,variant_id,product_name,sku,color,size,quantity,requested_price,status,claim_token_hash) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,'awaiting_payment',$20) RETURNING *`,
+        `INSERT INTO preorders(request_id,customer_id,customer_name,phone,whatsapp,email,address1,address2,city,district,postal_code,product_id,variant_id,product_name,sku,color,size,quantity,requested_price,status,payment_receipt_public_id,payment_receipt_resource_type,payment_receipt_format,payment_submitted_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,'payment_submitted',$20,$21,$22,now()) RETURNING *`,
         [
           requestId,
           input.customerId || null,
@@ -141,7 +142,9 @@ export async function createPreorder(input: Record<string, unknown>) {
           product.size,
           input.quantity,
           product.price,
-          payment.hash,
+          receipt.publicId,
+          receipt.resourceType,
+          receipt.format,
         ],
       );
     await client.query(
@@ -151,10 +154,11 @@ export async function createPreorder(input: Record<string, unknown>) {
         JSON.stringify({
           productId: product.product_id,
           quantity: input.quantity,
+          receipt: true,
         }),
       ],
     );
-    return {...mapPreorder(result.rows[0]),paymentToken:payment.token};
+    return mapPreorder(result.rows[0]);
   });
 }
 

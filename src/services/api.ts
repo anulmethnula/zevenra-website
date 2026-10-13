@@ -69,6 +69,7 @@ export const api = {
     productId: string;
     variantId: string;
     quantity: number;
+    paymentReceiptUrl: string;
   }): Promise<PreorderRequest> => {
     if (!demo)
       return request<PreorderRequest>("/preorders", {
@@ -100,7 +101,7 @@ export const api = {
       size: variant.size,
       quantity: data.quantity,
       requestedPrice: product.price,
-      status: "new",
+      status: "payment_submitted",
     };
   },
   createOrder: async (data: CheckoutData): Promise<Order> => {

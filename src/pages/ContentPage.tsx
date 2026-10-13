@@ -52,11 +52,11 @@ const returnSections: CareSection[] = [
   },
   {
     title: "Check Your Size",
-    body: "Sizing can vary between suppliers. Always use the measurements and fit guidance shown for the individual product, and contact us before confirming if you need help.",
+    body: "Sizing can vary between pieces. Always use the measurements and fit guidance shown for the individual product, and contact us before confirming if you need help.",
   },
   {
     title: "Sourced-on-Request Orders",
-    body: "Once a sourced-on-request order has been confirmed and placed with the supplier, we are unable to accept returns or exchanges for change of mind, incorrect size selection or colour preference.",
+    body: "Once a sourced-on-request order has been confirmed and sourcing has begun, we are unable to accept returns or exchanges for change of mind, incorrect size selection or colour preference.",
   },
   {
     title: "Incorrect / Damaged Items",
@@ -120,7 +120,7 @@ const termsSections: CareSection[] = [
   },
   {
     title: "Sizing",
-    body: "Sizing may vary by supplier. Customers should review product-specific sizing information before confirming an order.",
+    body: "Sizing may vary by piece. Customers should review product-specific sizing information before confirming an order.",
   },
   {
     title: "Pricing",
@@ -136,11 +136,11 @@ const termsSections: CareSection[] = [
   },
   {
     title: "Sourced-on-Request Items",
-    body: "Some products may be sourced only after customer confirmation. Once placed with a supplier, these orders are subject to the returns and cancellation conditions stated here.",
+    body: "Some products may be sourced only after customer confirmation. Once sourcing begins, these orders are subject to the returns and cancellation conditions stated here.",
   },
   {
     title: "Returns & Exchanges",
-    body: "Change-of-mind, incorrect size selection or colour preference returns are not available after a sourced-on-request order has been confirmed and placed with the supplier.",
+    body: "Change-of-mind, incorrect size selection or colour preference returns are not available after a sourced-on-request order has been confirmed and sourcing has begun.",
   },
   {
     title: "Incorrect / Damaged Items",
@@ -148,7 +148,7 @@ const termsSections: CareSection[] = [
   },
   {
     title: "Order Cancellation",
-    body: "A cancellation request can be reviewed before an order is placed with a supplier. Cancellation may not be possible after sourcing or fulfilment has started.",
+    body: "A cancellation request can be reviewed before sourcing begins. Cancellation may not be possible after sourcing or fulfilment has started.",
   },
   {
     title: "Website Use",
@@ -172,7 +172,7 @@ const pageContent = {
     eyebrow: "Customer Care",
     title: "Returns & exchanges.",
     intro:
-      "Many ZEVENRA pieces are sourced specifically after your order is confirmed. Because sizing and specifications can vary between suppliers, please review the product-specific measurements, colour and product details carefully before confirming your order.",
+      "Many ZEVENRA pieces are sourced specifically after your order is confirmed. Because sizing and specifications can vary between pieces, please review the product-specific measurements, colour and product details carefully before confirming your order.",
     sections: returnSections,
   },
   privacy: {

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { access,readFile } from "node:fs/promises";
 import test from "node:test";
-import { preorderClaimCheckoutSchema,preorderConversionSchema } from "../api/_shared.ts";
+import { preorderClaimCheckoutSchema,preorderConversionSchema,preorderSchema } from "../api/_shared.ts";
 import {createPreorderClaimToken,hashPreorderClaimToken,releasePreorderToStock} from "../api/_data/preorders.ts";
 import {
   isPreorderTransitionAllowed,
@@ -28,13 +28,19 @@ test("payment-first preorder uses snapshotted price and verified protected recei
   const source=await readFile(new URL("../api/_data/preorders.ts",import.meta.url),"utf8");
   const create=source.slice(source.indexOf("export async function createPreorder"),source.indexOf("export async function listPreorders"));
   const conversion=source.slice(source.indexOf("export async function convertPreorderToOrder"));
-  assert.match(create,/status,claim_token_hash\).*'awaiting_payment'/s);
-  assert.match(source,/verifyReceiptAsset\(input\.paymentReceiptUrl/);
+  assert.match(create,/verifyReceiptAsset\(String\(input\.paymentReceiptUrl/);
+  assert.match(create,/status,payment_receipt_public_id,payment_receipt_resource_type,payment_receipt_format,payment_submitted_at\).*'payment_submitted'/s);
   assert.match(source,/status='payment_submitted'.*payment_submitted_at=now\(\).*claim_token_hash=NULL/s);
   assert.match(source,/nextStatus==="paid"&&!current\.payment_receipt_public_id/);
   assert.match(source,/nextStatus==="confirmed"&&current\.status!=="paid"/);
   assert.match(conversion,/Number\(preorder\.requested_price\)/);
   assert.doesNotMatch(conversion,/Number\(preorder\.confirmed_price\)/);
+});
+
+test("new preorder submission requires a protected payment receipt",()=>{
+  const base={customerName:"Test Customer",whatsapp:"0771234567",address1:"12 Main Street",city:"Colombo",district:"Colombo",postalCode:"00100",productId:"product",variantId:"variant",quantity:1};
+  assert.equal(preorderSchema.safeParse(base).success,false);
+  assert.equal(preorderSchema.safeParse({...base,paymentReceiptUrl:"https://res.cloudinary.com/cloud/image/authenticated/v1/zevenra/payment-receipts/test.jpg"}).success,true);
 });
 
 test("paid preorder lifecycle has no automatic release path",async()=>{

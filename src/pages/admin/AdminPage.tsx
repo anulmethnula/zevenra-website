@@ -2208,12 +2208,12 @@ function Preorders() {
     payment_submitted:"Payment submitted",
     paid:"Paid",
     contacted: "Customer contacted",
-    confirmed: "Customer confirmed",
+    confirmed: "Confirmed",
     batched: "Legacy batched",
     ordered: "Legacy ordered",
     in_transit: "In transit",
-    arrived: "Arrived in Sri Lanka",
-    ready: "Ready for customer",
+    arrived: "Arrived",
+    ready: "Ready",
     notified: "Customer notified",
     converted: "Converted to order",
     cancelled: "Cancelled",
@@ -2270,7 +2270,7 @@ function Preorders() {
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     ),
     needle = query.trim().toLowerCase(),
-    awaitingPaymentCount = all.filter((x) => x.status === "awaiting_payment").length,
+    confirmedCount = all.filter((x) => x.status === "confirmed").length,
     paymentSubmittedCount = all.filter((x) => x.status === "payment_submitted").length,
     inTransitCount = all.filter((x) => x.status === "in_transit").length,
     readyCount = all.filter((x) => x.status === "ready").length;
@@ -2468,12 +2468,12 @@ function Preorders() {
         title="Pre-orders"
       />
       <div className="admin-help-card mt-5">
-        <b>Payment-first flow:</b> Awaiting payment → Payment submitted → Paid → Confirmed → In transit → Arrived → Ready → Delivery order. <span>Estimated arrival: 3–4 weeks.</span>
+        <b>Paid pre-order flow:</b> Payment submitted → Verify payment → Confirmed → In transit → Arrived → Ready → Delivery order. <span>Estimated arrival: 3–4 weeks.</span>
       </div>
       <div className="mt-6 grid grid-cols-2 gap-3 xl:grid-cols-4">
         {[
-          ["Awaiting payment", awaitingPaymentCount, "Waiting for bank payment"],
           ["Payment submitted", paymentSubmittedCount, "Receipts ready to verify"],
+          ["Confirmed", confirmedCount, "Paid pre-orders confirmed"],
           ["In transit", inTransitCount, "Pre-orders currently on the way"],
           ["Ready for delivery", readyCount, "Create linked delivery orders"],
         ].map(([label, value, help]) => (
@@ -2531,6 +2531,7 @@ function Preorders() {
               image = product?.media.find((media) => media.type === "image"),
               phone = waNumber(item.whatsapp || item.phone),
               finalPrice = Number(item.requestedPrice || 0),
+              paymentState=item.paymentVerifiedAt?"Verified":item.paymentSubmittedAt?"Submitted":item.status==="awaiting_payment"?"Awaiting payment":"Legacy / not recorded",
               claimLink=claimLinks[item.requestId]||"",
               nextStatus = next[item.status],
               progressIndex = item.status === "converted" ? 4 : item.status === "ready" ? 3 : ["in_transit","arrived"].includes(item.status) ? 2 : ["confirmed","ordered","batched"].includes(item.status) ? 1 : 0,
@@ -2575,7 +2576,7 @@ function Preorders() {
                         )}
                       </div>
                       <p className="truncate text-sm font-medium text-black/75">{item.productName} · {item.size} · Qty {item.quantity}</p>
-                      <p className="truncate text-xs text-black/50">{item.customerName} · {money(item.requestedPrice*item.quantity)}</p>
+                      <p className="truncate text-xs text-black/50">{item.customerName} · {money(item.requestedPrice*item.quantity)} · Payment {paymentState}</p>
                       <p>
                         {new Date(item.createdAt).toLocaleString("en-LK", {
                           year: "numeric",
@@ -2595,6 +2596,11 @@ function Preorders() {
                 <motion.aside initial={{x:"100%"}} animate={{x:0}} exit={{x:"100%"}} transition={{duration:.26,ease:[.4,0,.2,1]}} className="admin-drawer preorder-admin-drawer" role="dialog" aria-modal="true" aria-label={`Pre-order ${item.requestId}`}>
                 <div className="admin-drawer__header"><div><p className="eyebrow text-black/45">Pre-order details</p><h2>{item.requestId}</h2></div><button type="button" className="btn" onClick={()=>setOpen("")}>Close</button></div>
                 <div className="admin-drawer__body">
+                <section className="preorder-drawer-section preorder-drawer-overview">
+                  <div><small>Overview</small><h3>{item.requestId}</h3></div>
+                  <div><span>Status</span><b>{labels[item.status]}</b></div>
+                  <div><span>Estimated arrival</span><b>3–4 weeks</b></div>
+                </section>
                 <div className="preorder-admin-grid">
                   <section className="preorder-product-box">
                     {product ? (
@@ -2605,7 +2611,7 @@ function Preorders() {
                       <div className="preorder-product-placeholder" />
                     )}
                     <div>
-                      <small>Requested item</small>
+                      <small>Product</small>
                       <h3>{product ? <Link to={`/admin/products/${product.id}`} className="hover:underline">{item.productName}</Link> : item.productName}</h3>
                       <p>
                         {item.color} / {item.size} · Qty {item.quantity}
@@ -2645,9 +2651,9 @@ function Preorders() {
                     </p></>}
                   </section>
                   <section className="preorder-next-box">
-                    <small>What to do next</small>
+                    <small>Payment</small>
                     <h3>{guidance[item.status]}</h3>
-                    <div className="mb-3 grid gap-1 text-xs text-black/60"><span>Amount due: <b>{money(item.requestedPrice*item.quantity)}</b></span><span>Payment status: <b>{item.paymentVerifiedAt?"PAID":item.paymentSubmittedAt?"SUBMITTED":"AWAITING PAYMENT"}</b></span><span>ETA: <b>3–4 weeks</b></span><span>Courier fee: <b>{item.convertedOrderDeliveryFee==null?"Paid separately on delivery":money(item.convertedOrderDeliveryFee)}</b></span>{item.paymentReceiptUrl&&item.status!=="awaiting_payment"&&<ProtectedReceipt url={item.paymentReceiptUrl}/>}</div>
+                    <div className="mb-3 grid gap-2 text-xs text-black/60"><span>Amount: <b>{money(item.requestedPrice*item.quantity)}</b></span><span>Status: <b>{paymentState}</b></span>{item.paymentReceiptUrl&&item.status!=="awaiting_payment"&&<ProtectedReceipt url={item.paymentReceiptUrl}/>}</div>
                     {item.status === "awaiting_payment" && <a href={wa} target="_blank" rel="noreferrer" className="btn mb-2 w-full justify-center"><MessageCircle size={14} /> WhatsApp customer</a>}
                     {item.status==="converted"&&item.convertedOrderId&&<Link className="btn justify-center" to={`/admin/orders/${encodeURIComponent(item.convertedOrderId)}`}>Converted to {item.convertedOrderId} · {item.convertedOrderStatus === "shipped" ? "Dispatched" : item.convertedOrderStatus === "pending" ? "Pending dispatch" : item.convertedOrderStatus || "Order"}</Link>}
                     {nextStatus && item.status!=="awaiting_payment" && (
@@ -2679,50 +2685,22 @@ function Preorders() {
                       <button type="button" className="btn justify-center" disabled={busy===item.requestId} onClick={()=>void extendReservation(item)}>Extend 24h</button>
                       <button type="button" className="btn justify-center text-red-800" disabled={busy===item.requestId} onClick={()=>void releaseReservation(item)}>Release to stock</button>
                     </div>}
-                    {!["converted", "cancelled","expired","notified"].includes(item.status) && (
-                      <button
-                        disabled={busy === item.requestId}
-                        onClick={() =>
-                          confirm("Cancel " + item.requestId + "?") &&
-                          void change(item, "cancelled")
-                        }
-                        className="preorder-cancel"
-                      >
-                        Cancel request
-                      </button>
-                    )}
                   </section>
                 </div>
-                <div className="preorder-admin-card__progress">
+                <section className="preorder-drawer-section preorder-delivery-summary">
+                  <div><small>Delivery</small><h3>{item.convertedOrderDeliveryFee==null?"Courier fee calculated with delivery order":money(item.convertedOrderDeliveryFee)}</h3><p>Customer pays courier on delivery.</p></div>
+                  {item.status==="converted"&&item.convertedOrderId&&<Link className="btn" to={`/admin/orders/${encodeURIComponent(item.convertedOrderId)}`}>{item.convertedOrderId} · {item.convertedOrderStatus === "shipped" ? "Dispatched" : item.convertedOrderStatus === "pending" ? "Pending dispatch" : item.convertedOrderStatus || "Order"}</Link>}
+                </section>
+                <section className="preorder-drawer-section"><div><small>Timeline</small><ol className="preorder-timeline">
                   {["Payment","Confirmed","In transit","Ready","Delivery"].map((label,index) => (
-                    <span
+                    <li
                       key={label}
                       className={index <= progressIndex ? "is-done" : ""}
                     >
                       {label}
-                    </span>
+                    </li>
                   ))}
-                </div>
-                {item.status==="ready"&&<div className="preorder-edit-row">
-                  <div><span className="block text-[8px] font-semibold uppercase tracking-[.12em] text-black/45">Product price</span><b className="mt-2 block text-sm">{money(item.requestedPrice)} each</b></div>
-                  <label>
-                    <span>Private admin note</span>
-                    <input
-                      placeholder="e.g. customer confirmed on WhatsApp"
-                      value={draft.notes}
-                      onChange={(e) =>
-                        editDraft(item, { notes: e.target.value })
-                      }
-                    />
-                  </label>
-                  <button
-                    disabled={busy === item.requestId}
-                    onClick={() => void saveDetails(item)}
-                    className="btn"
-                  >
-                    Save details
-                  </button>
-                </div>}
+                </ol></div></section>
                 {item.status==="ready"&&<details className="mt-4 rounded-xl border border-black/10 bg-white/35 p-4">
                   <summary className="cursor-pointer text-xs font-semibold">
                     Delivery details for final order
@@ -2795,6 +2773,7 @@ function Preorders() {
                       />
                     </label>
                   </div>
+                  <button disabled={busy===item.requestId} onClick={()=>void saveDetails(item)} className="btn mt-4">Save delivery details</button>
                 </details>}
                 </div>
                 </motion.aside>

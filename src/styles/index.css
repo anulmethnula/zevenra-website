@@ -375,6 +375,26 @@ textarea.field{padding-block:1rem}
  .mobile-menu__social{margin-top:2px}
 }
 
+/* Final preorder admin workspace */
+.preorder-admin-card{border-color:rgba(17,17,15,.09);border-radius:13px;background:#faf8f4;box-shadow:0 7px 24px rgba(36,30,24,.035)}
+.preorder-admin-card__top{min-height:92px;padding:14px 16px;background:transparent}
+.preorder-admin-card__top>div:last-child{align-items:center}
+.preorder-admin-drawer{width:min(520px,94vw);min-width:0;background:#f7f4ee}
+.preorder-admin-drawer .admin-drawer__body{display:grid;align-content:start;gap:14px;padding:18px 20px 60px}
+.preorder-drawer-section,.preorder-admin-drawer .preorder-admin-grid{overflow:hidden;border:1px solid var(--admin-border);border-radius:13px;background:var(--admin-surface)}
+.preorder-drawer-section{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:17px 18px}
+.preorder-drawer-section small,.preorder-admin-drawer section>small{display:block;margin-bottom:7px;color:#8a7f73;font-size:8px;font-weight:750;letter-spacing:.15em;text-transform:uppercase}
+.preorder-drawer-section h3{font-size:13px;font-weight:650}.preorder-drawer-section p{margin-top:5px;color:#756c63;font-size:10px}
+.preorder-drawer-overview{display:grid;grid-template-columns:1.2fr 1fr 1fr}.preorder-drawer-overview>div:not(:first-child){display:grid;gap:5px;padding-left:16px;border-left:1px solid var(--admin-border)}.preorder-drawer-overview span{color:#8a7f73;font-size:8px;text-transform:uppercase;letter-spacing:.1em}.preorder-drawer-overview b{font-size:11px}
+.preorder-admin-drawer .preorder-admin-grid{display:grid;grid-template-columns:1fr;gap:0}
+.preorder-admin-drawer .preorder-admin-grid>section{padding:17px 18px;border:0;border-bottom:1px solid var(--admin-border);background:transparent}.preorder-admin-drawer .preorder-admin-grid>section:last-child{border-bottom:0}
+.preorder-admin-drawer .preorder-product-box{grid-template-columns:68px minmax(0,1fr)}.preorder-admin-drawer .preorder-product-box img,.preorder-admin-drawer .preorder-product-placeholder{width:68px}
+.preorder-admin-drawer .preorder-next-box h3{margin-bottom:12px;font-size:11px;line-height:1.55}
+.preorder-delivery-summary{align-items:flex-end}
+.preorder-timeline{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin-top:12px}.preorder-timeline li{position:relative;padding-top:14px;color:#a39a91;font-size:8px;text-align:center}.preorder-timeline li::before{position:absolute;top:0;right:0;left:0;height:3px;border-radius:99px;background:#ded8d0;content:''}.preorder-timeline li.is-done{color:#624b36;font-weight:700}.preorder-timeline li.is-done::before{background:var(--bronze)}
+.preorder-admin-drawer details{margin-top:0!important;border-color:var(--admin-border)!important;background:var(--admin-surface)!important}
+@media(max-width:640px){.preorder-admin-card__top{align-items:stretch}.preorder-admin-card__top>div:last-child{display:grid;grid-template-columns:1fr 1fr}.preorder-admin-card__top>div:last-child .btn-dark{grid-column:1/-1;grid-row:1}.preorder-drawer-overview{grid-template-columns:1fr 1fr}.preorder-drawer-overview>div:first-child{grid-column:1/-1}.preorder-drawer-overview>div:nth-child(2){padding-left:0;border-left:0}.preorder-drawer-section{align-items:stretch;flex-direction:column}.preorder-delivery-summary .btn{width:100%;justify-content:center}}
+
 @media(prefers-reduced-motion:reduce){
  .mobile-menu,.mobile-menu *{scroll-behavior:auto!important}
 }
@@ -880,3 +900,13 @@ textarea.field{padding-block:1rem}
  .mobile-menu__row>a{font-size:21px}
  .mobile-menu__foot{margin-top:20px;padding-top:10px}
 }
+
+/* Authoritative preorder admin layout */
+.preorder-admin-card{border-radius:13px;background:#faf8f4;box-shadow:0 7px 24px rgba(36,30,24,.035)}
+.preorder-admin-card__top{min-height:92px;padding:14px 16px;background:transparent}
+.preorder-admin-drawer{width:min(520px,94vw);min-width:0;background:#f7f4ee}
+.preorder-admin-drawer .admin-drawer__body{display:grid;align-content:start;gap:14px;padding:18px 20px 60px}
+.preorder-admin-drawer .preorder-admin-grid{overflow:hidden;border:1px solid var(--admin-border);border-radius:13px;background:var(--admin-surface)}
+.preorder-admin-drawer .preorder-admin-grid>section{padding:17px 18px;border:0;border-bottom:1px solid var(--admin-border);background:transparent}.preorder-admin-drawer .preorder-admin-grid>section:last-child{border-bottom:0}
+.preorder-admin-drawer .preorder-product-box{grid-template-columns:68px minmax(0,1fr)}.preorder-admin-drawer .preorder-product-box img,.preorder-admin-drawer .preorder-product-placeholder{width:68px}
+@media(max-width:640px){.preorder-admin-card__top{align-items:stretch}.preorder-admin-card__top>div:last-child{display:grid;grid-template-columns:1fr 1fr}.preorder-admin-card__top>div:last-child .btn-dark{grid-column:1/-1;grid-row:1}}
