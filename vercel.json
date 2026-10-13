@@ -1,130 +1,40 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "headers": [
-    {
-      "source": "/(.*)",
-      "headers": [
-        {
-          "key": "X-Content-Type-Options",
-          "value": "nosniff"
-        },
-        {
-          "key": "Referrer-Policy",
-          "value": "strict-origin-when-cross-origin"
-        },
-        {
-          "key": "X-Frame-Options",
-          "value": "DENY"
-        },
-        {
-          "key": "Permissions-Policy",
-          "value": "camera=(), microphone=(), geolocation=()"
-        },
-        {
-          "key": "Strict-Transport-Security",
-          "value": "max-age=31536000; includeSubDomains"
-        },
-        {
-          "key": "Cross-Origin-Opener-Policy",
-          "value": "same-origin"
-        },
-        {
-          "key": "Content-Security-Policy-Report-Only",
-          "value": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://res.cloudinary.com; media-src 'self' https://res.cloudinary.com; connect-src 'self' https://api.cloudinary.com; worker-src 'self' blob:; manifest-src 'self'; upgrade-insecure-requests"
-        }
-      ]
-    },
-    {
-      "source": "/api/account/(.*)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "private, no-store"
-        }
-      ]
-    },
-    {
-      "source": "/api/admin/(.*)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "private, no-store"
-        }
-      ]
-    },
-    {
-      "source": "/api/order-track",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "private, no-store"
-        }
-      ]
-    },
-    {
-      "source": "/api/payment-receipt-access",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "private, no-store"
-        }
-      ]
-    },
-    {
-      "source": "/assets/(.*)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=31536000, immutable"
-        }
-      ]
-    },
-    {
-      "source": "/media/(hero-desktop-v1\\.mp4|hero-mobile-v1\\.mp4|hero-poster-v1\\.webp)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=31536000, immutable"
-        }
-      ]
-    },
-    {
-      "source": "/brand/(.*)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=86400"
-        }
-      ]
-    }
+    {"source":"/(.*)","headers":[{"key":"X-Content-Type-Options","value":"nosniff"},{"key":"Referrer-Policy","value":"strict-origin-when-cross-origin"},{"key":"X-Frame-Options","value":"DENY"},{"key":"Permissions-Policy","value":"camera=(), microphone=(), geolocation=()"},{"key":"Strict-Transport-Security","value":"max-age=31536000; includeSubDomains"},{"key":"Cross-Origin-Opener-Policy","value":"same-origin"},{"key":"Content-Security-Policy-Report-Only","value":"default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://res.cloudinary.com; media-src 'self' https://res.cloudinary.com; connect-src 'self' https://api.cloudinary.com; worker-src 'self' blob:; manifest-src 'self'; upgrade-insecure-requests"}]},
+    {"source":"/api/account/(.*)","headers":[{"key":"Cache-Control","value":"private, no-store"}]},
+    {"source":"/api/admin/(.*)","headers":[{"key":"Cache-Control","value":"private, no-store"}]},
+    {"source":"/api/order-track","headers":[{"key":"Cache-Control","value":"private, no-store"}]},
+    {"source":"/api/payment-receipt-access","headers":[{"key":"Cache-Control","value":"private, no-store"}]},
+    {"source":"/assets/(.*)","headers":[{"key":"Cache-Control","value":"public, max-age=31536000, immutable"}]},
+    {"source":"/media/(hero-desktop-v1\\.mp4|hero-mobile-v1\\.mp4|hero-poster-v1\\.webp)","headers":[{"key":"Cache-Control","value":"public, max-age=31536000, immutable"}]},
+    {"source":"/brand/(.*)","headers":[{"key":"Cache-Control","value":"public, max-age=86400"}]}
   ],
-  "functions": {
-    "api/product-page.ts": { "includeFiles": "dist/index.html" }
-  },
+  "functions": {"api/product-page.ts":{"includeFiles":"dist/index.html"}},
   "rewrites": [
-    {
-      "source": "/robots.txt",
-      "destination": "/api/robots"
-    },
-    {
-      "source": "/sitemap.xml",
-      "destination": "/api/sitemap"
-    },
-    {
-      "source": "/api/admin/:action",
-      "destination": "/api/admin/[action]"
-    },
-    {
-      "source": "/api/products/:slug",
-      "destination": "/api/products/[slug]"
-    },
-    {
-      "source": "/product/:slug",
-      "destination": "/api/product-page?slug=:slug"
-    },
-    {
-      "source": "/((?!api/).*)",
-      "destination": "/index.html"
-    }
+    {"source":"/robots.txt","destination":"/api/public?route=robots"},
+    {"source":"/sitemap.xml","destination":"/api/public?route=sitemap"},
+    {"source":"/api/cart-products","destination":"/api/public?route=cart-products"},
+    {"source":"/api/catalog","destination":"/api/public?route=catalog"},
+    {"source":"/api/checkout-config","destination":"/api/public?route=checkout-config"},
+    {"source":"/api/delivery-quote","destination":"/api/public?route=delivery-quote"},
+    {"source":"/api/discount-validate","destination":"/api/public?route=discount-validate"},
+    {"source":"/api/home","destination":"/api/public?route=home"},
+    {"source":"/api/order-track","destination":"/api/public?route=order-track"},
+    {"source":"/api/orders","destination":"/api/public?route=orders"},
+    {"source":"/api/payment-receipt-access","destination":"/api/public?route=payment-receipt-access"},
+    {"source":"/api/payment-receipt-sign","destination":"/api/public?route=payment-receipt-sign"},
+    {"source":"/api/preorders","destination":"/api/public?route=preorders"},
+    {"source":"/api/product","destination":"/api/public?route=product"},
+    {"source":"/api/products","destination":"/api/public?route=products"},
+    {"source":"/api/recommendations","destination":"/api/public?route=recommendations"},
+    {"source":"/api/robots","destination":"/api/public?route=robots"},
+    {"source":"/api/sitemap","destination":"/api/public?route=sitemap"},
+    {"source":"/api/size-chart","destination":"/api/public?route=size-chart"},
+    {"source":"/api/store","destination":"/api/public?route=store"},
+    {"source":"/api/admin/:action","destination":"/api/admin/[action]"},
+    {"source":"/api/products/:slug","destination":"/api/products/[slug]"},
+    {"source":"/product/:slug","destination":"/api/product-page?slug=:slug"},
+    {"source":"/((?!api/).*)","destination":"/index.html"}
   ]
 }
