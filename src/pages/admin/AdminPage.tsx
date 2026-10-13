@@ -2204,10 +2204,13 @@ function Preorders() {
   useEffect(()=>{void adminApi.get<PreorderFulfillmentConfig>("getFulfillmentConfig").then(setFulfillment).catch(reason=>setMessage(reason instanceof Error?reason.message:"Could not load fulfillment settings."));},[]);
   const labels: Record<PreorderStatus, string> = {
     new: "New request",
+    awaiting_payment:"Awaiting payment",
+    payment_submitted:"Payment submitted",
+    paid:"Paid",
     contacted: "Customer contacted",
     confirmed: "Customer confirmed",
-    batched: "In supplier batch",
-    ordered: "Ordered from supplier",
+    batched: "Legacy batched",
+    ordered: "Legacy ordered",
     in_transit: "In transit",
     arrived: "Arrived in Sri Lanka",
     ready: "Ready for customer",
@@ -2217,39 +2220,46 @@ function Preorders() {
     expired: "Expired",
   };
   const next: Partial<Record<PreorderStatus, PreorderStatus>> = {
-    new: "contacted",
+    new: "awaiting_payment",
+    payment_submitted:"paid",
+    paid:"confirmed",
     contacted: "confirmed",
-    confirmed: "ordered",
+    confirmed: "in_transit",
     batched: "ordered",
     ordered: "in_transit",
     in_transit: "arrived",
     arrived: "ready",
   };
   const nextText: Partial<Record<PreorderStatus, string>> = {
-    new: "Mark customer contacted",
+    new: "Move to awaiting payment",
+    payment_submitted:"Verify payment",
+    paid:"Confirm pre-order",
     contacted: "Confirm customer",
-    confirmed: "Mark supplier order placed",
-    batched: "Mark supplier order placed",
+    confirmed: "Mark in transit",
+    batched: "Mark legacy order placed",
     ordered: "Mark in transit",
     in_transit: "Mark arrived",
     arrived: "Mark ready for customer",
   };
   const guidance: Record<PreorderStatus, string> = {
-    new: "Contact the customer on WhatsApp. Confirm the exact item, size and that they still want it.",
+    new: "Legacy new request. Move it to awaiting payment when ready.",
+    awaiting_payment:"Waiting for the customer to pay the full product price and upload a bank receipt.",
+    payment_submitted:"Open the receipt and verify the full product payment.",
+    paid:"Payment is verified. Confirm this pre-order.",
     contacted:
-      "Enter the final selling price, then confirm the customer only after they agree.",
+      "Legacy contacted request. Confirm only after validating its payment.",
     confirmed:
-      "The customer has confirmed. Place the supplier order, then mark this request ordered.",
+      "The paid pre-order is confirmed. Mark it in transit when tracking begins.",
     batched:
-      "Legacy batched request. Place the supplier order, then mark it ordered.",
+      "Legacy batched request. Continue using the legacy ordered step.",
     ordered:
-      "Supplier order has been placed. Mark it in transit when tracking starts moving.",
+      "Legacy ordered request. Mark it in transit when tracking starts moving.",
     in_transit:
-      "The supplier parcel is on the way. Mark arrived when you physically receive it.",
+      "The pre-order is on the way. Mark arrived when you physically receive it.",
     arrived:
       "Check the item, size and condition. Keep this customer-reserved piece out of public stock, then mark it ready.",
     ready:
-      "Send the secure checkout link to the customer. Their piece will be reserved for 48 hours.",
+      "Create the linked delivery order. Only the courier fee will be collected on delivery.",
     notified:"The customer has a secure one-time checkout link while this reservation remains active.",
     converted: "This request is finished and is now a normal order.",
     cancelled: "No further action is required for this cancelled request.",
@@ -2321,15 +2331,10 @@ function Preorders() {
     setBusy(item.requestId);
     setMessage("");
     try {
-      const draft = draftFor(item),
-        confirmedPrice =
-          draft.confirmedPrice === ""
-            ? item.confirmedPrice
-            : Number(draft.confirmedPrice);
+      const draft = draftFor(item);
       await store.updatePreorder({
         requestId: item.requestId,
         status,
-        confirmedPrice,
         notes: draft.notes,
       });
       setMessage(item.requestId + " → " + labels[status] + ".");
@@ -2347,18 +2352,11 @@ function Preorders() {
     setBusy(item.requestId);
     setMessage("");
     try {
-      const draft = draftFor(item),
-        price =
-          draft.confirmedPrice === ""
-            ? undefined
-            : Number(draft.confirmedPrice);
-      if (price !== undefined && (!Number.isFinite(price) || price <= 0))
-        throw new Error("Final price must be a valid amount greater than 0.");
+      const draft = draftFor(item);
       if (draft.postalCode && !/^\d{5}$/.test(draft.postalCode))
         throw new Error("Postal code must be 5 digits.");
       await store.updatePreorder({
         requestId: item.requestId,
-        confirmedPrice: price,
         notes: draft.notes.trim(),
         address1: draft.address1.trim(),
         address2: draft.address2.trim(),
@@ -2405,7 +2403,7 @@ function Preorders() {
     const link=claimLinks[item.requestId];if(!link)return;
     try{await navigator.clipboard.writeText(link);setMessage("Checkout link copied.");}catch{setMessage("Copy failed. Generate and copy the link again.");}
   }
-  async function convert(item: PreorderRequest, paymentMethod: "cod" | "bank") {
+  async function convert(item: PreorderRequest) {
     const draft = draftFor(item);
     const activeMethods=(fulfillment?.methods||[]).filter(method=>method.active),selected=conversion[item.requestId]||{method:activeMethods.length===1?activeMethods[0].type:"" as "flat",pickupLocationId:""};
     if(!selected.method)return setMessage("Choose a fulfillment method before converting this pre-order.");
@@ -2420,23 +2418,15 @@ function Preorders() {
       !confirm(
         "Convert " +
           item.requestId +
-          " to a normal " +
-          (paymentMethod === "cod" ? "COD" : "bank transfer") +
-          " order? Arrived stock will be reserved immediately.",
+        " to a delivery order? The courier will collect only the delivery fee.",
       )
     )
       return;
     setBusy(item.requestId);
     setMessage("");
     try {
-      const price =
-        draft.confirmedPrice === ""
-          ? Number(item.confirmedPrice || 0)
-          : Number(draft.confirmedPrice);
-      if (price <= 0) throw new Error("Set the final confirmed price first.");
       await store.updatePreorder({
         requestId: item.requestId,
-        confirmedPrice: price,
         notes: draft.notes.trim(),
         address1: draft.address1.trim(),
         address2: draft.address2.trim(),
@@ -2446,7 +2436,7 @@ function Preorders() {
       });
       const order = await adminApi.post<Order>("convertPreorderToOrder", {
         requestId: item.requestId,
-        paymentMethod,
+        paymentMethod:"bank",
         fulfillmentMethod:selected.method,
         pickupLocationId:selected.method==="pickup"?selected.pickupLocationId:undefined,
       });
@@ -2478,9 +2468,7 @@ function Preorders() {
         title="Pre-orders"
       />
       <div className="admin-help-card mt-5">
-        <b>Simple flow:</b> Request → WhatsApp contact → Final price agreed →
-        Confirmed → Ordered → In transit → Arrived → Ready →
-        Normal order. <span>No payment is collected at the request stage.</span>
+        <b>Payment-first flow:</b> Awaiting payment → Payment submitted → Paid → Confirmed → In transit → Arrived → Ready → Delivery order. <span>Estimated arrival: 3–4 weeks.</span>
       </div>
       <div className="mt-6 grid grid-cols-2 gap-3 xl:grid-cols-4">
         {[
@@ -2548,9 +2536,7 @@ function Preorders() {
               image = product?.media.find((media) => media.type === "image"),
               phone = waNumber(item.whatsapp || item.phone),
               callNumber = String(item.phone || item.whatsapp || "").replace(/[^+\d]/g, ""),
-              finalPrice = Number(
-                draft.confirmedPrice || item.confirmedPrice || 0,
-              ),
+              finalPrice = Number(item.requestedPrice || 0),
               claimLink=claimLinks[item.requestId]||"",
               nextStatus = next[item.status],
               statusIndex = [
@@ -2578,10 +2564,7 @@ function Preorders() {
                 " × " +
                 item.quantity +
                 ". " +
-                (finalPrice > 0
-                  ? "The final price is " + money(finalPrice) + ". "
-                  : "") +
-                "Please confirm if you still want this item.",
+                "The product price is " + money(finalPrice) + ". Estimated arrival is 3–4 weeks.",
               wa =
                 "https://wa.me/" +
                 phone +
@@ -2676,12 +2659,13 @@ function Preorders() {
                   <section className="preorder-next-box">
                     <small>What to do next</small>
                     <h3>{guidance[item.status]}</h3>
+                    <div className="mb-3 grid gap-1 text-xs text-black/60"><span>Product price: <b>{money(item.requestedPrice*item.quantity)}</b></span><span>Payment: <b>{labels[item.status]}</b></span><span>ETA: <b>3–4 weeks</b></span><span>Courier fee: <b>{item.convertedOrderDeliveryFee==null?"Collected on delivery":money(item.convertedOrderDeliveryFee)}</b></span>{item.paymentReceiptUrl&&<ProtectedReceipt url={item.paymentReceiptUrl}/>}</div>
                     {item.status==="converted"&&item.convertedOrderId&&<Link className="btn justify-center" to={`/admin/orders/${encodeURIComponent(item.convertedOrderId)}`}>Converted to {item.convertedOrderId} · {item.convertedOrderStatus === "shipped" ? "Dispatched" : item.convertedOrderStatus === "pending" ? "Pending dispatch" : item.convertedOrderStatus || "Order"}</Link>}
                     {nextStatus && (
                       <button
                         disabled={
                           busy === item.requestId ||
-                          (nextStatus === "confirmed" && finalPrice <= 0)
+                          (nextStatus === "paid" && !item.paymentReceiptUrl)
                         }
                         onClick={() => void change(item, nextStatus)}
                         className="btn btn-dark w-full disabled:opacity-40"
@@ -2693,13 +2677,9 @@ function Preorders() {
                     )}
                     {item.status === "ready" && (
                       <div className="grid gap-2">
-                        <button disabled={busy===item.requestId||finalPrice<=0} onClick={()=>void notifyCustomer(item)} className="btn btn-dark w-full">Notify customer</button>
-                        <details className="mt-2 text-xs text-black/50"><summary className="cursor-pointer underline underline-offset-4">Manual conversion fallback</summary><div className="mt-3 grid gap-2">
-                          <label className="label">Fulfillment<select className="field mt-1" value={conversion[item.requestId]?.method||((fulfillment?.methods||[]).filter(method=>method.active).length===1?(fulfillment?.methods||[]).find(method=>method.active)?.type:"")||""} onChange={event=>setConversion(current=>({...current,[item.requestId]:{method:event.target.value as "flat"|"area_group"|"pickup",pickupLocationId:""}}))}><option value="">Choose method</option>{(fulfillment?.methods||[]).filter(method=>method.active).map(method=><option key={method.type} value={method.type}>{method.displayName}</option>)}</select></label>
+                        <label className="label">Fulfillment<select className="field mt-1" value={conversion[item.requestId]?.method||((fulfillment?.methods||[]).filter(method=>method.active).length===1?(fulfillment?.methods||[]).find(method=>method.active)?.type:"")||""} onChange={event=>setConversion(current=>({...current,[item.requestId]:{method:event.target.value as "flat"|"area_group"|"pickup",pickupLocationId:""}}))}><option value="">Choose method</option>{(fulfillment?.methods||[]).filter(method=>method.active).map(method=><option key={method.type} value={method.type}>{method.displayName}</option>)}</select></label>
                           {(conversion[item.requestId]?.method||((fulfillment?.methods||[]).filter(method=>method.active).length===1?(fulfillment?.methods||[]).find(method=>method.active)?.type:""))==="pickup"?<label className="label">Pickup branch<select className="field mt-1" value={conversion[item.requestId]?.pickupLocationId||""} onChange={event=>setConversion(current=>({...current,[item.requestId]:{method:"pickup",pickupLocationId:event.target.value}}))}><option value="">Choose branch</option>{(fulfillment?.pickupLocations||[]).filter(branch=>branch.active).map(branch=><option key={branch.id} value={branch.id}>{branch.name} — {branch.address}</option>)}</select></label>:null}
-                          <button disabled={busy===item.requestId||finalPrice<=0} onClick={()=>void convert(item,"cod")} className="btn">Create COD order</button>
-                          <button disabled={busy===item.requestId||finalPrice<=0} onClick={()=>void convert(item,"bank")} className="btn">Create bank order</button>
-                        </div></details>
+                          <button disabled={busy===item.requestId} onClick={()=>void convert(item)} className="btn btn-dark">Create Delivery Order</button>
                       </div>
                     )}
                     {item.status==="notified"&&<div className="grid gap-2">
@@ -2727,14 +2707,13 @@ function Preorders() {
                 <div className="preorder-admin-card__progress">
                   {(
                     [
-                      "new",
-                      "contacted",
+                      "awaiting_payment",
+                      "payment_submitted",
+                      "paid",
                       "confirmed",
-                      "ordered",
                       "in_transit",
                       "arrived",
                       "ready",
-                      "notified",
                     ] as PreorderStatus[]
                   ).map((status, index) => (
                     <span
@@ -2746,19 +2725,7 @@ function Preorders() {
                   ))}
                 </div>
                 <div className="preorder-edit-row">
-                  <label>
-                    <span>Final selling price</span>
-                    <input
-                      type="number"
-                      min="1"
-                      step="1"
-                      placeholder="Enter after customer agrees"
-                      value={draft.confirmedPrice}
-                      onChange={(e) =>
-                        editDraft(item, { confirmedPrice: e.target.value })
-                      }
-                    />
-                  </label>
+                  <div><span className="block text-[8px] font-semibold uppercase tracking-[.12em] text-black/45">Product price</span><b className="mt-2 block text-sm">{money(item.requestedPrice)} each</b></div>
                   <label>
                     <span>Private admin note</span>
                     <input
@@ -2782,9 +2749,7 @@ function Preorders() {
                     Delivery details for final order
                   </summary>
                   <p className="mt-2 text-[11px] leading-5 text-black/45">
-                    The customer does not need to enter the full address when
-                    requesting a pre-order. Collect it on WhatsApp before
-                    converting the arrived item into a normal order.
+                    Confirm these delivery details before creating the delivery order.
                   </p>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     <label className="text-xs sm:col-span-2">

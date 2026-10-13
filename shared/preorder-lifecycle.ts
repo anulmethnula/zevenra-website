@@ -1,5 +1,8 @@
 export const preorderActiveStatuses = [
   "new",
+  "awaiting_payment",
+  "payment_submitted",
+  "paid",
   "contacted",
   "confirmed",
   "batched",
@@ -11,9 +14,12 @@ export const preorderActiveStatuses = [
 ] as const;
 
 const transitions: Record<string, readonly string[]> = {
-  new: ["new", "contacted", "cancelled"],
+  new: ["new", "awaiting_payment", "contacted", "cancelled"],
+  awaiting_payment: ["awaiting_payment", "payment_submitted", "cancelled"],
+  payment_submitted: ["payment_submitted", "paid", "awaiting_payment", "cancelled"],
+  paid: ["paid", "confirmed", "cancelled"],
   contacted: ["contacted", "confirmed", "cancelled"],
-  confirmed: ["confirmed", "ordered", "cancelled"],
+  confirmed: ["confirmed", "in_transit", "ordered", "cancelled"],
   batched: ["batched", "ordered", "cancelled"],
   ordered: ["ordered", "in_transit", "cancelled"],
   in_transit: ["in_transit", "arrived"],

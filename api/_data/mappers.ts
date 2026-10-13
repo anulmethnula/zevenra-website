@@ -277,6 +277,10 @@ export function mapPreorder(row: Record<string, unknown>) {
     releasedAt: text(row.released_at),
     convertedOrderId: text(row.converted_order_id),
     convertedOrderStatus: text(row.converted_order_status),
+    convertedOrderDeliveryFee: row.converted_order_delivery_fee == null ? undefined : number(row.converted_order_delivery_fee),
+    paymentReceiptUrl: text(row.payment_receipt_public_id) ? `preorder:${text(row.request_id)}` : "",
+    paymentSubmittedAt: text(row.payment_submitted_at),
+    paymentVerifiedAt: text(row.payment_verified_at),
     notes: text(row.notes),
   };
 }

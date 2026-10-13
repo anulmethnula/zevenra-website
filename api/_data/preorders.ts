@@ -10,6 +10,8 @@ import {
   resolvePreorderConfirmedPrice,
 } from "../../shared/preorder-lifecycle.js";
 import { assertPaymentMethodAvailable, deliverySnapshot } from "./orders.js";
+import { verifyReceiptAsset } from "../_receipt-asset.js";
+import { cloudinaryEnv } from "../_shared.js";
 
 const orderWithItems = `SELECT o.*,COALESCE(NULLIF(o.payment_receipt_public_id,''),pr.payment_receipt_public_id) AS linked_payment_receipt_public_id,pr.created_at AS source_preorder_created_at,pr.notified_at AS source_preorder_notified_at,pr.confirmed_price AS source_preorder_confirmed_price,COALESCE((SELECT jsonb_agg(to_jsonb(oi) ORDER BY oi.id) FROM order_items oi WHERE oi.order_id=o.order_id),'[]') AS items FROM orders o LEFT JOIN preorders pr ON pr.request_id=o.source_preorder_request_id`;
 const newId = (prefix: string) =>
@@ -73,6 +75,7 @@ export async function quotePreorderClaim(input:Record<string,unknown>){
 
 export async function createPreorder(input: Record<string, unknown>) {
   return withTransaction(async (client) => {
+    await assertPaymentMethodAvailable(client,"bank");
     const product = (
       await client.query<Record<string, unknown>>(
         `SELECT p.id AS product_id,p.name AS product_name,p.price,p.preorder_enabled,p.status,v.id AS variant_id,v.sku,v.color,v.size,v.stock,v.active FROM products p JOIN variants v ON v.product_id=p.id WHERE p.id=$1 AND v.id=$2 FOR UPDATE`,
@@ -115,9 +118,9 @@ export async function createPreorder(input: Record<string, unknown>) {
         "You already have an active pre-order request for this size. Contact ZEVENRA if you want to change it.",
       );
 
-    const requestId = newId("PRE"),
+    const requestId = newId("PRE"), payment=createPreorderClaimToken(),
       result = await client.query<Record<string, unknown>>(
-        `INSERT INTO preorders(request_id,customer_id,customer_name,phone,whatsapp,email,address1,address2,city,district,postal_code,product_id,variant_id,product_name,sku,color,size,quantity,requested_price,status) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,'new') RETURNING *`,
+        `INSERT INTO preorders(request_id,customer_id,customer_name,phone,whatsapp,email,address1,address2,city,district,postal_code,product_id,variant_id,product_name,sku,color,size,quantity,requested_price,status,claim_token_hash) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,'awaiting_payment',$20) RETURNING *`,
         [
           requestId,
           input.customerId || null,
@@ -138,6 +141,7 @@ export async function createPreorder(input: Record<string, unknown>) {
           product.size,
           input.quantity,
           product.price,
+          payment.hash,
         ],
       );
     await client.query(
@@ -150,6 +154,20 @@ export async function createPreorder(input: Record<string, unknown>) {
         }),
       ],
     );
+    return {...mapPreorder(result.rows[0]),paymentToken:payment.token};
+  });
+}
+
+export async function submitPreorderPayment(input:{token:string;paymentReceiptUrl:string}){
+  const asset=await verifyReceiptAsset(input.paymentReceiptUrl,cloudinaryEnv());
+  return withTransaction(async(client)=>{
+    const result=await client.query<Record<string,unknown>>(
+      `UPDATE preorders SET status='payment_submitted',payment_receipt_public_id=$2,payment_receipt_resource_type=$3,payment_receipt_format=$4,payment_submitted_at=now(),claim_token_hash=NULL,updated_at=now()
+       WHERE claim_token_hash=$1 AND status='awaiting_payment' AND converted_order_id IS NULL RETURNING *`,
+      [hashPreorderClaimToken(input.token),asset.publicId,asset.resourceType,asset.format],
+    );
+    if(!result.rows[0])throw new Error("Pre-order payment link unavailable");
+    await client.query("INSERT INTO audit_logs(actor,action,entity_type,entity_id,details) VALUES('customer','payment_submitted','preorder',$1,$2::jsonb)",[result.rows[0].request_id,JSON.stringify({receipt:true})]);
     return mapPreorder(result.rows[0]);
   });
 }
@@ -162,7 +180,7 @@ export async function listPreorders(status?: string) {
       `SELECT p.request_id,p.created_at,p.updated_at,p.customer_id,p.customer_name,p.phone,p.whatsapp,p.email,
               p.address1,p.address2,p.city,p.district,p.postal_code,p.product_id,p.variant_id,p.product_name,
               p.sku,p.color,p.size,p.quantity,p.requested_price,p.confirmed_price,p.status,p.batch_id,p.notes,
-              p.notified_at,p.reservation_expires_at,p.released_at,p.converted_order_id,o.order_status AS converted_order_status
+              p.notified_at,p.reservation_expires_at,p.released_at,p.converted_order_id,p.payment_receipt_public_id,p.payment_submitted_at,p.payment_verified_at,o.order_status AS converted_order_status,o.delivery_fee AS converted_order_delivery_fee
          FROM preorders p LEFT JOIN orders o ON o.order_id=p.converted_order_id${where}
         ORDER BY p.created_at DESC
         LIMIT 100`,
@@ -190,13 +208,11 @@ export async function updatePreorder(input: Record<string, unknown>) {
       throw new Error(
         "Invalid pre-order step. Follow the next action shown in the admin panel.",
       );
-    if (nextStatus === "confirmed" && confirmedPrice === null)
-      throw new Error(
-        "Set the confirmed selling price before confirming the customer.",
-      );
+    if(nextStatus==="paid"&&!current.payment_receipt_public_id)throw new Error("A verified payment receipt is required.");
+    if(nextStatus==="confirmed"&&current.status!=="paid"&&current.status!=="confirmed")throw new Error("Only a paid pre-order can be confirmed.");
 
     const result = await client.query<Record<string, unknown>>(
-      `UPDATE preorders SET status=$2,confirmed_price=$3,batch_id=$4,notes=$5,customer_name=$6,phone=$7,whatsapp=$8,email=$9,address1=$10,address2=$11,city=$12,district=$13,postal_code=$14,updated_at=now() WHERE request_id=$1 RETURNING *`,
+      `UPDATE preorders SET status=$2,confirmed_price=$3,batch_id=$4,notes=$5,customer_name=$6,phone=$7,whatsapp=$8,email=$9,address1=$10,address2=$11,city=$12,district=$13,postal_code=$14,payment_verified_at=CASE WHEN $2='paid' THEN now() ELSE payment_verified_at END,updated_at=now() WHERE request_id=$1 RETURNING *`,
       [
         input.requestId,
         nextStatus,
@@ -235,12 +251,11 @@ export async function convertPreorderToOrder(input: Record<string, unknown>) {
     ).rows[0];
     if (!preorder) throw new Error("Pre-order not found");
     if(customerClaim&&(preorder.status!=="notified"||preorder.released_at||preorder.converted_order_id||!preorder.reservation_expires_at||new Date(String(preorder.reservation_expires_at)).getTime()<=Date.now()))throw new Error("Pre-order claim unavailable");
-    if (!customerClaim&&!["arrived", "ready"].includes(String(preorder.status)))
+    if (!customerClaim&&preorder.status!=="ready")
       throw new Error(
         "Mark the pre-order as arrived or ready before conversion.",
       );
-    if (Number(preorder.confirmed_price) <= 0)
-      throw new Error("Confirmed selling price is required before conversion.");
+    if (!customerClaim&&!preorder.payment_verified_at)throw new Error("Only a paid pre-order can create a delivery order.");
     const fulfillmentMethod=String(input.fulfillmentMethod||"") as "flat"|"area_group"|"pickup";
     const customerName=customerClaim?String(input.customerName||"").trim():String(preorder.customer_name),
       phone=customerClaim?String(input.phone||"").trim():String(preorder.phone),
@@ -263,7 +278,7 @@ export async function convertPreorderToOrder(input: Record<string, unknown>) {
 
     const paymentMethod = normalizePreorderPaymentMethod(input.paymentMethod);
     await assertPaymentMethodAvailable(client,paymentMethod);
-    const price = Number(preorder.confirmed_price),
+    const price = Number(preorder.requested_price),
       subtotal = price * Number(preorder.quantity),
       delivery = await deliverySnapshot(
         client,

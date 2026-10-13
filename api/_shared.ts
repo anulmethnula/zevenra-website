@@ -506,6 +506,10 @@ export const preorderSchema = z
     quantity: z.number().int().min(1).max(5),
   })
   .strict();
+export const preorderPaymentSchema = z.object({
+  token:z.string().min(32).max(200),
+  paymentReceiptUrl:receiptUrlSchema,
+}).strict();
 export const preorderConversionSchema = z.object({
   requestId: z.string().trim().min(1).max(100),
   paymentMethod: z.enum(["cod", "bank"]),

@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { authenticatedReceiptDownloadUrl } from "./_receipt-access-url.js";
-import { receiptForOrder } from "./_data/orders.js";
+import { receiptForOrder,receiptForPreorder } from "./_data/orders.js";
 import {
   body,
   cloudinaryEnv,
@@ -20,9 +20,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return json(res, { error: "Invalid request origin" }, 403);
     const input = body(req) as { url?: unknown },
       reference = String(input?.url || "");
-    if (!reference.startsWith("order:"))
+    if (!reference.startsWith("order:")&&!reference.startsWith("preorder:"))
       return json(res, { error: "Receipt reference is required." }, 400);
-    const asset = await receiptForOrder(reference.slice(6));
+    const asset = reference.startsWith("preorder:") ? await receiptForPreorder(reference.slice(9)) : await receiptForOrder(reference.slice(6));
     if (!asset?.payment_receipt_public_id)
       return json(res, { error: "Receipt not found." }, 404);
     const access=authenticatedReceiptDownloadUrl(asset,{cloudName:config.CLOUDINARY_CLOUD_NAME,apiKey:config.CLOUDINARY_API_KEY,apiSecret:config.CLOUDINARY_API_SECRET},Math.floor(Date.now()/1000));

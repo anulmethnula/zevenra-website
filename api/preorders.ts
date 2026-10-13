@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { convertPreorderToOrder,createPreorder,getPreorderClaim,quotePreorderClaim } from "./_data/preorders.js";
+import { convertPreorderToOrder,createPreorder,getPreorderClaim,quotePreorderClaim,submitPreorderPayment } from "./_data/preorders.js";
 import {
   body,
   json,
@@ -7,6 +7,7 @@ import {
   originEnv,
   preorderClaimCheckoutSchema,
   preorderClaimQuoteSchema,
+  preorderPaymentSchema,
   preorderSchema,
   rateLimit,
   readCustomerSession,
@@ -39,6 +40,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const order=await convertPreorderToOrder(preorderClaimCheckoutSchema.parse(body(req)));
       return json(res,order,201,{"Cache-Control":"private, no-store"});
     }
+    if(action==="payment")return json(res,await submitPreorderPayment(preorderPaymentSchema.parse(body(req))),200,{"Cache-Control":"private, no-store"});
     if(action==="quote")return json(res,await quotePreorderClaim(preorderClaimQuoteSchema.parse(body(req))),200,{"Cache-Control":"private, no-store"});
     if(action)return json(res,{error:"Invalid request"},400);
     const payload = preorderSchema.parse(body(req)),

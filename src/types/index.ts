@@ -388,6 +388,9 @@ export type DashboardTopProduct = {
 };
 export type PreorderStatus =
   | "new"
+  | "awaiting_payment"
+  | "payment_submitted"
+  | "paid"
   | "contacted"
   | "confirmed"
   | "batched"
@@ -428,6 +431,11 @@ export type PreorderRequest = {
   releasedAt?: string;
   convertedOrderId?: string;
   convertedOrderStatus?: string;
+  convertedOrderDeliveryFee?: number;
+  paymentReceiptUrl?: string;
+  paymentSubmittedAt?: string;
+  paymentVerifiedAt?: string;
+  paymentToken?: string;
   notes?: string;
   updatedAt: string;
 };

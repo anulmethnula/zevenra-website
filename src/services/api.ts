@@ -30,6 +30,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   preorderClaim:(token:string)=>request<import("../types").PreorderClaim>("/preorders?action=claim&token="+encodeURIComponent(token)),
   completePreorder:(data:Record<string,unknown>)=>request<Order>("/preorders?action=checkout",{method:"POST",body:JSON.stringify(data)}),
+  submitPreorderPayment:(data:{token:string;paymentReceiptUrl:string})=>request<PreorderRequest>("/preorders?action=payment",{method:"POST",body:JSON.stringify(data)}),
   preorderDeliveryQuote:(data:Record<string,unknown>)=>request<{fee:number;minimumDeliveryDays:number|null;maximumDeliveryDays:number|null;fulfillmentMethod:string;methodName:string;areaGroupName:string;pickupLocationId:string}>("/preorders?action=quote",{method:"POST",body:JSON.stringify(data)}),
   validateDiscount: (data: { code: string; items: Array<{ productId: string; variantId: string; quantity: number }> }) =>
     demo ? Promise.resolve<{ valid: boolean; code?: string; discountAmount?: number; message: string }>({valid:false,message:"Discount codes are unavailable in demo mode."}) : request<{ valid: boolean; code?: string; discountAmount?: number; message: string }>("/discount-validate", { method: "POST", body: JSON.stringify(data) }),

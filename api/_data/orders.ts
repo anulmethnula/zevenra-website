@@ -15,6 +15,7 @@ export {
   getOrder,
   listOrders,
   receiptForOrder,
+  receiptForPreorder,
   recentOrders,
   updateOrder,
   updateOrderDetails,

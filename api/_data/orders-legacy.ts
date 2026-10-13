@@ -559,3 +559,6 @@ export async function receiptForOrder(orderId: string) {
     ).rows[0] || null
   );
 }
+export async function receiptForPreorder(requestId:string){
+  return (await query<{payment_receipt_public_id:string;payment_receipt_resource_type:string;payment_receipt_format:string}>("SELECT payment_receipt_public_id,payment_receipt_resource_type,payment_receipt_format FROM preorders WHERE request_id=$1",[requestId])).rows[0]||null;
+}

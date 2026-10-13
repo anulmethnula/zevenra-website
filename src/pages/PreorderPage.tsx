@@ -6,7 +6,8 @@ import { Seo } from "../components/Seo";
 import { money } from "../config/site";
 import { useCustomerAuth } from "../features/account/CustomerAuthContext";
 import { api } from "../services/api";
-import { useProduct } from "../hooks/usePublicData";
+import { useCheckoutConfig, useProduct } from "../hooks/usePublicData";
+import { uploadPaymentReceipt } from "../services/paymentReceiptUpload";
 
 const requestSchema = z.object({
   customerName: z.string().trim().min(2, "Enter your full name.").max(100),
@@ -15,6 +16,10 @@ const requestSchema = z.object({
     .trim()
     .regex(/^[+\d][\d\s-]{8,14}$/, "Enter a valid WhatsApp number."),
   city: z.string().trim().min(2, "Enter your city or area.").max(80),
+  address1:z.string().trim().min(5,"Enter your delivery address.").max(180),
+  address2:z.string().trim().max(180).optional(),
+  district:z.string().trim().min(1,"Enter your district."),
+  postalCode:z.string().trim().regex(/^\d{5}$/,"Enter a 5-digit postal code."),
   email: z
     .string()
     .trim()
@@ -27,6 +32,7 @@ export default function PreorderPage() {
   const { slug } = useParams(),
     [search] = useSearchParams(),
     request = useProduct(slug || ""),
+    checkout=useCheckoutConfig(),
     { user } = useCustomerAuth(),
     product = request.data?.product,
     variant = product?.variants.find(
@@ -38,7 +44,10 @@ export default function PreorderPage() {
     }),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
-    [done, setDone] = useState("");
+    [done, setDone] = useState(""),
+    [paymentToken,setPaymentToken]=useState(""),
+    [receiptBusy,setReceiptBusy]=useState(false),
+    [receiptName,setReceiptName]=useState("");
   const defaultName = useMemo(
     () => [user?.firstName, user?.lastName].filter(Boolean).join(" "),
     [user],
@@ -75,6 +84,7 @@ export default function PreorderPage() {
         quantity: qty,
       });
       setDone(created.requestId);
+      setPaymentToken(created.paymentToken||"");
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -85,19 +95,23 @@ export default function PreorderPage() {
       setBusy(false);
     }
   }
+  const settings=Object.fromEntries((checkout.data?.settings||[]).map(row=>[row.key,row.value])),productTotal=product.price*qty;
+  async function submitPayment(file?:File){if(!file||!paymentToken)return;setReceiptBusy(true);setError("");try{const paymentReceiptUrl=await uploadPaymentReceipt(file);await api.submitPreorderPayment({token:paymentToken,paymentReceiptUrl});setReceiptName(file.name);setPaymentToken("");}catch(reason){setError(reason instanceof Error?reason.message:"Could not submit payment receipt.");}finally{setReceiptBusy(false);}}
   if (done)
     return (
       <main className="container grid min-h-[75vh] place-content-center px-4 py-28 text-center">
         <Seo title="Pre-order requested" noindex />
         <CheckCircle2 className="mx-auto" size={34} />
-        <p className="eyebrow mt-5 text-bronze">Request received</p>
+        <p className="eyebrow mt-5 text-bronze">{paymentToken?"Complete payment":"Payment submitted"}</p>
         <h1 className="display mt-3 break-words text-4xl sm:text-5xl">
-          We’ll confirm with you first.
+          {paymentToken?"Pay for your pre-order.":"Receipt received."}
         </h1>
         <p className="mx-auto mt-5 max-w-xl text-sm leading-7 text-ink/60">
-          No payment has been taken. We will contact you on WhatsApp with the
-          final price before placing the supplier order.
+          {paymentToken?<>Transfer <b>{money(productTotal)}</b> for the product, then upload your receipt. The courier fee is separate and will be collected by the courier on delivery.</>:<>We will verify your bank receipt before confirming the pre-order. Estimated arrival is 3–4 weeks.</>}
         </p>
+        {paymentToken&&<div className="mx-auto mt-6 grid w-full max-w-lg gap-3 border border-line bg-white/40 p-5 text-left text-sm"><p><b>Bank:</b> {String(settings.bankName||"—")}</p><p><b>Account name:</b> {String(settings.accountName||"—")}</p><p><b>Account number:</b> {String(settings.bankAccountNumber||settings.accountNumber||"—")}</p><p><b>Branch:</b> {String(settings.branch||"—")}</p><label className="btn btn-dark mt-2 min-h-12 cursor-pointer justify-center">{receiptBusy?"Uploading…":"Upload bank receipt"}<input className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf" disabled={receiptBusy} onChange={event=>{void submitPayment(event.target.files?.[0]);event.currentTarget.value="";}}/></label></div>}
+        {receiptName&&<p className="mt-3 text-xs text-emerald-800">Submitted: {receiptName}</p>}
+        {error&&<p role="alert" className="mx-auto mt-3 max-w-lg bg-red-950 p-3 text-xs text-white">{error}</p>}
         <p className="mt-4 break-all text-xs text-ink/45">Reference: {done}</p>
         <div className="mx-auto mt-8 flex w-full max-w-md flex-col justify-center gap-3 sm:flex-row sm:flex-wrap">
           {user && (
@@ -151,36 +165,33 @@ export default function PreorderPage() {
               <b>1</b>
               <span>
                 <strong>Send request</strong>
-                <small>No payment now.</small>
+                <small>Enter contact and delivery details.</small>
               </span>
             </div>
             <div>
               <b>2</b>
               <span>
-                <strong>WhatsApp confirmation</strong>
-                <small>We confirm the item and final price with you.</small>
+                <strong>Bank payment</strong>
+                <small>Pay the full product price and upload your receipt.</small>
               </span>
             </div>
             <div>
               <b>3</b>
               <span>
-                <strong>Supplier order</strong>
-                <small>We place the order after you confirm the final price.</small>
+                <strong>Payment verification</strong>
+                <small>We confirm the pre-order after verifying your receipt.</small>
               </span>
             </div>
             <div>
               <b>4</b>
               <span>
-                <strong>Delivery details</strong>
-                <small>
-                  Full address is collected before the normal order is created.
-                </small>
+                <strong>Arrival and delivery</strong>
+                <small>Estimated arrival is 3–4 weeks. Courier fee is collected on delivery.</small>
               </span>
             </div>
           </div>
           <p className="preorder-request-note break-words">
-            {product.preorderMessage ||
-              "Supplier delivery is usually around two weeks after the supplier order is placed, but timing can vary."}
+            Estimated arrival is 3–4 weeks after payment confirmation.
           </p>
         </section>
         <form onSubmit={submit} className="preorder-request-form min-w-0">
@@ -188,9 +199,7 @@ export default function PreorderPage() {
             <p className="eyebrow">Quick request</p>
             <h2 className="display mt-2 break-words text-4xl">Request this piece.</h2>
             <p className="mt-3 break-words text-xs leading-6 text-ink/55">
-              Keep it simple: we only need your contact and area now. We will
-              collect the full delivery address later, before creating the final
-              order.
+              The product price is fixed now. Add delivery details, then pay the product total by bank transfer.
             </p>
           </div>
           <div className="grid min-w-0 gap-4 sm:grid-cols-2">
@@ -221,6 +230,10 @@ export default function PreorderPage() {
               type="email"
               defaultValue={user?.email || ""}
             />
+            <Field name="address1" label="Delivery address *" required minLength={5} defaultValue={user?.address1||""}/>
+            <Field name="address2" label="Address line 2" defaultValue={user?.address2||""}/>
+            <Field name="district" label="District *" required defaultValue={user?.district||""}/>
+            <Field name="postalCode" label="Postal code *" required defaultValue={user?.postalCode||""}/>
           </div>
           <div>
             <p className="mb-2 text-xs">Quantity</p>
@@ -246,9 +259,7 @@ export default function PreorderPage() {
             </div>
           </div>
           <div className="break-words border border-bronze/25 bg-bronze/5 p-4 text-xs leading-6 text-ink/65">
-            <b>No payment now.</b> The displayed price is not a final supplier
-            commitment. ZEVENRA will confirm the item and final price with you
-            on WhatsApp before spending money on the supplier order.
+            <b>Product payment: {money(productTotal)} by bank transfer.</b> The courier fee is not paid online and will be collected by the courier on delivery.
           </div>
           {error && (
             <p role="alert" className="break-words bg-red-950 p-3 text-xs leading-5 text-white">
