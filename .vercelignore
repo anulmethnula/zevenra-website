@@ -10,3 +10,23 @@ scripts
 *.dump
 *.log
 screenshots
+
+# Compatibility copies used by tests only. Production traffic is routed through api/public.ts.
+api/cart-products.ts
+api/catalog.ts
+api/checkout-config.ts
+api/delivery-quote.ts
+api/discount-validate.ts
+api/home.ts
+api/order-track.ts
+api/orders.ts
+api/payment-receipt-access.ts
+api/payment-receipt-sign.ts
+api/preorders.ts
+api/product.ts
+api/products.ts
+api/recommendations.ts
+api/robots.ts
+api/sitemap.ts
+api/size-chart.ts
+api/store.ts
