@@ -266,6 +266,10 @@ export function mapPreorder(row: Record<string, unknown>) {
       row.confirmed_price === null ? undefined : number(row.confirmed_price),
     status: text(row.status),
     batchId: text(row.batch_id),
+    notifiedAt: text(row.notified_at),
+    reservationExpiresAt: text(row.reservation_expires_at),
+    releasedAt: text(row.released_at),
+    convertedOrderId: text(row.converted_order_id),
     notes: text(row.notes),
   };
 }

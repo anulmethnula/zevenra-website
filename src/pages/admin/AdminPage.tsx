@@ -2197,6 +2197,7 @@ function Preorders() {
     [busy, setBusy] = useState(""),
     [message, setMessage] = useState(""),
     [drafts, setDrafts] = useState<Record<string, PreorderAdminDraft>>({}),
+    [claimLinks,setClaimLinks]=useState<Record<string,string>>({}),
     [fulfillment,setFulfillment]=useState<PreorderFulfillmentConfig|null>(null),
     [conversion,setConversion]=useState<Record<string,{method:"flat"|"area_group"|"pickup";pickupLocationId:string}>>({}),
     pageSize = 20;
@@ -2210,8 +2211,10 @@ function Preorders() {
     in_transit: "In transit",
     arrived: "Arrived in Sri Lanka",
     ready: "Ready for customer",
+    notified: "Customer notified",
     converted: "Converted to order",
     cancelled: "Cancelled",
+    expired: "Expired",
   };
   const next: Partial<Record<PreorderStatus, PreorderStatus>> = {
     new: "contacted",
@@ -2246,9 +2249,11 @@ function Preorders() {
     arrived:
       "Check the item, size and condition. Keep this customer-reserved piece out of public stock, then mark it ready.",
     ready:
-      "Create the normal COD or bank order. The arrived pre-order piece stays reserved and is not exposed as public stock.",
+      "Send the secure checkout link to the customer. Their piece will be reserved for 48 hours.",
+    notified:"The customer has a secure one-time checkout link while this reservation remains active.",
     converted: "This request is finished and is now a normal order.",
     cancelled: "No further action is required for this cancelled request.",
+    expired:"This reservation was released to stock and can no longer be claimed.",
   };
   const all = [...store.admin.preorders].sort(
       (a, b) =>
@@ -2260,7 +2265,7 @@ function Preorders() {
     contacted = all.filter((x) => x.status === "contacted").length,
     readyCount = all.filter((x) => x.status === "ready").length;
   const filtered = all.filter((item) => {
-      const active = !["converted", "cancelled"].includes(item.status),
+      const active = !["converted", "cancelled", "expired"].includes(item.status),
         statusOk =
           filter === "all" ||
           (filter === "active" && active) ||
@@ -2371,6 +2376,34 @@ function Preorders() {
     } finally {
       setBusy("");
     }
+  }
+  async function notifyCustomer(item:PreorderRequest){
+    setBusy(item.requestId);setMessage("");
+    try{
+      const result=await adminApi.post<{token:string;reservationExpiresAt:string}>("notifyPreorder",{requestId:item.requestId});
+      const link=window.location.origin+"/preorder/complete?token="+encodeURIComponent(result.token);
+      setClaimLinks(current=>({...current,[item.requestId]:link}));
+      await store.refreshPreorders();
+      setMessage(item.requestId+" checkout link created.");
+    }catch(reason){setMessage(reason instanceof Error?reason.message:"Could not notify customer.");}
+    finally{setBusy("");}
+  }
+  async function extendReservation(item:PreorderRequest){
+    setBusy(item.requestId);setMessage("");
+    try{await adminApi.post("extendPreorderReservation",{requestId:item.requestId});await store.refreshPreorders();setMessage(item.requestId+" reservation extended by 24 hours.");}
+    catch(reason){setMessage(reason instanceof Error?reason.message:"Could not extend reservation.");}
+    finally{setBusy("");}
+  }
+  async function releaseReservation(item:PreorderRequest){
+    if(!confirm("Release "+item.requestId+" to public stock?"))return;
+    setBusy(item.requestId);setMessage("");
+    try{await adminApi.post("releasePreorderToStock",{requestId:item.requestId});await store.loadAdmin();setMessage(item.requestId+" released to stock.");}
+    catch(reason){setMessage(reason instanceof Error?reason.message:"Could not release reservation.");}
+    finally{setBusy("");}
+  }
+  async function copyClaimLink(item:PreorderRequest){
+    const link=claimLinks[item.requestId];if(!link)return;
+    try{await navigator.clipboard.writeText(link);setMessage("Checkout link copied.");}catch{setMessage("Copy failed. Generate and copy the link again.");}
   }
   async function convert(item: PreorderRequest, paymentMethod: "cod" | "bank") {
     const draft = draftFor(item);
@@ -2494,8 +2527,10 @@ function Preorders() {
               "in_transit",
               "arrived",
               "ready",
+              "notified",
               "converted",
               "cancelled",
+              "expired",
             ] as PreorderStatus[]
           ).map((status) => (
             <option key={status} value={status}>
@@ -2516,6 +2551,7 @@ function Preorders() {
               finalPrice = Number(
                 draft.confirmedPrice || item.confirmedPrice || 0,
               ),
+              claimLink=claimLinks[item.requestId]||"",
               nextStatus = next[item.status],
               statusIndex = [
                 "new",
@@ -2525,9 +2561,11 @@ function Preorders() {
                 "in_transit",
                 "arrived",
                 "ready",
+                "notified",
               ].indexOf(item.status === "batched" ? "confirmed" : item.status),
-              waMessage =
-                "Hi " +
+              waMessage = item.status==="notified"&&claimLink
+                ? "Your ZEVENRA pre-order has arrived 🤍\nYour "+item.productName+" — "+item.size+" is reserved for you.\nComplete your order here:\n"+claimLink+"\n\nReserved for 48 hours."
+                : "Hi " +
                 item.customerName +
                 ", this is ZEVENRA about your pre-order " +
                 item.requestId +
@@ -2638,6 +2676,7 @@ function Preorders() {
                   <section className="preorder-next-box">
                     <small>What to do next</small>
                     <h3>{guidance[item.status]}</h3>
+                    {item.status==="converted"&&item.convertedOrderId&&<Link className="btn justify-center" to={`/admin/orders/${encodeURIComponent(item.convertedOrderId)}`}>View {item.convertedOrderId}</Link>}
                     {nextStatus && (
                       <button
                         disabled={
@@ -2654,25 +2693,24 @@ function Preorders() {
                     )}
                     {item.status === "ready" && (
                       <div className="grid gap-2">
-                        <label className="label">Fulfillment<select className="field mt-1" value={conversion[item.requestId]?.method||((fulfillment?.methods||[]).filter(method=>method.active).length===1?(fulfillment?.methods||[]).find(method=>method.active)?.type:"")||""} onChange={event=>setConversion(current=>({...current,[item.requestId]:{method:event.target.value as "flat"|"area_group"|"pickup",pickupLocationId:""}}))}><option value="">Choose method</option>{(fulfillment?.methods||[]).filter(method=>method.active).map(method=><option key={method.type} value={method.type}>{method.displayName}</option>)}</select></label>
-                        {(conversion[item.requestId]?.method||((fulfillment?.methods||[]).filter(method=>method.active).length===1?(fulfillment?.methods||[]).find(method=>method.active)?.type:""))==="pickup"?<label className="label">Pickup branch<select className="field mt-1" value={conversion[item.requestId]?.pickupLocationId||""} onChange={event=>setConversion(current=>({...current,[item.requestId]:{method:"pickup",pickupLocationId:event.target.value}}))}><option value="">Choose branch</option>{(fulfillment?.pickupLocations||[]).filter(branch=>branch.active).map(branch=><option key={branch.id} value={branch.id}>{branch.name} — {branch.address}</option>)}</select></label>:null}
-                        <button
-                          disabled={busy === item.requestId || finalPrice <= 0}
-                          onClick={() => void convert(item, "cod")}
-                          className="btn btn-dark"
-                        >
-                          Create COD order
-                        </button>
-                        <button
-                          disabled={busy === item.requestId || finalPrice <= 0}
-                          onClick={() => void convert(item, "bank")}
-                          className="btn"
-                        >
-                          Create bank order
-                        </button>
+                        <button disabled={busy===item.requestId||finalPrice<=0} onClick={()=>void notifyCustomer(item)} className="btn btn-dark w-full">Notify customer</button>
+                        <details className="mt-2 text-xs text-black/50"><summary className="cursor-pointer underline underline-offset-4">Manual conversion fallback</summary><div className="mt-3 grid gap-2">
+                          <label className="label">Fulfillment<select className="field mt-1" value={conversion[item.requestId]?.method||((fulfillment?.methods||[]).filter(method=>method.active).length===1?(fulfillment?.methods||[]).find(method=>method.active)?.type:"")||""} onChange={event=>setConversion(current=>({...current,[item.requestId]:{method:event.target.value as "flat"|"area_group"|"pickup",pickupLocationId:""}}))}><option value="">Choose method</option>{(fulfillment?.methods||[]).filter(method=>method.active).map(method=><option key={method.type} value={method.type}>{method.displayName}</option>)}</select></label>
+                          {(conversion[item.requestId]?.method||((fulfillment?.methods||[]).filter(method=>method.active).length===1?(fulfillment?.methods||[]).find(method=>method.active)?.type:""))==="pickup"?<label className="label">Pickup branch<select className="field mt-1" value={conversion[item.requestId]?.pickupLocationId||""} onChange={event=>setConversion(current=>({...current,[item.requestId]:{method:"pickup",pickupLocationId:event.target.value}}))}><option value="">Choose branch</option>{(fulfillment?.pickupLocations||[]).filter(branch=>branch.active).map(branch=><option key={branch.id} value={branch.id}>{branch.name} — {branch.address}</option>)}</select></label>:null}
+                          <button disabled={busy===item.requestId||finalPrice<=0} onClick={()=>void convert(item,"cod")} className="btn">Create COD order</button>
+                          <button disabled={busy===item.requestId||finalPrice<=0} onClick={()=>void convert(item,"bank")} className="btn">Create bank order</button>
+                        </div></details>
                       </div>
                     )}
-                    {!["converted", "cancelled"].includes(item.status) && (
+                    {item.status==="notified"&&<div className="grid gap-2">
+                      <p className="text-xs text-black/55">Reserved until {item.reservationExpiresAt?new Date(item.reservationExpiresAt).toLocaleString("en-LK"):"—"}</p>
+                      <a href={wa} target="_blank" rel="noreferrer" className={"btn btn-dark justify-center "+(!claimLink?"pointer-events-none opacity-40":"")}>WhatsApp customer</a>
+                      <button type="button" className="btn justify-center" disabled={!claimLink} onClick={()=>void copyClaimLink(item)}>Copy checkout link</button>
+                      <button type="button" className="btn justify-center" disabled={busy===item.requestId} onClick={()=>void notifyCustomer(item)}>Send again</button>
+                      <button type="button" className="btn justify-center" disabled={busy===item.requestId} onClick={()=>void extendReservation(item)}>Extend 24h</button>
+                      <button type="button" className="btn justify-center text-red-800" disabled={busy===item.requestId} onClick={()=>void releaseReservation(item)}>Release to stock</button>
+                    </div>}
+                    {!["converted", "cancelled","expired","notified"].includes(item.status) && (
                       <button
                         disabled={busy === item.requestId}
                         onClick={() =>
@@ -2696,6 +2734,7 @@ function Preorders() {
                       "in_transit",
                       "arrived",
                       "ready",
+                      "notified",
                     ] as PreorderStatus[]
                   ).map((status, index) => (
                     <span

@@ -423,8 +423,10 @@ function normalizePreorderStatus(value: unknown) {
     "in_transit",
     "arrived",
     "ready",
+    "notified",
     "converted",
     "cancelled",
+    "expired",
   ];
   return allowed.includes(normalized) ? normalized : "new";
 }

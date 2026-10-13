@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { access,readFile } from "node:fs/promises";
 import test from "node:test";
-import { preorderConversionSchema } from "../api/_shared.ts";
+import { preorderClaimCheckoutSchema,preorderConversionSchema } from "../api/_shared.ts";
+import {createPreorderClaimToken,hashPreorderClaimToken,releasePreorderToStock} from "../api/_data/preorders.ts";
 import {
   isPreorderTransitionAllowed,
   normalizePreorderPaymentMethod,
@@ -50,6 +51,12 @@ test("preorder conversion rejects arbitrary payment method values", () => {
   assert.throws(() => normalizePreorderPaymentMethod("crypto"));
 });
 
+test("customer preorder completion accepts COD and bank checkout",()=>{
+  const base={token:"x".repeat(32),customerName:"Test Customer",phone:"0771234567",fulfillmentMethod:"pickup",pickupLocationId:"branch"};
+  assert.equal(preorderClaimCheckoutSchema.safeParse({...base,paymentMethod:"cod"}).success,true);
+  assert.equal(preorderClaimCheckoutSchema.safeParse({...base,paymentMethod:"bank"}).success,true);
+});
+
 test("admin preorder list is bounded and selects only mapped fields", async () => {
   const source = await readFile(
     new URL("../api/_data/preorders.ts", import.meta.url),
@@ -81,4 +88,48 @@ test("supplier batch creation is no longer exposed",async()=>{
   ]);
   assert.doesNotMatch(dataSource,/createPreorderBatch|SHEIN-|at least 5 pieces/);
   assert.doesNotMatch(actionSource,/createPreorderBatch/);
+});
+
+test("preorder claim tokens are random and represented by hashes for storage",()=>{
+  const first=createPreorderClaimToken(),second=createPreorderClaimToken();
+  assert.notEqual(first.token,second.token);
+  assert.equal(first.hash,hashPreorderClaimToken(first.token));
+  assert.notEqual(first.hash,first.token);
+  assert.match(first.hash,/^[a-f0-9]{64}$/);
+});
+
+test("claim lookup and checkout enforce one-time notified reservations",async()=>{
+  const source=await readFile(new URL("../api/_data/preorders.ts",import.meta.url),"utf8");
+  assert.match(source,/status='notified'.*released_at IS NULL.*converted_order_id IS NULL.*reservation_expires_at>now\(\)/s);
+  assert.match(source,/status IN\('ready','notified'\)/);
+  assert.match(source,/claim_token_hash=NULL,reservation_expires_at=NULL/);
+  assert.match(source,/Number\(preorder\.confirmed_price\)/);
+  const conversion=source.slice(source.indexOf("export async function convertPreorderToOrder"));
+  assert.doesNotMatch(conversion,/stock=stock-/);
+});
+
+test("release returns reserved quantity to stock exactly once",async()=>{
+  const source=await readFile(new URL("../api/_data/preorders.ts",import.meta.url),"utf8"),release=source.slice(source.indexOf("export async function releasePreorderToStock"),source.indexOf("export async function getPreorderClaim"));
+  assert.match(release,/FOR UPDATE/);
+  assert.match(release,/preorder\.released_at/);
+  assert.match(release,/stock=stock\+\$2/);
+  assert.match(release,/released_at=now\(\)/);
+  const state={released:false,stock:0},client={query:async(text:string)=>{
+    if(text.startsWith("SELECT"))return{rows:state.released?[]:[{request_id:"PRE-1",status:"notified",released_at:null,converted_order_id:null,variant_id:"variant",quantity:2}],rowCount:state.released?0:1};
+    if(text.startsWith("UPDATE variants")){state.stock+=2;return{rows:[],rowCount:1};}
+    if(text.startsWith("UPDATE preorders")){state.released=true;return{rows:[],rowCount:1};}
+    return{rows:[],rowCount:1};
+  }};
+  const transact=async(work:(db:typeof client)=>Promise<{ok:boolean}>)=>work(client);
+  assert.deepEqual(await releasePreorderToStock("PRE-1",transact),{ok:true});
+  await assert.rejects(()=>releasePreorderToStock("PRE-1",transact),/cannot be released/);
+  assert.equal(state.stock,2);
+});
+
+test("claim lookup and checkout share the existing preorder API entry",async()=>{
+  const source=await readFile(new URL("../api/preorders.ts",import.meta.url),"utf8");
+  assert.match(source,/action==="claim"/);
+  assert.match(source,/action==="checkout"/);
+  await assert.rejects(()=>access(new URL("../api/preorder-claim.ts",import.meta.url)));
+  await assert.rejects(()=>access(new URL("../api/preorder-checkout.ts",import.meta.url)));
 });

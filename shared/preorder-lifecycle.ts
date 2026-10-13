@@ -7,6 +7,7 @@ export const preorderActiveStatuses = [
   "in_transit",
   "arrived",
   "ready",
+  "notified",
 ] as const;
 
 const transitions: Record<string, readonly string[]> = {
@@ -18,8 +19,10 @@ const transitions: Record<string, readonly string[]> = {
   in_transit: ["in_transit", "arrived"],
   arrived: ["arrived", "ready", "cancelled"],
   ready: ["ready", "cancelled"],
+  notified: ["notified", "cancelled", "expired"],
   converted: ["converted"],
   cancelled: ["cancelled"],
+  expired: ["expired"],
 };
 
 export function isPreorderTransitionAllowed(current: unknown, next: unknown) {

@@ -389,8 +389,10 @@ export type PreorderStatus =
   | "in_transit"
   | "arrived"
   | "ready"
+  | "notified"
   | "converted"
-  | "cancelled";
+  | "cancelled"
+  | "expired";
 export type PreorderRequest = {
   requestId: string;
   createdAt: string;
@@ -415,6 +417,10 @@ export type PreorderRequest = {
   confirmedPrice?: number;
   status: PreorderStatus;
   batchId?: string;
+  notifiedAt?: string;
+  reservationExpiresAt?: string;
+  releasedAt?: string;
+  convertedOrderId?: string;
   notes?: string;
   updatedAt: string;
 };
@@ -422,6 +428,12 @@ export type CustomerPreorder = Omit<
   PreorderRequest,
   "customerId" | "phone" | "email" | "notes"
 >;
+export type PreorderClaim={
+  requestId:string;customerName:string;phone:string;whatsapp:string;email:string;
+  address1:string;address2:string;city:string;district:string;postalCode:string;
+  productId:string;variantId:string;productName:string;color:string;size:string;
+  quantity:number;confirmedPrice:number;reservationExpiresAt:string;imageUrl:string;
+};
 export type DashboardData = {
   publishedProducts: number;
   lowStockProducts: number;

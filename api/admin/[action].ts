@@ -37,7 +37,10 @@ import {
 } from "../_data/orders.js";
 import {
   convertPreorderToOrder,
+  extendPreorderReservation,
   listPreorders,
+  notifyPreorder,
+  releasePreorderToStock,
   updatePreorder,
 } from "../_data/preorders.js";
 import {
@@ -98,7 +101,7 @@ const mutationActions = new Set([
   "saveSizeChart", "deleteSizeChart", "saveNavigation", "deleteNavigation",
   "saveHomepageSection", "deleteHomepageSection", "duplicateHomepageSection", "reorderHomepageSections",
   "updateOrder", "updateOrderDetails", "createReturn", "updateReturn",
-  "updatePreorder", "convertPreorderToOrder", "createManualOrder",
+  "updatePreorder", "notifyPreorder", "extendPreorderReservation", "releasePreorderToStock", "convertPreorderToOrder", "createManualOrder",
   "saveSettings", "saveDeliveryRates", "saveCourierConfig", "importCourierRateSheet",
   "validateCourierRateSheet", "confirmCourierRateSheet",
   "setCourierRateCardStatus", "previewDeliveryZoneTemplate", "applyDeliveryZoneTemplate",
@@ -215,6 +218,12 @@ async function execute(action: string, payload: Record<string, unknown>) {
       return updateReturn(payload);
     case "updatePreorder":
       return updatePreorder(payload);
+    case "notifyPreorder":
+      return notifyPreorder(String(payload.requestId||""));
+    case "extendPreorderReservation":
+      return extendPreorderReservation(String(payload.requestId||""));
+    case "releasePreorderToStock":
+      return releasePreorderToStock(String(payload.requestId||""));
     case "convertPreorderToOrder":
       return convertPreorderToOrder(preorderConversionSchema.parse(payload));
     case "createManualOrder":

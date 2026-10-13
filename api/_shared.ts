@@ -515,6 +515,32 @@ export const preorderConversionSchema = z.object({
   if(value.fulfillmentMethod==="pickup"&&!value.pickupLocationId)
     ctx.addIssue({code:z.ZodIssueCode.custom,path:["pickupLocationId"],message:"Choose a pickup branch."});
 });
+export const preorderClaimCheckoutSchema = z.object({
+  token:z.string().min(32).max(200),
+  customerName:z.string().trim().min(2).max(100),
+  phone:phoneSchema,
+  whatsapp:optionalPhoneSchema,
+  email:z.string().trim().email().or(z.literal("")).optional(),
+  fulfillmentMethod:z.enum(["flat","area_group","pickup"]),
+  pickupLocationId:z.string().trim().max(100).optional(),
+  address1:z.string().trim().max(180).optional(),
+  address2:z.string().trim().max(180).optional(),
+  city:z.string().trim().max(80).optional(),
+  district:z.enum(sriLankaDistricts).or(z.literal("")).optional(),
+  postalCode:optionalPostalSchema,
+  paymentMethod:z.enum(["cod","bank"]),
+}).strict().superRefine((value,ctx)=>{
+  if(value.fulfillmentMethod==="pickup"&&!value.pickupLocationId)ctx.addIssue({code:z.ZodIssueCode.custom,path:["pickupLocationId"],message:"Choose a pickup branch."});
+  if(value.fulfillmentMethod!=="pickup"&&(!value.address1||value.address1.length<5||!value.city||!value.district||!value.postalCode))ctx.addIssue({code:z.ZodIssueCode.custom,path:["address1"],message:"Enter a complete delivery address."});
+});
+export const preorderClaimQuoteSchema=z.object({
+  token:z.string().min(32).max(200),
+  fulfillmentMethod:z.enum(["flat","area_group","pickup"]),
+  pickupLocationId:z.string().trim().max(100).optional(),
+  city:z.string().trim().max(80).optional(),
+  district:z.enum(sriLankaDistricts).or(z.literal("")).optional(),
+  postalCode:optionalPostalSchema,
+}).strict();
 export const manualOrderSchema = z
   .object({
     source: z.enum(["instagram", "whatsapp", "manual"]),

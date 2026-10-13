@@ -1,5 +1,5 @@
-import { randomBytes } from "node:crypto";
-import { query, withTransaction } from "../_db.js";
+import { createHash, randomBytes } from "node:crypto";
+import { query, withTransaction,type DatabaseClient } from "../_db.js";
 import { normalizeSriLankanPhoneForLookup } from "../_order-track-normalization.js";
 import { mapOrder, mapPreorder } from "./mappers.js";
 import {
@@ -14,6 +14,62 @@ import { assertPaymentMethodAvailable, deliverySnapshot } from "./orders.js";
 const orderWithItems = `SELECT o.*,COALESCE((SELECT jsonb_agg(to_jsonb(oi) ORDER BY oi.id) FROM order_items oi WHERE oi.order_id=o.order_id),'[]') AS items FROM orders o`;
 const newId = (prefix: string) =>
   `${prefix}-${new Date().toISOString().slice(2, 10).replaceAll("-", "")}-${randomBytes(3).toString("hex").toUpperCase()}`;
+export const hashPreorderClaimToken=(token:string)=>createHash("sha256").update(token).digest("hex");
+export function createPreorderClaimToken(){const token=randomBytes(32).toString("base64url");return{token,hash:hashPreorderClaimToken(token)};}
+
+export async function notifyPreorder(requestId:string,run:{query:typeof query}={query}){
+  const {token,hash}=createPreorderClaimToken();
+  const result=await run.query<Record<string,unknown>>(
+    "UPDATE preorders SET status='notified',claim_token_hash=$2,notified_at=now(),reservation_expires_at=now()+interval '48 hours',released_at=NULL,updated_at=now() WHERE request_id=$1 AND status IN('ready','notified') AND converted_order_id IS NULL RETURNING reservation_expires_at",
+    [requestId,hash],
+  );
+  if(!result.rows[0])throw new Error("Only a ready preorder can be notified.");
+  return{token,reservationExpiresAt:String(result.rows[0].reservation_expires_at)};
+}
+
+export async function extendPreorderReservation(requestId:string){
+  const result=await query<Record<string,unknown>>(
+    "UPDATE preorders SET reservation_expires_at=greatest(reservation_expires_at,now())+interval '24 hours',updated_at=now() WHERE request_id=$1 AND status='notified' AND claim_token_hash IS NOT NULL AND released_at IS NULL AND converted_order_id IS NULL RETURNING reservation_expires_at",
+    [requestId],
+  );
+  if(!result.rows[0])throw new Error("This reservation cannot be extended.");
+  return{reservationExpiresAt:String(result.rows[0].reservation_expires_at)};
+}
+
+export async function releasePreorderToStock(requestId:string,transact:(work:(client:DatabaseClient)=>Promise<{ok:boolean}>)=>Promise<{ok:boolean}>=withTransaction){
+  return transact(async(client)=>{
+    const preorder=(await client.query<Record<string,unknown>>("SELECT * FROM preorders WHERE request_id=$1 FOR UPDATE",[requestId])).rows[0];
+    if(!preorder||preorder.status!=="notified"||preorder.released_at||preorder.converted_order_id)throw new Error("This reservation cannot be released.");
+    await client.query("UPDATE variants SET stock=stock+$2,updated_at=now() WHERE id=$1",[preorder.variant_id,preorder.quantity]);
+    await client.query("UPDATE preorders SET status='expired',released_at=now(),claim_token_hash=NULL,reservation_expires_at=NULL,updated_at=now() WHERE request_id=$1",[requestId]);
+    await client.query("INSERT INTO audit_logs(actor,action,entity_type,entity_id,details) VALUES('owner','release','preorder',$1,$2::jsonb)",[requestId,JSON.stringify({quantity:preorder.quantity,variantId:preorder.variant_id})]);
+    return{ok:true};
+  });
+}
+
+export async function getPreorderClaim(token:string){
+  if(!token)return null;
+  const row=(await query<Record<string,unknown>>(
+    `SELECT pr.request_id,pr.customer_name,pr.phone,pr.whatsapp,pr.email,pr.address1,pr.address2,pr.city,pr.district,pr.postal_code,
+            pr.product_id,pr.variant_id,pr.product_name,pr.color,pr.size,pr.quantity,pr.confirmed_price,pr.reservation_expires_at,p.media
+       FROM preorders pr LEFT JOIN products p ON p.id=pr.product_id
+      WHERE pr.claim_token_hash=$1 AND pr.status='notified' AND pr.released_at IS NULL AND pr.converted_order_id IS NULL AND pr.reservation_expires_at>now()
+      LIMIT 1`,
+    [hashPreorderClaimToken(token)],
+  )).rows[0];
+  if(!row)return null;
+  const media=Array.isArray(row.media)?row.media as Array<Record<string,unknown>>:[];
+  return{requestId:String(row.request_id),customerName:String(row.customer_name),phone:String(row.phone),whatsapp:String(row.whatsapp),email:String(row.email||""),address1:String(row.address1||""),address2:String(row.address2||""),city:String(row.city||""),district:String(row.district||""),postalCode:String(row.postal_code||""),productId:String(row.product_id),variantId:String(row.variant_id),productName:String(row.product_name),color:String(row.color),size:String(row.size),quantity:Number(row.quantity),confirmedPrice:Number(row.confirmed_price),reservationExpiresAt:String(row.reservation_expires_at),imageUrl:String(media.find(item=>item.type==="image")?.url||"")};
+}
+
+export async function quotePreorderClaim(input:Record<string,unknown>){
+  return withTransaction(async(client)=>{
+    const preorder=(await client.query<Record<string,unknown>>("SELECT * FROM preorders WHERE claim_token_hash=$1 AND status='notified' AND released_at IS NULL AND converted_order_id IS NULL AND reservation_expires_at>now()",[hashPreorderClaimToken(String(input.token||""))])).rows[0];
+    if(!preorder)throw new Error("Pre-order claim unavailable");
+    const delivery=await deliverySnapshot(client,{fulfillmentMethod:String(input.fulfillmentMethod||"") as "flat"|"area_group"|"pickup",pickupLocationId:String(input.pickupLocationId||"")||undefined,city:String(input.city||""),district:String(input.district||""),postalCode:String(input.postalCode||"")},Number(preorder.confirmed_price)*Number(preorder.quantity),false);
+    return{fee:delivery.fee,minimumDeliveryDays:delivery.minimumDeliveryDays,maximumDeliveryDays:delivery.maximumDeliveryDays,fulfillmentMethod:delivery.method,methodName:delivery.methodName,areaGroupName:delivery.areaGroupName,pickupLocationId:delivery.pickup?.id||""};
+  });
+}
 
 export async function createPreorder(input: Record<string, unknown>) {
   return withTransaction(async (client) => {
@@ -105,7 +161,8 @@ export async function listPreorders(status?: string) {
     await query<Record<string, unknown>>(
       `SELECT request_id,created_at,updated_at,customer_id,customer_name,phone,whatsapp,email,
               address1,address2,city,district,postal_code,product_id,variant_id,product_name,
-              sku,color,size,quantity,requested_price,confirmed_price,status,batch_id,notes
+              sku,color,size,quantity,requested_price,confirmed_price,status,batch_id,notes,
+              notified_at,reservation_expires_at,released_at,converted_order_id
          FROM preorders${where}
         ORDER BY created_at DESC
         LIMIT 100`,
@@ -167,25 +224,38 @@ export async function updatePreorder(input: Record<string, unknown>) {
 
 export async function convertPreorderToOrder(input: Record<string, unknown>) {
   return withTransaction(async (client) => {
+    const token=String(input.token||""),customerClaim=Boolean(token);
     const preorder = (
       await client.query<Record<string, unknown>>(
-        "SELECT * FROM preorders WHERE request_id=$1 FOR UPDATE",
-        [input.requestId],
+        customerClaim
+          ? "SELECT * FROM preorders WHERE claim_token_hash=$1 FOR UPDATE"
+          : "SELECT * FROM preorders WHERE request_id=$1 FOR UPDATE",
+        [customerClaim?hashPreorderClaimToken(token):input.requestId],
       )
     ).rows[0];
     if (!preorder) throw new Error("Pre-order not found");
-    if (!["arrived", "ready"].includes(String(preorder.status)))
+    if(customerClaim&&(preorder.status!=="notified"||preorder.released_at||preorder.converted_order_id||!preorder.reservation_expires_at||new Date(String(preorder.reservation_expires_at)).getTime()<=Date.now()))throw new Error("Pre-order claim unavailable");
+    if (!customerClaim&&!["arrived", "ready"].includes(String(preorder.status)))
       throw new Error(
         "Mark the pre-order as arrived or ready before conversion.",
       );
     if (Number(preorder.confirmed_price) <= 0)
       throw new Error("Confirmed selling price is required before conversion.");
     const fulfillmentMethod=String(input.fulfillmentMethod||"") as "flat"|"area_group"|"pickup";
+    const customerName=customerClaim?String(input.customerName||"").trim():String(preorder.customer_name),
+      phone=customerClaim?String(input.phone||"").trim():String(preorder.phone),
+      whatsapp=customerClaim?String(input.whatsapp||input.phone||"").trim():String(preorder.whatsapp),
+      email=customerClaim?String(input.email||"").trim():String(preorder.email||""),
+      address1=customerClaim?String(input.address1||"").trim():String(preorder.address1||""),
+      address2=customerClaim?String(input.address2||"").trim():String(preorder.address2||""),
+      city=customerClaim?String(input.city||"").trim():String(preorder.city||""),
+      district=customerClaim?String(input.district||"").trim():String(preorder.district||""),
+      postalCode=customerClaim?String(input.postalCode||"").trim():String(preorder.postal_code||"");
     if (fulfillmentMethod!=="pickup"&&!preorderDeliveryAddressReady({
-      address1: preorder.address1,
-      city: preorder.city,
-      district: preorder.district,
-      postalCode: preorder.postal_code,
+      address1,
+      city,
+      district,
+      postalCode,
     }))
       throw new Error(
         "Complete the delivery address with a valid 5-digit postal code before conversion.",
@@ -200,9 +270,9 @@ export async function convertPreorderToOrder(input: Record<string, unknown>) {
         {
           fulfillmentMethod,
           pickupLocationId:String(input.pickupLocationId||"")||undefined,
-          district: String(preorder.district),
-          city: String(preorder.city),
-          postalCode: String(preorder.postal_code || ""),
+          district,
+          city,
+          postalCode,
         },
         subtotal,
         false,
@@ -214,15 +284,15 @@ export async function convertPreorderToOrder(input: Record<string, unknown>) {
       [
         orderId,
         preorder.customer_id,
-        preorder.customer_name,
-        preorder.phone,
-        preorder.whatsapp,
-        preorder.email,
-        fulfillmentMethod==="pickup"?"":preorder.address1,
-        fulfillmentMethod==="pickup"?"":preorder.address2,
-        fulfillmentMethod==="pickup"?"":preorder.city,
-        fulfillmentMethod==="pickup"?"":preorder.district,
-        fulfillmentMethod==="pickup"?"":preorder.postal_code,
+        customerName,
+        phone,
+        whatsapp,
+        email,
+        fulfillmentMethod==="pickup"?"":address1,
+        fulfillmentMethod==="pickup"?"":address2,
+        fulfillmentMethod==="pickup"?"":city,
+        fulfillmentMethod==="pickup"?"":district,
+        fulfillmentMethod==="pickup"?"":postalCode,
         delivery.courierProviderId,
         delivery.courierName,
         delivery.pricingMode,
@@ -264,7 +334,7 @@ export async function convertPreorderToOrder(input: Record<string, unknown>) {
       ],
     );
     await client.query(
-      "UPDATE preorders SET status='converted',converted_order_id=$2,notes=concat_ws(' | ',nullif(notes,''),$3::text),updated_at=now() WHERE request_id=$1",
+      "UPDATE preorders SET status='converted',converted_order_id=$2,claim_token_hash=NULL,reservation_expires_at=NULL,notes=concat_ws(' | ',nullif(notes,''),$3::text),updated_at=now() WHERE request_id=$1",
       [input.requestId, orderId, `Converted to ${orderId}`],
     );
     await client.query(

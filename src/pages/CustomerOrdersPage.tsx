@@ -24,8 +24,10 @@ const preorderLabels: Record<PreorderStatus, string> = {
   in_transit: "On the way",
   arrived: "Arrived",
   ready: "Ready for you",
+  notified: "Ready for checkout",
   converted: "Moved to Orders",
   cancelled: "Cancelled",
+  expired: "Reservation expired",
 };
 const preorderHelp: Record<PreorderStatus, string> = {
   new: "We received your request. ZEVENRA will contact you on WhatsApp before any supplier order is placed.",
@@ -38,9 +40,11 @@ const preorderHelp: Record<PreorderStatus, string> = {
   arrived: "Your piece has arrived and is being checked.",
   ready:
     "Your piece is ready. We will arrange the normal order/payment with you.",
+  notified:"Your piece is reserved. Use the secure link sent by ZEVENRA to complete your order.",
   converted:
     "This pre-order is finished and has been converted into a normal order. Check the Orders tab.",
   cancelled: "This pre-order request was cancelled.",
+  expired:"This reservation expired. Contact ZEVENRA if you still want this item.",
 };
 
 export default function CustomerOrdersPage() {
