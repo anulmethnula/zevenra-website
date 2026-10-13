@@ -142,7 +142,8 @@ export default function LoginPage() {
                   name={recoveryMode?"newPassword":"password"}
                   type={showPassword ? "text" : "password"}
                   autoComplete={recoveryMode?"new-password":"current-password"}
-                  placeholder={recoveryMode?"At least 10 characters":"Enter your password"}
+                  placeholder={recoveryMode?"Choose your new password.":"Enter your password"}
+                  maxLength={200}
                   required
                 />
                 <button
@@ -156,7 +157,7 @@ export default function LoginPage() {
             </label>
             {recoveryMode&&<label>
               <span>Confirm new password</span>
-              <div className="admin-login__field"><LockKeyhole/><input name="confirmPassword" type={showConfirm?"text":"password"} autoComplete="new-password" placeholder="Repeat your new password" required/><button type="button" onClick={()=>setShowConfirm(value=>!value)} aria-label={showConfirm?"Hide confirmed password":"Show confirmed password"}>{showConfirm?<EyeOff/>:<Eye/>}</button></div>
+              <div className="admin-login__field"><LockKeyhole/><input name="confirmPassword" type={showConfirm?"text":"password"} autoComplete="new-password" placeholder="Repeat your new password" maxLength={200} required/><button type="button" onClick={()=>setShowConfirm(value=>!value)} aria-label={showConfirm?"Hide confirmed password":"Show confirmed password"}>{showConfirm?<EyeOff/>:<Eye/>}</button></div>
             </label>}
           </div>
           {!recoveryMode&&<button type="button" className="mt-3 text-[10px] text-white/45 underline-offset-4 hover:text-white hover:underline" onClick={()=>{setRecoveryMode(true);setError("");setSuccess("");}}>Forgot password?</button>}

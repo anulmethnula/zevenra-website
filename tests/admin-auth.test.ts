@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { VercelRequest } from "@vercel/node";
 import { adminCookie, hashAdminPassword, makeSession, validSession, verifyAdminPassword } from "../api/_shared.ts";
-import { changeAdminPassword,generateAdminRecoveryCode,getAdminAuth,loginAdmin,recoverAdminPassword,validAdminSession } from "../api/_admin-auth.ts";
+import { changeAdminPassword,generateAdminRecoveryCode,getAdminAuth,loginAdmin,recoverAdminPassword,validAdminPassword,validAdminSession } from "../api/_admin-auth.ts";
 
 type Row={id:string;username:string;password_hash:string;recovery_code_hash:string|null;session_version:number};
 class AuthDb{
@@ -38,6 +38,15 @@ test("admin session rejects missing, tampered, and wrong-secret cookies", () => 
   assert.equal(validSession(requestWithCookie(), secret), false);
   assert.equal(validSession(requestWithCookie(`${cookie}x`), secret), false);
   assert.equal(validSession(requestWithCookie(cookie), "different-secret"), false);
+});
+
+test("admin passwords may contain any non-empty value up to 200 characters",()=>{
+  assert.equal(validAdminPassword(""),false);
+  assert.equal(validAdminPassword(" "),true);
+  assert.equal(validAdminPassword("x"),true);
+  assert.equal(validAdminPassword("🔐 symbols only !"),true);
+  assert.equal(validAdminPassword("x".repeat(200)),true);
+  assert.equal(validAdminPassword("x".repeat(201)),false);
 });
 
 test("missing and invalid admin cookies are rejected without database access",async()=>{

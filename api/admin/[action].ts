@@ -328,7 +328,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         400,
       );
     if(error instanceof Error&&error.message==="CURRENT_PASSWORD_INVALID")return json(res,{error:"Current password is incorrect."},400);
-    if(error instanceof Error&&error.message==="PASSWORD_INVALID")return json(res,{error:"Use at least 10 characters with letters and numbers."},400);
+    if(error instanceof Error&&error.message==="PASSWORD_INVALID")return json(res,{error:"Choose a password with no more than 200 characters."},400);
     if(error instanceof Error&&error.message==="PASSWORD_CONFIRM_MISMATCH")return json(res,{error:"New passwords do not match."},400);
     if(error instanceof Error&&error.message==="USERNAME_INVALID")return json(res,{error:"Use 3–50 letters, numbers, dots, dashes, or underscores."},400);
     const conflict = databaseConflictMessage(action, error);

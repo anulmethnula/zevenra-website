@@ -9,7 +9,7 @@ const defaultRunner:Runner={query:async(text,values=[])=>query(text,values)};
 
 function record(row:Record<string,unknown>):AdminAuthRecord{return{id:String(row.id),username:String(row.username),passwordHash:String(row.password_hash),recoveryCodeHash:String(row.recovery_code_hash||""),sessionVersion:Number(row.session_version)}}
 export function validAdminUsername(value:string){return /^[A-Za-z0-9._-]{3,50}$/.test(value);}
-export function validAdminPassword(value:string){return value.length>=10&&value.length<=200&&/[A-Za-z]/.test(value)&&/\d/.test(value);}
+export function validAdminPassword(value:string){return value.length>0&&value.length<=200;}
 
 export async function getAdminAuth(run:Runner=defaultRunner):Promise<AdminAuthRecord|null>{
   const result=await run.query("SELECT id,username,password_hash,recovery_code_hash,session_version FROM admin_auth ORDER BY created_at LIMIT 1");
