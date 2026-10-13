@@ -68,7 +68,7 @@ test("admin preorder list is bounded and selects only mapped fields", async () =
   );
   assert.doesNotMatch(listQuery, /SELECT\s+\*/i);
   assert.match(listQuery, /LIMIT 100/);
-  assert.match(listQuery, /request_id,created_at,updated_at/);
+  assert.match(listQuery, /p\.request_id,p\.created_at,p\.updated_at/);
 });
 
 test("preorder requests use configured variants without deducting stock",async()=>{
@@ -106,6 +106,27 @@ test("claim lookup and checkout enforce one-time notified reservations",async()=
   assert.match(source,/Number\(preorder\.confirmed_price\)/);
   const conversion=source.slice(source.indexOf("export async function convertPreorderToOrder"));
   assert.doesNotMatch(conversion,/stock=stock-/);
+});
+
+test("conversion links both records and snapshots prepaid product and courier balance",async()=>{
+  const source=await readFile(new URL("../api/_data/preorders.ts",import.meta.url),"utf8");
+  const conversion=source.slice(source.indexOf("export async function convertPreorderToOrder"));
+  assert.match(conversion,/source_preorder_request_id,amount_paid,amount_to_collect/);
+  assert.match(conversion,/\$25,\$18,\$19/);
+  assert.match(conversion,/payment_method,payment_status.*\$17,'paid'/s);
+  assert.match(conversion,/UPDATE preorders SET status='converted',converted_order_id=\$2/);
+  assert.doesNotMatch(conversion,/UPDATE variants SET stock=stock-/);
+});
+
+test("linked preorder order IDs are unique and receipts remain relationship-backed",async()=>{
+  const migration=await readFile(new URL("../database/migrations/024_preorder_order_linking.sql",import.meta.url),"utf8");
+  const orders=await readFile(new URL("../api/_data/orders-legacy.ts",import.meta.url),"utf8");
+  assert.match(migration,/UNIQUE INDEX[\s\S]*source_preorder_request_id/);
+  assert.match(migration,/amount_paid = o\.subtotal[\s\S]*amount_to_collect = o\.delivery_fee/);
+  assert.match(migration,/UPDATE preorders[\s\S]*payment_receipt_public_id = o\.payment_receipt_public_id/);
+  assert.match(migration,/UPDATE orders[\s\S]*payment_receipt_public_id = ''/);
+  assert.match(orders,/LEFT JOIN preorders p ON p\.request_id=o\.source_preorder_request_id/);
+  assert.match(orders,/COALESCE\(NULLIF\(o\.payment_receipt_public_id,''\),p\.payment_receipt_public_id\)/);
 });
 
 test("release returns reserved quantity to stock exactly once",async()=>{

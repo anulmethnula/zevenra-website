@@ -283,6 +283,12 @@ export type Order = {
   paymentReceiptUrl?: string;
   source?: string;
   hasPreorder?: boolean;
+  sourcePreorderRequestId?: string;
+  sourcePreorderCreatedAt?: string;
+  sourcePreorderNotifiedAt?: string;
+  sourcePreorderConfirmedPrice?: number;
+  amountPaid?: number;
+  amountToCollect?: number;
   subtotal: number;
   discountCode?: string;
   discountAmount?: number;
@@ -421,6 +427,7 @@ export type PreorderRequest = {
   reservationExpiresAt?: string;
   releasedAt?: string;
   convertedOrderId?: string;
+  convertedOrderStatus?: string;
   notes?: string;
   updatedAt: string;
 };

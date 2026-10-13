@@ -11,7 +11,7 @@ import {
 } from "../../shared/preorder-lifecycle.js";
 import { assertPaymentMethodAvailable, deliverySnapshot } from "./orders.js";
 
-const orderWithItems = `SELECT o.*,COALESCE((SELECT jsonb_agg(to_jsonb(oi) ORDER BY oi.id) FROM order_items oi WHERE oi.order_id=o.order_id),'[]') AS items FROM orders o`;
+const orderWithItems = `SELECT o.*,COALESCE(NULLIF(o.payment_receipt_public_id,''),pr.payment_receipt_public_id) AS linked_payment_receipt_public_id,pr.created_at AS source_preorder_created_at,pr.notified_at AS source_preorder_notified_at,pr.confirmed_price AS source_preorder_confirmed_price,COALESCE((SELECT jsonb_agg(to_jsonb(oi) ORDER BY oi.id) FROM order_items oi WHERE oi.order_id=o.order_id),'[]') AS items FROM orders o LEFT JOIN preorders pr ON pr.request_id=o.source_preorder_request_id`;
 const newId = (prefix: string) =>
   `${prefix}-${new Date().toISOString().slice(2, 10).replaceAll("-", "")}-${randomBytes(3).toString("hex").toUpperCase()}`;
 export const hashPreorderClaimToken=(token:string)=>createHash("sha256").update(token).digest("hex");
@@ -156,15 +156,15 @@ export async function createPreorder(input: Record<string, unknown>) {
 
 export async function listPreorders(status?: string) {
   const values = status ? [status] : [],
-    where = status ? " WHERE status=$1" : "";
+    where = status ? " WHERE p.status=$1" : "";
   return (
     await query<Record<string, unknown>>(
-      `SELECT request_id,created_at,updated_at,customer_id,customer_name,phone,whatsapp,email,
-              address1,address2,city,district,postal_code,product_id,variant_id,product_name,
-              sku,color,size,quantity,requested_price,confirmed_price,status,batch_id,notes,
-              notified_at,reservation_expires_at,released_at,converted_order_id
-         FROM preorders${where}
-        ORDER BY created_at DESC
+      `SELECT p.request_id,p.created_at,p.updated_at,p.customer_id,p.customer_name,p.phone,p.whatsapp,p.email,
+              p.address1,p.address2,p.city,p.district,p.postal_code,p.product_id,p.variant_id,p.product_name,
+              p.sku,p.color,p.size,p.quantity,p.requested_price,p.confirmed_price,p.status,p.batch_id,p.notes,
+              p.notified_at,p.reservation_expires_at,p.released_at,p.converted_order_id,o.order_status AS converted_order_status
+         FROM preorders p LEFT JOIN orders o ON o.order_id=p.converted_order_id${where}
+        ORDER BY p.created_at DESC
         LIMIT 100`,
       values,
     )
@@ -280,7 +280,7 @@ export async function convertPreorderToOrder(input: Record<string, unknown>) {
       fee = delivery.fee,
       orderId = newId("ZEV");
     await client.query(
-      `INSERT INTO orders(order_id,customer_id,customer_name,phone,whatsapp,email,address1,address2,city,district,postal_code,courier_provider_id,courier_name,delivery_pricing_mode,delivery_rate_plan,delivery_zone_name,payment_method,payment_status,subtotal,delivery_fee,total,total_product_weight_grams,total_shipping_weight_grams,minimum_delivery_days,maximum_delivery_days,stock_state,order_status,source,has_preorder,fulfillment_method,delivery_method_name,delivery_area_group_id,delivery_area_group_name,pickup_location_id,pickup_branch_name,pickup_branch_address,pickup_instructions) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,'not_applicable','pending','preorder',true,$26,$27,$28,$29,$30,$31,$32,$33)`,
+      `INSERT INTO orders(order_id,customer_id,customer_name,phone,whatsapp,email,address1,address2,city,district,postal_code,courier_provider_id,courier_name,delivery_pricing_mode,delivery_rate_plan,delivery_zone_name,payment_method,payment_status,subtotal,delivery_fee,total,total_product_weight_grams,total_shipping_weight_grams,minimum_delivery_days,maximum_delivery_days,stock_state,order_status,source,has_preorder,source_preorder_request_id,amount_paid,amount_to_collect,fulfillment_method,delivery_method_name,delivery_area_group_id,delivery_area_group_name,pickup_location_id,pickup_branch_name,pickup_branch_address,pickup_instructions) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,'paid',$18,$19,$20,$21,$22,$23,$24,'not_applicable','pending','preorder',true,$25,$18,$19,$26,$27,$28,$29,$30,$31,$32,$33)`,
       [
         orderId,
         preorder.customer_id,
@@ -299,7 +299,6 @@ export async function convertPreorderToOrder(input: Record<string, unknown>) {
         delivery.ratePlan,
         delivery.zoneName,
         paymentMethod,
-        paymentMethod === "bank" ? "verification required" : "COD",
         subtotal,
         fee,
         subtotal + fee,
@@ -307,6 +306,7 @@ export async function convertPreorderToOrder(input: Record<string, unknown>) {
         null,
         delivery.minimumDeliveryDays,
         delivery.maximumDeliveryDays,
+        preorder.request_id,
         delivery.method,
         delivery.methodName,
         delivery.areaGroupId||null,
@@ -335,11 +335,11 @@ export async function convertPreorderToOrder(input: Record<string, unknown>) {
     );
     await client.query(
       "UPDATE preorders SET status='converted',converted_order_id=$2,claim_token_hash=NULL,reservation_expires_at=NULL,notes=concat_ws(' | ',nullif(notes,''),$3::text),updated_at=now() WHERE request_id=$1",
-      [input.requestId, orderId, `Converted to ${orderId}`],
+      [preorder.request_id, orderId, `Converted to ${orderId}`],
     );
     await client.query(
       "INSERT INTO audit_logs(actor,action,entity_type,entity_id,details) VALUES('owner','convert','preorder',$1,$2::jsonb)",
-      [input.requestId, JSON.stringify({ orderId })],
+      [preorder.request_id, JSON.stringify({ orderId, amountPaid: subtotal, amountToCollect: fee })],
     );
     return mapOrder(
       (

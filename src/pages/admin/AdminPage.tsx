@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import {
   ChevronLeft,
   ChevronRight,
@@ -2190,7 +2190,7 @@ function Preorders() {
   const store = useStore(),
     location = useLocation(),
     initialParams = new URLSearchParams(location.search),
-    [query, setQuery] = useState(""),
+    [query, setQuery] = useState(()=>initialParams.get("search")||""),
     [filter, setFilter] = useState(()=>initialParams.get("status")||"active"),
     [page, setPage] = useState(1),
     [open, setOpen] = useState(""),
@@ -2676,7 +2676,7 @@ function Preorders() {
                   <section className="preorder-next-box">
                     <small>What to do next</small>
                     <h3>{guidance[item.status]}</h3>
-                    {item.status==="converted"&&item.convertedOrderId&&<Link className="btn justify-center" to={`/admin/orders/${encodeURIComponent(item.convertedOrderId)}`}>View {item.convertedOrderId}</Link>}
+                    {item.status==="converted"&&item.convertedOrderId&&<Link className="btn justify-center" to={`/admin/orders/${encodeURIComponent(item.convertedOrderId)}`}>Converted to {item.convertedOrderId} · {item.convertedOrderStatus === "shipped" ? "Dispatched" : item.convertedOrderStatus === "pending" ? "Pending dispatch" : item.convertedOrderStatus || "Order"}</Link>}
                     {nextStatus && (
                       <button
                         disabled={
@@ -2953,13 +2953,15 @@ function downloadOrdersCsv(rows: Order[]) {
 function Orders() {
   const { admin, updateOrder, data, loadAdmin } = useStore(),
     location = useLocation(),
+    { id: routeOrderId } = useParams(),
     initialParams = new URLSearchParams(location.search),
-    [query, setQuery] = useState(""),
+    [query, setQuery] = useState(()=>initialParams.get("search")||""),
     [orderFilter, setOrderFilter] = useState(()=>initialParams.get("status")||"all"),
     [paymentFilter, setPaymentFilter] = useState("all"),
+    [sourceFilter, setSourceFilter] = useState("all"),
     [dateFilter, setDateFilter] = useState(()=>initialParams.get("date")||"all"),
     [page, setPage] = useState(1),
-    [open, setOpen] = useState(""),
+    [open, setOpen] = useState(routeOrderId||""),
     [details, setDetails] = useState<Record<string, AdminOrderDetail>>({}),
     [loadingId, setLoadingId] = useState(""),
     [savingId, setSavingId] = useState(""),
@@ -2999,12 +3001,15 @@ function Orders() {
       (orderFilter === "needs_payment" && order.paymentMethod === "bank" && !["paid", "verified"].includes(payment)) ||
       (orderFilter === "ready_to_pack" && ["confirmed", "sourcing"].includes(String(order.orderStatus).toLowerCase())) ||
       (orderFilter === "returns" && Number(order.returnCount) > 0);
+    const matchesSource = sourceFilter === "all" || (sourceFilter === "preorder" ? Boolean(order.sourcePreorderRequestId) : !order.sourcePreorderRequestId);
     const matchesQuery =
       !needle ||
       [
         order.orderId,
+        order.sourcePreorderRequestId,
         order.customerName,
         order.phone,
+        order.whatsapp,
         order.email,
         order.district,
       ].some((value) =>
@@ -3012,12 +3017,13 @@ function Orders() {
           .toLowerCase()
           .includes(needle),
       );
-    return matchesDate && matchesPayment && matchesOrder && matchesQuery;
+    return matchesDate && matchesPayment && matchesOrder && matchesSource && matchesQuery;
   });
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize)),
     safePage = Math.min(page, pageCount),
     visible = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
-  useEffect(() => setPage(1), [query, orderFilter, paymentFilter, dateFilter]);
+  useEffect(() => setPage(1), [query, orderFilter, paymentFilter, sourceFilter, dateFilter]);
+  useEffect(()=>{if(!routeOrderId)return;let active=true;setLoadingId(routeOrderId);void adminApi.get<AdminOrderDetail>("getOrder",{orderId:routeOrderId}).then(detail=>{if(active)setDetails(current=>({...current,[routeOrderId]:detail}));}).catch(reason=>{if(active)setStatus(reason instanceof Error?reason.message:"Could not load order details.");}).finally(()=>{if(active)setLoadingId("");});return()=>{active=false;};},[routeOrderId]);
 
   async function toggle(orderId: string) {
     if (open === orderId) {
@@ -3434,6 +3440,9 @@ function Orders() {
           </button>
         ))}
       </div>
+      <div className="mt-3 flex flex-wrap gap-2" aria-label="Order source filter">
+        {[["All","all"],["Normal Orders","normal"],["Pre-orders","preorder"]].map(([label,value])=><button type="button" key={value} onClick={()=>setSourceFilter(value)} className={`btn ${sourceFilter===value?"btn-dark":""}`}>{label}</button>)}
+      </div>
       <div className="admin-toolbar mt-5 md:grid-cols-[minmax(220px,1fr)_180px_180px_160px_auto]">
         <div className="admin-search">
           <Search size={17} />
@@ -3441,7 +3450,7 @@ function Orders() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             aria-label="Search orders"
-            placeholder="Order ID, customer, phone, email…"
+            placeholder="Order ID, pre-order ID, customer, phone or WhatsApp…"
           />
         </div>
         <select
@@ -3491,7 +3500,7 @@ function Orders() {
           <option value="7">Last 7 days</option>
           <option value="30">Last 30 days</option>
         </select>
-        <button type="button" className="btn" onClick={() => { setQuery(""); setOrderFilter("all"); setPaymentFilter("all"); setDateFilter("all"); }}>Clear filters</button>
+        <button type="button" className="btn" onClick={() => { setQuery(""); setOrderFilter("all"); setPaymentFilter("all"); setSourceFilter("all"); setDateFilter("all"); }}>Clear filters</button>
       </div>
       {status && (
         <p className="mt-4 border-l-2 border-[#96724f] bg-white/40 px-4 py-3 text-xs text-black/60">
@@ -3545,11 +3554,11 @@ function Orders() {
                           minute: "2-digit",
                         })}
                       </p>
-                      {order.hasPreorder && (
+                      {order.sourcePreorderRequestId ? (
                         <span className="border border-[#96724f]/30 bg-[#96724f]/5 px-1.5 py-0.5 text-[8px] font-medium tracking-[.12em] text-[#765638]">
                           PRE-ORDER
                         </span>
-                      )}
+                      ) : <span className="border border-black/10 px-1.5 py-0.5 text-[8px] font-medium tracking-[.12em] text-black/45">NORMAL ORDER</span>}
                     </div>
                   </button>
                   <div className="col-span-2 flex min-h-12 min-w-0 flex-col justify-center border-t border-black/[.06] pt-2 lg:col-span-1 lg:min-h-16 lg:border-0 lg:pt-0">
@@ -3560,15 +3569,13 @@ function Orders() {
                   </div>
                   <span className="col-span-2 flex min-h-10 items-center text-sm font-medium tabular-nums lg:col-span-1 lg:min-h-16 lg:justify-end lg:text-right">{money(Number(order.total))}</span>
                   <div className="col-span-2 flex min-h-10 min-w-0 flex-col justify-center lg:col-span-1 lg:min-h-10 lg:border-l lg:border-black/10 lg:pl-5">
-                    <p className="text-xs font-medium">
-                      {order.paymentMethod === "cod" ? "COD" : "BANK"}
-                    </p>
-                    <p className="mt-1 truncate whitespace-nowrap text-[10px] uppercase tracking-[.08em] text-black/45" title={order.paymentStatus}>
-                      {order.paymentStatus}
+                    <p className="text-xs font-medium">{order.sourcePreorderRequestId ? "Product Paid ✓" : order.paymentMethod === "cod" ? "COD" : "BANK"}</p>
+                    <p className="mt-1 truncate whitespace-nowrap text-[10px] uppercase tracking-[.08em] text-black/45" title={order.sourcePreorderRequestId ? `Amount to collect ${money(Number(order.amountToCollect || 0))}` : order.paymentStatus}>
+                      {order.sourcePreorderRequestId ? `Courier Due ${money(Number(order.amountToCollect || 0))}` : order.paymentStatus}
                     </p>
                   </div>
                   <span className="col-span-2 w-fit rounded-full border border-black/10 bg-white/30 px-3 py-1 text-center text-[10px] uppercase tracking-wider lg:col-span-1 lg:min-w-20 lg:justify-self-center">
-                    {order.orderStatus}
+                    {order.sourcePreorderRequestId && order.orderStatus === "pending" ? "Pending dispatch" : order.sourcePreorderRequestId && order.orderStatus === "shipped" ? "Dispatched" : order.orderStatus}
                   </span>
                   <button
                     type="button"
@@ -3583,7 +3590,7 @@ function Orders() {
                   <button type="button" aria-label="Close order details" onClick={() => setOpen("")} className="fixed inset-0 z-[90] bg-black/45 backdrop-blur-[1px]" />
                   <motion.div initial={{ x: "100%" }} animate={{ x: 0 }} transition={{ type: "tween", duration: .28 }} className="fixed inset-y-0 right-0 z-[100] w-full overflow-y-auto overflow-x-hidden bg-[#f6f3ed] p-5 shadow-[-20px_0_60px_rgba(0,0,0,.18)] sm:w-[760px] sm:p-7 lg:w-[860px]">
                     <div className="mb-6 flex items-start justify-between gap-4 border-b border-black/10 pb-5">
-                      <div className="min-w-0"><p className="eyebrow text-black/45">Order details</p><h2 className="mt-2 break-all text-xl font-medium">{order.orderId}</h2><p className="mt-1 text-xs text-black/45">{new Date(order.createdAt).toLocaleString("en-LK")}</p><div className="mt-3 flex flex-wrap items-center gap-2"><button type="button" className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-black/50" onClick={() => { void navigator.clipboard.writeText(order.orderId); setStatus("Order ID copied."); }}><Copy size={12}/> Copy order ID</button><span className="admin-status">{order.orderStatus}</span><span className="admin-status admin-status--info">{order.paymentStatus}</span></div></div>
+                      <div className="min-w-0"><p className="eyebrow text-black/45">Order details</p><h2 className="mt-2 break-all text-xl font-medium">{order.orderId}</h2><p className="mt-1 text-xs text-black/45">{new Date(order.createdAt).toLocaleString("en-LK")}</p><div className="mt-3 flex flex-wrap items-center gap-2"><button type="button" className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-black/50" onClick={() => { void navigator.clipboard.writeText(order.orderId); setStatus("Order ID copied."); }}><Copy size={12}/> Copy order ID</button><span className="admin-status">{order.sourcePreorderRequestId ? "PRE-ORDER" : "NORMAL ORDER"}</span><span className="admin-status">{order.orderStatus}</span><span className="admin-status admin-status--info">{order.paymentStatus}</span></div></div>
                       <button type="button" onClick={() => setOpen("")} className="btn px-4">Close</button>
                     </div>
                     {loadingId === order.orderId ? (
@@ -3617,13 +3624,7 @@ function Orders() {
                               Customer & delivery
                             </p>
                             <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
-                              <Info
-                                label="Source"
-                                value={(detail.source || "web").replace(
-                                  "_",
-                                  " ",
-                                )}
-                              />
+                              <Info label="Source" value={detail.sourcePreorderRequestId ? "Pre-order" : (detail.source || "web").replace("_", " ")} />
                               <Info label="Name" value={detail.customerName} />
                               <Info label="Phone" value={detail.phone} />
                               <div><p className="text-[10px] uppercase tracking-[.14em] text-black/40">WhatsApp</p>{detail.whatsapp ? <a className="mt-1 inline-flex items-center gap-1 text-sm underline underline-offset-4" href={`https://wa.me/${String(detail.whatsapp).replace(/\D/g, "").replace(/^0/, "94")}`} target="_blank" rel="noreferrer"><MessageCircle size={13}/>{detail.whatsapp}</a> : <p className="mt-1 text-sm">—</p>}</div>
@@ -3675,6 +3676,7 @@ function Orders() {
                               setStatus("Customer and delivery details updated.");
                             }}
                           />
+                          {detail.sourcePreorderRequestId && <Panel title="Linked preorder"><div className="space-y-3 text-sm"><Link className="font-medium underline underline-offset-4" to={`/admin/preorders?search=${encodeURIComponent(detail.sourcePreorderRequestId)}`}>Original pre-order: {detail.sourcePreorderRequestId}</Link><Info label="Pre-order created" value={detail.sourcePreorderCreatedAt ? new Date(detail.sourcePreorderCreatedAt).toLocaleString("en-LK") : "—"}/><Info label="Customer notified" value={detail.sourcePreorderNotifiedAt ? new Date(detail.sourcePreorderNotifiedAt).toLocaleString("en-LK") : "—"}/><Info label="Estimated delivery" value={detail.minimumDeliveryDays != null && detail.maximumDeliveryDays != null ? `${detail.minimumDeliveryDays}–${detail.maximumDeliveryDays} working days` : "—"}/></div></Panel>}
                         </div>
                         <div className="space-y-5">
                           <Panel title="Order control">
@@ -3703,7 +3705,12 @@ function Orders() {
                                 {[
                                   String(detail.orderStatus).toLowerCase(),
                                   ...(
-                                    {
+                                    detail.sourcePreorderRequestId ? {
+                                      pending: ["shipped", "cancelled"],
+                                      shipped: ["delivered"],
+                                      delivered: [],
+                                      cancelled: [],
+                                    } : {
                                       pending: ["confirmed", "cancelled"],
                                       confirmed: [
                                         "sourcing",
@@ -3721,7 +3728,7 @@ function Orders() {
                                   ],
                                 ].map((value) => (
                                   <option key={value} value={value}>
-                                    {value}
+                                    {detail.sourcePreorderRequestId && value === "pending" ? "pending dispatch" : detail.sourcePreorderRequestId && value === "shipped" ? "dispatched" : value}
                                   </option>
                                 ))}
                               </select>
@@ -3729,7 +3736,7 @@ function Orders() {
                             <label className="block text-xs">
                               Payment status
                               <select
-                                disabled={savingId === order.orderId}
+                                disabled={savingId === order.orderId || Boolean(detail.sourcePreorderRequestId)}
                                 className="field mt-2"
                                 value={String(detail.paymentStatus || "")}
                                 onChange={(e) =>
@@ -3764,10 +3771,17 @@ function Orders() {
                           </Panel>
                           <Panel title="Payment">
                             <div className="space-y-3 text-sm">
+                              {detail.sourcePreorderRequestId ? <>
+                                <Info label="Product total" value={money(Number(detail.subtotal))}/>
+                                <Info label="Product payment" value="PAID ✓"/>
+                                <Info label="Amount already paid" value={money(Number(detail.amountPaid ?? detail.subtotal))}/>
+                              </> : null}
                               <Info
                                 label="Method"
                                 value={
-                                  detail.paymentMethod === "cod"
+                                  detail.sourcePreorderRequestId
+                                    ? "Product prepaid · courier fee on delivery"
+                                    : detail.paymentMethod === "cod"
                                     ? "Cash on delivery"
                                     : "Bank transfer"
                                 }
@@ -3782,15 +3796,22 @@ function Orders() {
                                 label="Payment status"
                                 value={detail.paymentStatus}
                               />
-                              {detail.paymentMethod === "bank" && (
+                              {detail.paymentReceiptUrl && (
                                 <ProtectedReceipt
                                   url={detail.paymentReceiptUrl}
                                 />
                               )}{" "}
                             </div>
                           </Panel>
-                          <Panel title="Totals">
+                          <Panel title={detail.sourcePreorderRequestId ? "Delivery" : "Totals"}>
                             <div className="space-y-2 text-sm">
+                              {detail.sourcePreorderRequestId ? <>
+                                <div className="flex justify-between"><span>Courier fee</span><span>{money(Number(detail.deliveryFee))}</span></div>
+                                <div className="flex justify-between border-y border-black/10 py-3 text-base"><b>AMOUNT TO COLLECT</b><b>{money(Number(detail.amountToCollect ?? detail.deliveryFee))}</b></div>
+                                <div className="flex justify-between"><span>Grand total</span><b>{money(Number(detail.total))}</b></div>
+                                <Info label="Collection" value={detail.fulfillmentMethod === "pickup" ? "No courier collection" : "Courier on delivery"}/>
+                                {detail.fulfillmentMethod !== "pickup" && <p className="border-l-2 border-[#96724f] pl-3 text-xs font-medium">Collect {money(Number(detail.amountToCollect ?? detail.deliveryFee))} on delivery.</p>}
+                              </> : <>
                               <div className="flex justify-between">
                                 <span>Subtotal</span>
                                 <span>{money(Number(detail.subtotal))}</span>
@@ -3808,8 +3829,10 @@ function Orders() {
                                 <b>Total</b>
                                 <b>{money(Number(detail.total))}</b>
                               </div>
+                              </>}
                             </div>
                           </Panel>
+                          {detail.sourcePreorderRequestId && <Panel title="Status / timeline"><ol className="space-y-2 text-xs"><li><b>Created</b> · {new Date(detail.createdAt).toLocaleString("en-LK")}</li><li><b>Product payment verified</b> · before conversion</li><li><b>Pre-order converted</b> · {new Date(detail.createdAt).toLocaleString("en-LK")}</li><li className={detail.orderStatus === "shipped" || detail.orderStatus === "delivered" ? "" : "text-black/35"}><b>Dispatched</b>{detail.courierSentDate ? ` · ${new Date(detail.courierSentDate).toLocaleString("en-LK")}` : ""}</li><li className={detail.orderStatus === "delivered" ? "" : "text-black/35"}><b>Delivered</b></li></ol></Panel>}
                           <FulfilmentPanel
                             order={detail}
                             couriers={admin.couriers}

@@ -47,7 +47,7 @@ type Line = {
   isPreorder: boolean;
 };
 
-const orderWithItems = `SELECT o.*,COALESCE((SELECT jsonb_agg(to_jsonb(oi) ORDER BY oi.id) FROM order_items oi WHERE oi.order_id=o.order_id),'[]') AS items,(SELECT count(*)::int FROM order_returns r WHERE r.order_id=o.order_id) AS return_count FROM orders o`;
+const orderWithItems = `SELECT o.*,COALESCE(NULLIF(o.payment_receipt_public_id,''),pr.payment_receipt_public_id) AS linked_payment_receipt_public_id,pr.created_at AS source_preorder_created_at,pr.notified_at AS source_preorder_notified_at,pr.confirmed_price AS source_preorder_confirmed_price,COALESCE((SELECT jsonb_agg(to_jsonb(oi) ORDER BY oi.id) FROM order_items oi WHERE oi.order_id=o.order_id),'[]') AS items,(SELECT count(*)::int FROM order_returns r WHERE r.order_id=o.order_id) AS return_count FROM orders o LEFT JOIN preorders pr ON pr.request_id=o.source_preorder_request_id`;
 const normalize = (value: string) =>
   value
     .trim()
@@ -380,7 +380,13 @@ export async function updateOrder(input: Record<string, unknown>) {
     if (!current) throw new Error("Order not found");
     const currentStatus = String(current.order_status),
       nextStatus = String(input.orderStatus ?? currentStatus).toLowerCase(),
-      transitions: Record<string, string[]> = {
+      preorderOrder = Boolean(current.source_preorder_request_id),
+      transitions: Record<string, string[]> = preorderOrder ? {
+        pending: ["shipped", "cancelled"],
+        shipped: ["delivered"],
+        delivered: [],
+        cancelled: [],
+      } : {
         pending: ["confirmed", "cancelled"],
         confirmed: ["sourcing", "packed", "cancelled"],
         sourcing: ["packed", "cancelled"],
@@ -441,7 +447,7 @@ export async function updateOrder(input: Record<string, unknown>) {
         trackingUrl: "tracking_url",
         courierSentDate: "courier_sent_date",
       } as const;
-    const automaticCodPaid = current.payment_method === "cod" && nextStatus === "delivered",
+    const automaticCodPaid = !preorderOrder && current.payment_method === "cod" && nextStatus === "delivered",
       paymentStatus = automaticCodPaid ? "paid" : nextPayment;
     const updates = ["order_status=$2", "stock_state=$3", "payment_status=$4", "updated_at=now()"],
       values: unknown[] = [orderId, nextStatus, stockState, paymentStatus];
@@ -543,7 +549,11 @@ export async function receiptForOrder(orderId: string) {
         payment_receipt_resource_type: string;
         payment_receipt_format: string;
       }>(
-        "SELECT payment_receipt_public_id,payment_receipt_resource_type,payment_receipt_format FROM orders WHERE order_id=$1",
+        `SELECT COALESCE(NULLIF(o.payment_receipt_public_id,''),p.payment_receipt_public_id) AS payment_receipt_public_id,
+                COALESCE(NULLIF(o.payment_receipt_resource_type,''),p.payment_receipt_resource_type) AS payment_receipt_resource_type,
+                COALESCE(NULLIF(o.payment_receipt_format,''),p.payment_receipt_format) AS payment_receipt_format
+           FROM orders o LEFT JOIN preorders p ON p.request_id=o.source_preorder_request_id
+          WHERE o.order_id=$1`,
         [orderId],
       )
     ).rows[0] || null

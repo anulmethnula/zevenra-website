@@ -198,9 +198,15 @@ export function mapOrder(row: Record<string, unknown>) {
     paymentMethod: text(row.payment_method),
     paymentStatus: text(row.payment_status),
     paymentReference: text(row.payment_reference),
-    paymentReceiptUrl: text(row.payment_receipt_public_id)
+    paymentReceiptUrl: text(row.linked_payment_receipt_public_id || row.payment_receipt_public_id)
       ? `order:${text(row.order_id)}`
       : "",
+    sourcePreorderRequestId: text(row.source_preorder_request_id),
+    sourcePreorderCreatedAt: date(row.source_preorder_created_at),
+    sourcePreorderNotifiedAt: date(row.source_preorder_notified_at),
+    sourcePreorderConfirmedPrice: row.source_preorder_confirmed_price == null ? undefined : number(row.source_preorder_confirmed_price),
+    amountPaid: row.amount_paid == null ? undefined : number(row.amount_paid),
+    amountToCollect: row.amount_to_collect == null ? undefined : number(row.amount_to_collect),
     subtotal: number(row.subtotal),
     discountCode: text(row.discount_code),
     discountAmount: number(row.discount_amount),
@@ -270,6 +276,7 @@ export function mapPreorder(row: Record<string, unknown>) {
     reservationExpiresAt: text(row.reservation_expires_at),
     releasedAt: text(row.released_at),
     convertedOrderId: text(row.converted_order_id),
+    convertedOrderStatus: text(row.converted_order_status),
     notes: text(row.notes),
   };
 }
