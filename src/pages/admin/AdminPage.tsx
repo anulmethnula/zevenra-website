@@ -2270,9 +2270,9 @@ function Preorders() {
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     ),
     needle = query.trim().toLowerCase(),
-    confirmedCount = all.filter((x) => x.status === "confirmed").length,
-    newCount = all.filter((x) => x.status === "new").length,
-    contacted = all.filter((x) => x.status === "contacted").length,
+    awaitingPaymentCount = all.filter((x) => x.status === "awaiting_payment").length,
+    paymentSubmittedCount = all.filter((x) => x.status === "payment_submitted").length,
+    inTransitCount = all.filter((x) => x.status === "in_transit").length,
     readyCount = all.filter((x) => x.status === "ready").length;
   const filtered = all.filter((item) => {
       const active = !["converted", "cancelled", "expired"].includes(item.status),
@@ -2472,18 +2472,10 @@ function Preorders() {
       </div>
       <div className="mt-6 grid grid-cols-2 gap-3 xl:grid-cols-4">
         {[
-          ["New requests", newCount, "Contact these customers first"],
-          [
-            "Waiting confirmation",
-            contacted,
-            "Receipt and payment verification",
-          ],
-          [
-            "Confirmed requests",
-            confirmedCount,
-            "Ready to mark ordered",
-          ],
-          ["Ready to convert", readyCount, "Turn arrived pieces into orders"],
+          ["Awaiting payment", awaitingPaymentCount, "Waiting for bank payment"],
+          ["Payment submitted", paymentSubmittedCount, "Receipts ready to verify"],
+          ["In transit", inTransitCount, "Pre-orders currently on the way"],
+          ["Ready for delivery", readyCount, "Create linked delivery orders"],
         ].map(([label, value, help]) => (
           <div key={String(label)} className="admin-stat-card">
             <p>{label}</p>
