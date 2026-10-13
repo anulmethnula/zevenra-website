@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { addProductSearchConditions, normalizeSearchTokens } from "../api/_data/product-search.ts";
-import { productsCacheControl } from "../api/_products-cache.ts";
+import { addProductSearchConditions, normalizeSearchTokens } from "../server/api-implementation/_data/product-search.ts";
+import { productsCacheControl } from "../server/api-implementation/_products-cache.ts";
 
 test("normalizes exact, partial, case-insensitive and repeated-space searches", () => {
   assert.deepEqual(normalizeSearchTokens("The Classic Fit"), ["the", "classic", "fit"]);

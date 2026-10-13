@@ -434,6 +434,8 @@ function Footer() {
             <Link to="/returns">Returns &amp; Exchanges</Link>
             <Link to="/contact">Contact</Link>
             <Link to="/track-order">Track Order</Link>
+            <Link className="footer-mobile-only" to="/account">Account</Link>
+            <Link className="footer-mobile-only" to="/shop?focusSearch=1">Search</Link>
           </div>
           {(instagram || tiktok || whatsapp) && (
             <div className="footer-column footer-follow">

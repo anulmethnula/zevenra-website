@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { VercelRequest } from "@vercel/node";
-import { adminCookie, hashAdminPassword, makeSession, validSession, verifyAdminPassword } from "../api/_shared.ts";
-import { changeAdminPassword,generateAdminRecoveryCode,getAdminAuth,loginAdmin,recoverAdminPassword,validAdminPassword,validAdminSession } from "../api/_admin-auth.ts";
+import { adminCookie, hashAdminPassword, makeSession, validSession, verifyAdminPassword } from "../server/api-implementation/_shared.ts";
+import { changeAdminPassword,generateAdminRecoveryCode,getAdminAuth,loginAdmin,recoverAdminPassword,validAdminPassword,validAdminSession } from "../server/api-implementation/_admin-auth.ts";
 
 type Row={id:string;username:string;password_hash:string;recovery_code_hash:string|null;session_version:number};
 class AuthDb{

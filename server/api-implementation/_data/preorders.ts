@@ -8,7 +8,7 @@ import {
   preorderDeliveryAddressReady,
   preorderActiveStatuses,
   resolvePreorderConfirmedPrice,
-} from "../../shared/preorder-lifecycle.js";
+} from "../../../shared/preorder-lifecycle.js";
 import { assertPaymentMethodAvailable, deliverySnapshot } from "./orders.js";
 import { verifyReceiptAsset } from "../_receipt-asset.js";
 import { cloudinaryEnv } from "../_shared.js";

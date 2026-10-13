@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { createOrderTrackHandler } from "../api/order-track.js";
-import { normalizeOrderIdForLookup, normalizeSriLankanPhoneForLookup } from "../api/_order-track-normalization.js";
+import { createOrderTrackHandler } from "../server/api-implementation/order-track.js";
+import { normalizeOrderIdForLookup, normalizeSriLankanPhoneForLookup } from "../server/api-implementation/_order-track-normalization.js";
 import { getRecentGuestOrders, orderIdFromSearch, rememberGuestOrder } from "../src/utils/guestOrders.js";
 import { createOrderPdf } from "../src/utils/orderPdf.js";
 import { safeHttpsUrl } from "../src/utils/orderTracking.js";

@@ -10,5 +10,5 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["api/**/*.ts", "shared/**/*.ts"]
+  "include": ["api/**/*.ts", "server/**/*.ts", "shared/**/*.ts"]
 }

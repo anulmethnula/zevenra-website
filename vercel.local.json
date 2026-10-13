@@ -1,10 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
-    { "source": "/robots.txt", "destination": "/api/robots" },
-    { "source": "/sitemap.xml", "destination": "/api/sitemap" },
+    { "source": "/robots.txt", "destination": "/api/public?route=robots" },
+    { "source": "/sitemap.xml", "destination": "/api/public?route=sitemap" },
+    { "source": "/api/:route(cart-products|catalog|checkout-config|delivery-quote|discount-validate|home|order-track|orders|payment-receipt-access|payment-receipt-sign|preorders|product|products|recommendations|robots|sitemap|size-chart|store)", "destination": "/api/public?route=:route" },
     { "source": "/api/admin/:action", "destination": "/api/admin/[action]" },
-    { "source": "/api/products/:slug", "destination": "/api/products/[slug]" },
+    { "source": "/api/products/:slug", "destination": "/api/public?route=product-by-slug&slug=:slug" },
     { "source": "/product/:slug", "destination": "/api/product-page?slug=:slug" }
   ]
 }

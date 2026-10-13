@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { calculateDiscount, discountAdminSchema, discountCode, discountDeleteSchema } from "../api/_data/discounts.ts";
+import { calculateDiscount, discountAdminSchema, discountCode, discountDeleteSchema } from "../server/api-implementation/_data/discounts.ts";
 import { checkoutAmounts } from "../src/utils/checkoutAmounts.ts";
-import { orderSchema } from "../api/_shared.ts";
+import { orderSchema } from "../server/api-implementation/_shared.ts";
 
 const now=new Date("2026-10-08T10:00:00Z"),base={code:"welcome10",type:"percentage",value:10,minimum_subtotal:0,maximum_discount:null,active:true,starts_at:null,expires_at:null,usage_limit:null,usage_count:0};
 test("percentage discounts are calculated from server subtotal",()=>assert.deepEqual(calculateDiscount(base,1650,now),{code:"WELCOME10",type:"percentage",value:10,amount:165}));

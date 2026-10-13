@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { duplicateCourierRateKeys, normalizeCourierRateImportRows, parseCourierRateFile, suggestedCourierRateField } from "../api/_data/courier-rate-parser.ts";
+import { duplicateCourierRateKeys, normalizeCourierRateImportRows, parseCourierRateFile, suggestedCourierRateField } from "../server/api-implementation/_data/courier-rate-parser.ts";
 import { initialCourierSelection } from "../src/services/deliverySettings.ts";
 
 function crc32(buffer: Buffer) {

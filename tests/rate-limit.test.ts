@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { durableRateLimit,requestClientKey,type RateLimitQuery } from "../api/_rate-limit.ts";
+import { durableRateLimit,requestClientKey,type RateLimitQuery } from "../server/api-implementation/_rate-limit.ts";
 
 const request=(ip="203.0.113.10")=>({headers:{"x-forwarded-for":ip},socket:{remoteAddress:"127.0.0.1"}} as never);
 test("client keys use the first platform forwarded address",()=>assert.equal(requestClientKey(request("203.0.113.10, 10.0.0.1")),"203.0.113.10"));

@@ -910,3 +910,6 @@ textarea.field{padding-block:1rem}
 .preorder-admin-drawer .preorder-admin-grid>section{padding:17px 18px;border:0;border-bottom:1px solid var(--admin-border);background:transparent}.preorder-admin-drawer .preorder-admin-grid>section:last-child{border-bottom:0}
 .preorder-admin-drawer .preorder-product-box{grid-template-columns:68px minmax(0,1fr)}.preorder-admin-drawer .preorder-product-box img,.preorder-admin-drawer .preorder-product-placeholder{width:68px}
 @media(max-width:640px){.preorder-admin-card__top{align-items:stretch}.preorder-admin-card__top>div:last-child{display:grid;grid-template-columns:1fr 1fr}.preorder-admin-card__top>div:last-child .btn-dark{grid-column:1/-1;grid-row:1}}
+/* Mobile-only footer utilities keep the desktop footer unchanged. */
+.footer-mobile-only{display:none!important}
+@media(max-width:699px){.footer-mobile-only{display:flex!important}}

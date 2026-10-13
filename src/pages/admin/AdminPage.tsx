@@ -2270,7 +2270,7 @@ function Preorders() {
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     ),
     needle = query.trim().toLowerCase(),
-    confirmedCount = all.filter((x) => x.status === "confirmed").length,
+    awaitingPaymentCount = all.filter((x) => x.status === "awaiting_payment").length,
     paymentSubmittedCount = all.filter((x) => x.status === "payment_submitted").length,
     inTransitCount = all.filter((x) => x.status === "in_transit").length,
     readyCount = all.filter((x) => x.status === "ready").length;
@@ -2472,8 +2472,8 @@ function Preorders() {
       </div>
       <div className="mt-6 grid grid-cols-2 gap-3 xl:grid-cols-4">
         {[
+          ["Awaiting payment", awaitingPaymentCount, "Waiting for receipt submission"],
           ["Payment submitted", paymentSubmittedCount, "Receipts ready to verify"],
-          ["Confirmed", confirmedCount, "Paid pre-orders confirmed"],
           ["In transit", inTransitCount, "Pre-orders currently on the way"],
           ["Ready for delivery", readyCount, "Create linked delivery orders"],
         ].map(([label, value, help]) => (
@@ -2571,21 +2571,9 @@ function Preorders() {
                         >
                           {labels[item.status]}
                         </span>
-                        {item.batchId && (
-                          <span className="preorder-batch">{item.batchId}</span>
-                        )}
                       </div>
                       <p className="truncate text-sm font-medium text-black/75">{item.productName} · {item.size} · Qty {item.quantity}</p>
                       <p className="truncate text-xs text-black/50">{item.customerName} · {money(item.requestedPrice*item.quantity)} · Payment {paymentState}</p>
-                      <p>
-                        {new Date(item.createdAt).toLocaleString("en-LK", {
-                          year: "numeric",
-                          month: "short",
-                          day: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2"><a href={wa} target="_blank" rel="noreferrer" className="btn" aria-label={`WhatsApp ${item.customerName}`}><MessageCircle size={14} /> WhatsApp</a>{nextStatus&&<button type="button" disabled={busy===item.requestId||(nextStatus==="paid"&&!item.paymentReceiptUrl)} onClick={()=>void change(item,nextStatus)} className="btn btn-dark">{nextText[item.status]}</button>}<button type="button" className="btn" onClick={()=>setOpen(item.requestId)}>View</button></div>
@@ -2599,6 +2587,7 @@ function Preorders() {
                 <section className="preorder-drawer-section preorder-drawer-overview">
                   <div><small>Overview</small><h3>{item.requestId}</h3></div>
                   <div><span>Status</span><b>{labels[item.status]}</b></div>
+                  <div><span>Created</span><b>{new Date(item.createdAt).toLocaleString("en-LK", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</b></div>
                   <div><span>Estimated arrival</span><b>3–4 weeks</b></div>
                 </section>
                 <div className="preorder-admin-grid">
@@ -2616,6 +2605,7 @@ function Preorders() {
                       <p>
                         {item.color} / {item.size} · Qty {item.quantity}
                       </p>
+                      <p>Locked product price: <b>{money(Number(item.requestedPrice))}</b></p>
                       <p>
                         Product total:{" "}
                         <b>{money(Number(item.requestedPrice) * item.quantity)}</b>

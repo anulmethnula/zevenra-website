@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {buildPublicCheckoutConfig} from "../api/_data/public-checkout.ts";
+import {buildPublicCheckoutConfig} from "../server/api-implementation/_data/public-checkout.ts";
 import { paymentMethodAvailable } from "../shared/payment-availability.ts";
 const base=[{key:"codEnabled",value:true},{key:"deliveryEnabled",value:true},{key:"deliveryFlatFee",value:450},{key:"freeDeliveryThreshold",value:5000},{key:"defaultCourierProviderId",value:"courier-1"},{key:"currency",value:"LKR"},{key:"storeOpen",value:true},{key:"ordersEnabled",value:true},{key:"bankName",value:"Private Bank"},{key:"bankAccountName",value:"ZEVENRA"},{key:"bankAccountNumber",value:"123456"},{key:"bankBranch",value:"Colombo"},{key:"bankInstructions",value:"Reference order"}],couriers=[{id:"courier-1",name:"Internal Courier",phone:"private",notes:"internal",pricingMode:"zone",flatRate:0,active:true}],rates=[{id:"zone-1",name:"Colombo Central",courierProviderId:"courier-1",fee:450,active:true,districts:["Colombo"],cities:[],postalCodes:[],fallback:true,sortOrder:1}];
 const settings=(result:ReturnType<typeof buildPublicCheckoutConfig>)=>Object.fromEntries(result.settings.map(row=>[row.key,row.value]));

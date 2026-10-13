@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { query, withTransaction, type DatabaseClient } from "../_db.js";
-import { normalizeLocation } from "../../shared/delivery-match.js";
-import { resolveAreaGroup, type AreaGroup, type AreaLocation, type DistrictDefault } from "../../shared/fulfillment.js";
+import { normalizeLocation } from "../../../shared/delivery-match.js";
+import { resolveAreaGroup, type AreaGroup, type AreaLocation, type DistrictDefault } from "../../../shared/fulfillment.js";
 
 const text=(v:unknown)=>String(v??"");
 const money=(v:unknown)=>v==null?null:Number(v);
@@ -35,13 +35,13 @@ export function validateFulfillmentConfig(input:Record<string,unknown>,ordersEna
 }
 
 async function load(client:{query:DatabaseClient["query"]}|null=null){
-  const run=client?.query.bind(client)??query;
+  const run=(sql:string)=>client?client.query<Record<string,unknown>>(sql):query<Record<string,unknown>>(sql);
   const [methods,groups,locations,defaults,pickups]=await Promise.all([
-    run<Record<string,unknown>>("SELECT * FROM delivery_methods ORDER BY sort_order,type"),
-    run<Record<string,unknown>>("SELECT * FROM delivery_area_groups ORDER BY sort_order,id"),
-    run<Record<string,unknown>>("SELECT * FROM delivery_area_locations ORDER BY district,town,postcode NULLS LAST"),
-    run<Record<string,unknown>>("SELECT * FROM delivery_district_defaults ORDER BY district"),
-    run<Record<string,unknown>>("SELECT * FROM pickup_locations ORDER BY sort_order,name"),
+    run("SELECT * FROM delivery_methods ORDER BY sort_order,type"),
+    run("SELECT * FROM delivery_area_groups ORDER BY sort_order,id"),
+    run("SELECT * FROM delivery_area_locations ORDER BY district,town,postcode NULLS LAST"),
+    run("SELECT * FROM delivery_district_defaults ORDER BY district"),
+    run("SELECT * FROM pickup_locations ORDER BY sort_order,name"),
   ]);
   return {methods:methods.rows.map(method),groups:groups.rows.map(group),locations:locations.rows.map(location),districtDefaults:defaults.rows.map(r=>({district:text(r.district),groupId:text(r.group_id)})),pickupLocations:pickups.rows.map(pickup)};
 }

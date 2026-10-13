@@ -1,6 +1,6 @@
 import readXlsxFile from "read-excel-file/node";
 import { parse as parseCsv } from "csv-parse/sync";
-import { normalizeLocation } from "../../shared/delivery-match.js";
+import { normalizeLocation } from "../../../shared/delivery-match.js";
 
 const MAX_FILE_BYTES = 3 * 1024 * 1024;
 const MAX_ROWS = 50_000;

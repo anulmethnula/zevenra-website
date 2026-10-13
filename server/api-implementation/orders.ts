@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { createOrder } from "./_data/orders.js";
+import { createOrder, type OrderInput } from "./_data/orders.js";
 import { durableRateLimit } from "./_rate-limit.js";
 import {
   body,
@@ -37,7 +37,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ...payload,
         customerId: identity?.id,
         email: identity?.email || payload.email,
-      });
+      } as OrderInput);
     return json(res, order, 201);
   } catch (error) {
     const message = error instanceof Error ? error.message : "";

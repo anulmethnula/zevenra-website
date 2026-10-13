@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { access,readFile } from "node:fs/promises";
 import test from "node:test";
-import { preorderClaimCheckoutSchema,preorderConversionSchema,preorderSchema } from "../api/_shared.ts";
-import {createPreorderClaimToken,hashPreorderClaimToken,releasePreorderToStock} from "../api/_data/preorders.ts";
+import { preorderClaimCheckoutSchema,preorderConversionSchema,preorderSchema } from "../server/api-implementation/_shared.ts";
+import {createPreorderClaimToken,hashPreorderClaimToken,releasePreorderToStock} from "../server/api-implementation/_data/preorders.ts";
 import {
   isPreorderTransitionAllowed,
   normalizePreorderPaymentMethod,
@@ -25,7 +25,7 @@ test("preorder lifecycle accepts only forward/admin-safe transitions", () => {
 });
 
 test("payment-first preorder uses snapshotted price and verified protected receipt",async()=>{
-  const source=await readFile(new URL("../api/_data/preorders.ts",import.meta.url),"utf8");
+  const source=await readFile(new URL("../server/api-implementation/_data/preorders.ts",import.meta.url),"utf8");
   const create=source.slice(source.indexOf("export async function createPreorder"),source.indexOf("export async function listPreorders"));
   const conversion=source.slice(source.indexOf("export async function convertPreorderToOrder"));
   assert.match(create,/verifyReceiptAsset\(String\(input\.paymentReceiptUrl/);
@@ -44,7 +44,7 @@ test("new preorder submission requires a protected payment receipt",()=>{
 });
 
 test("preorder API maps validation failures to safe field messages",async()=>{
-  const source=await readFile(new URL("../api/preorders.ts",import.meta.url),"utf8");
+  const source=await readFile(new URL("../server/api-implementation/preorders.ts",import.meta.url),"utf8");
   assert.match(source,/district:"Choose your district\."/);
   assert.match(source,/postalCode:"Enter a valid 5-digit postal code\."/);
   assert.match(source,/whatsapp:"Enter a valid WhatsApp number\."/);
@@ -53,7 +53,7 @@ test("preorder API maps validation failures to safe field messages",async()=>{
 });
 
 test("paid preorder lifecycle has no automatic release path",async()=>{
-  const source=await readFile(new URL("../api/_data/preorders.ts",import.meta.url),"utf8");
+  const source=await readFile(new URL("../server/api-implementation/_data/preorders.ts",import.meta.url),"utf8");
   const release=source.slice(source.indexOf("export async function releasePreorderToStock"),source.indexOf("export async function getPreorderClaim"));
   assert.match(release,/preorder\.status!=="notified"/);
   assert.doesNotMatch(release,/status='paid'/);
@@ -98,7 +98,7 @@ test("customer preorder completion accepts COD and bank checkout",()=>{
 
 test("admin preorder list is bounded and selects only mapped fields", async () => {
   const source = await readFile(
-    new URL("../api/_data/preorders.ts", import.meta.url),
+    new URL("../server/api-implementation/_data/preorders.ts", import.meta.url),
     "utf8",
   );
   const listQuery = source.slice(
@@ -111,7 +111,7 @@ test("admin preorder list is bounded and selects only mapped fields", async () =
 });
 
 test("preorder requests use configured variants without deducting stock",async()=>{
-  const source=await readFile(new URL("../api/_data/preorders.ts",import.meta.url),"utf8");
+  const source=await readFile(new URL("../server/api-implementation/_data/preorders.ts",import.meta.url),"utf8");
   const create=source.slice(source.indexOf("export async function createPreorder"),source.indexOf("export async function listPreorders"));
   assert.match(create,/JOIN variants v ON v\.product_id=p\.id WHERE p\.id=\$1 AND v\.id=\$2/);
   assert.match(create,/Number\(product\.stock\) > 0/);
@@ -122,8 +122,8 @@ test("preorder requests use configured variants without deducting stock",async()
 
 test("supplier batch creation is no longer exposed",async()=>{
   const [dataSource,actionSource]=await Promise.all([
-    readFile(new URL("../api/_data/preorders.ts",import.meta.url),"utf8"),
-    readFile(new URL("../api/admin/[action].ts",import.meta.url),"utf8"),
+    readFile(new URL("../server/api-implementation/_data/preorders.ts",import.meta.url),"utf8"),
+    readFile(new URL("../server/api-implementation/admin/[action].ts",import.meta.url),"utf8"),
   ]);
   assert.doesNotMatch(dataSource,/createPreorderBatch|SHEIN-|at least 5 pieces/);
   assert.doesNotMatch(actionSource,/createPreorderBatch/);
@@ -138,7 +138,7 @@ test("preorder claim tokens are random and represented by hashes for storage",()
 });
 
 test("claim lookup and checkout enforce one-time notified reservations",async()=>{
-  const source=await readFile(new URL("../api/_data/preorders.ts",import.meta.url),"utf8");
+  const source=await readFile(new URL("../server/api-implementation/_data/preorders.ts",import.meta.url),"utf8");
   assert.match(source,/status='notified'.*released_at IS NULL.*converted_order_id IS NULL.*reservation_expires_at>now\(\)/s);
   assert.match(source,/status IN\('ready','notified'\)/);
   assert.match(source,/claim_token_hash=NULL,reservation_expires_at=NULL/);
@@ -148,7 +148,7 @@ test("claim lookup and checkout enforce one-time notified reservations",async()=
 });
 
 test("conversion links both records and snapshots prepaid product and courier balance",async()=>{
-  const source=await readFile(new URL("../api/_data/preorders.ts",import.meta.url),"utf8");
+  const source=await readFile(new URL("../server/api-implementation/_data/preorders.ts",import.meta.url),"utf8");
   const conversion=source.slice(source.indexOf("export async function convertPreorderToOrder"));
   assert.match(conversion,/source_preorder_request_id,amount_paid,amount_to_collect/);
   assert.match(conversion,/\$25,\$18,\$19/);
@@ -159,7 +159,7 @@ test("conversion links both records and snapshots prepaid product and courier ba
 
 test("linked preorder order IDs are unique and receipts remain relationship-backed",async()=>{
   const migration=await readFile(new URL("../database/migrations/024_preorder_order_linking.sql",import.meta.url),"utf8");
-  const orders=await readFile(new URL("../api/_data/orders-legacy.ts",import.meta.url),"utf8");
+  const orders=await readFile(new URL("../server/api-implementation/_data/orders-legacy.ts",import.meta.url),"utf8");
   assert.match(migration,/UNIQUE INDEX[\s\S]*source_preorder_request_id/);
   assert.match(migration,/amount_paid = o\.subtotal[\s\S]*amount_to_collect = o\.delivery_fee/);
   assert.match(migration,/UPDATE preorders[\s\S]*payment_receipt_public_id = o\.payment_receipt_public_id/);
@@ -169,7 +169,7 @@ test("linked preorder order IDs are unique and receipts remain relationship-back
 });
 
 test("release returns reserved quantity to stock exactly once",async()=>{
-  const source=await readFile(new URL("../api/_data/preorders.ts",import.meta.url),"utf8"),release=source.slice(source.indexOf("export async function releasePreorderToStock"),source.indexOf("export async function getPreorderClaim"));
+  const source=await readFile(new URL("../server/api-implementation/_data/preorders.ts",import.meta.url),"utf8"),release=source.slice(source.indexOf("export async function releasePreorderToStock"),source.indexOf("export async function getPreorderClaim"));
   assert.match(release,/FOR UPDATE/);
   assert.match(release,/preorder\.released_at/);
   assert.match(release,/stock=stock\+\$2/);
@@ -187,7 +187,7 @@ test("release returns reserved quantity to stock exactly once",async()=>{
 });
 
 test("claim lookup and checkout share the existing preorder API entry",async()=>{
-  const source=await readFile(new URL("../api/preorders.ts",import.meta.url),"utf8");
+  const source=await readFile(new URL("../server/api-implementation/preorders.ts",import.meta.url),"utf8");
   assert.match(source,/action==="claim"/);
   assert.match(source,/action==="checkout"/);
   await assert.rejects(()=>access(new URL("../api/preorder-claim.ts",import.meta.url)));

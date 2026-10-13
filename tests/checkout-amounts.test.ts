@@ -4,7 +4,7 @@ import { checkoutAmounts } from "../src/utils/checkoutAmounts.ts";
 import { deliveryAddressReady,hydrateUntouchedDeliveryAddress,paymentReadinessMessage,postalCodeError } from "../src/utils/checkoutValidation.ts";
 import { orderSuccessCopy } from "../src/utils/orderSuccess.ts";
 import { cityDistrictMismatch } from "../src/utils/delivery.ts";
-import { orderSchema } from "../api/_shared.ts";
+import { orderSchema } from "../server/api-implementation/_shared.ts";
 import { checkoutDeliveryQuoteInput } from "../src/utils/checkoutFulfillment.ts";
 
 test("LKR 1600 plus LKR 400 produces LKR 2000",()=>{assert.deepEqual(checkoutAmounts(1600,400,true),{ready:true,subtotal:1600,discountAmount:0,deliveryFee:400,total:2000});});

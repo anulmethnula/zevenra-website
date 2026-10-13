@@ -7,8 +7,8 @@ import { cloudinaryEnv } from "../_shared.js";
 import { mapOrder } from "./mappers.js";
 import { validateDiscount } from "./discounts.js";
 import { resolveFulfillment } from "./fulfillment.js";
-import { paymentMethodAvailable } from "../../shared/payment-availability.js";
-import { enforceOnlineStoreAvailability } from "../../shared/order-source.js";
+import { paymentMethodAvailable } from "../../../shared/payment-availability.js";
+import { enforceOnlineStoreAvailability } from "../../../shared/order-source.js";
 
 export {
   findGuestOrder,
@@ -22,7 +22,7 @@ export {
 } from "./orders-legacy.js";
 export { createReturn, listReturns, updateReturn } from "./returns.js";
 
-type OrderInput = {
+export type OrderInput = {
   customerId?: string;
   customerName: string;
   phone: string;

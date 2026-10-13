@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { classifyCourierRateDuplicates } from "../shared/courier-rate-dedup.ts";
-import { courierRateDestinationKey } from "../api/_data/courier-rate-cards.ts";
+import { courierRateDestinationKey } from "../server/api-implementation/_data/courier-rate-cards.ts";
 
 test("identical duplicate destination rates keep one canonical row", () => {
   const result = classifyCourierRateDuplicates([

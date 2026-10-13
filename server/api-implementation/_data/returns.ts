@@ -3,7 +3,7 @@ import { query, withTransaction } from "../_db.js";
 import {
   returnTransitionAllowed,
   validateReturnRequest,
-} from "../../shared/return-lifecycle.js";
+} from "../../../shared/return-lifecycle.js";
 
 export async function listReturns(orderId?: string) {
   const rows = (

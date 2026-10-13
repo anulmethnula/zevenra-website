@@ -18,7 +18,7 @@ export default async function handler(req:VercelRequest,res:VercelResponse){
   if(throttle.limited){res.setHeader("Retry-After",String(throttle.retryAfter));return json(res,{error:"Too many delivery quote requests."},429);}
   try{
     if(!validOrigin(req,originEnv()))return json(res,{error:"Invalid request origin"},403);
-    return json(res,await quoteDelivery(schema.parse(body(req))),200,{"Cache-Control":"private, no-store"});
+    return json(res,await quoteDelivery(schema.parse(body(req)) as Parameters<typeof quoteDelivery>[0]),200,{"Cache-Control":"private, no-store"});
   }catch(error){
     const message=error instanceof Error?error.message:"";
     if(error instanceof Error&&error.name==="ZodError")return json(res,{error:"Enter a valid Sri Lankan district and 5-digit postal code."},400);

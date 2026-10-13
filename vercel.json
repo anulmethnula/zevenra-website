@@ -80,7 +80,7 @@
       ]
     },
     {
-      "source": "/media/(hero-desktop-v1\\.mp4|hero-mobile-v1\\.mp4|hero-poster-v1\\.webp)",
+    "source": "/media/(hero-final-v2\\.mp4|hero-desktop-v1\\.mp4|hero-mobile-v1\\.mp4|hero-poster-v1\\.webp)",
       "headers": [
         {
           "key": "Cache-Control",
@@ -104,11 +104,11 @@
   "rewrites": [
     {
       "source": "/robots.txt",
-      "destination": "/api/robots"
+      "destination": "/api/public?route=robots"
     },
     {
       "source": "/sitemap.xml",
-      "destination": "/api/sitemap"
+      "destination": "/api/public?route=sitemap"
     },
     {
       "source": "/api/admin/:action",
@@ -116,7 +116,11 @@
     },
     {
       "source": "/api/products/:slug",
-      "destination": "/api/products/[slug]"
+      "destination": "/api/public?route=product-by-slug&slug=:slug"
+    },
+    {
+      "source": "/api/:route(cart-products|catalog|checkout-config|delivery-quote|discount-validate|home|order-track|orders|payment-receipt-access|payment-receipt-sign|preorders|product|products|recommendations|robots|sitemap|size-chart|store)",
+      "destination": "/api/public?route=:route"
     },
     {
       "source": "/product/:slug",

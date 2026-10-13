@@ -55,7 +55,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const order=await convertPreorderToOrder(preorderClaimCheckoutSchema.parse(body(req)));
       return json(res,order,201,{"Cache-Control":"private, no-store"});
     }
-    if(action==="payment")return json(res,await submitPreorderPayment(preorderPaymentSchema.parse(body(req))),200,{"Cache-Control":"private, no-store"});
+    if(action==="payment")return json(res,await submitPreorderPayment(preorderPaymentSchema.parse(body(req)) as Parameters<typeof submitPreorderPayment>[0]),200,{"Cache-Control":"private, no-store"});
     if(action==="quote")return json(res,await quotePreorderClaim(preorderClaimQuoteSchema.parse(body(req))),200,{"Cache-Control":"private, no-store"});
     if(action)return json(res,{error:"Invalid request"},400);
     const payload = preorderSchema.parse(body(req)),

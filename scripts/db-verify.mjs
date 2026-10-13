@@ -81,6 +81,8 @@ try {
     negativeStock: "SELECT count(*)::int AS count FROM variants WHERE stock<0",
     invalidTotals:
       "SELECT count(*)::int AS count FROM orders WHERE subtotal-COALESCE(discount_amount,0)+delivery_fee<>total",
+    invalidPreorderFinancialSnapshots:
+      "SELECT count(*)::int AS count FROM orders o JOIN preorders p ON p.request_id=o.source_preorder_request_id WHERE o.source='preorder' AND (o.subtotal<>p.requested_price*p.quantity OR o.amount_paid<>o.subtotal OR o.amount_to_collect<>o.delivery_fee OR o.total<>o.subtotal+o.delivery_fee OR o.payment_status<>'paid')",
     invalidStockStates:
       "SELECT count(*)::int AS count FROM orders WHERE stock_state NOT IN ('reserved','fulfilled','restored','not_applicable')",
     invalidDeliveryEstimateSnapshots:

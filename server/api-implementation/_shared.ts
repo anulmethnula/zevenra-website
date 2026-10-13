@@ -7,8 +7,8 @@ import {
 } from "node:crypto";
 import { promisify } from "node:util";
 import { z } from "zod";
-import { sriLankaDistricts } from "../shared/sri-lanka-districts.js";
-export { sriLankaDistricts } from "../shared/sri-lanka-districts.js";
+import { sriLankaDistricts } from "../../shared/sri-lanka-districts.js";
+export { sriLankaDistricts } from "../../shared/sri-lanka-districts.js";
 
 export type AuthEnv = {
   SESSION_SECRET: string;

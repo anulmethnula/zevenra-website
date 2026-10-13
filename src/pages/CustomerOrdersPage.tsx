@@ -24,11 +24,11 @@ const preorderLabels: Record<PreorderStatus, string> = {
   confirmed: "Confirmed",
   batched: "Legacy batched",
   ordered: "Legacy ordered",
-  in_transit: "On the way",
+  in_transit: "In transit",
   arrived: "Arrived",
-  ready: "Ready for you",
+  ready: "Ready",
   notified: "Ready for checkout",
-  converted: "Moved to Orders",
+  converted: "Converted to order",
   cancelled: "Cancelled",
   expired: "Reservation expired",
 };
@@ -400,7 +400,7 @@ function PreordersView({ requests }: { requests: CustomerPreorder[] }) {
               <p>
                 Price when requested: <b>{money(item.requestedPrice)}</b>
               </p>
-              {Number(item.confirmedPrice || 0) > 0 && (
+              {["new", "contacted", "batched", "ordered", "notified", "expired"].includes(item.status) && Number(item.confirmedPrice || 0) > 0 && (
                 <p>
                   Final agreed price:{" "}
                   <b>{money(Number(item.confirmedPrice))}</b>

@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { query, withTransaction } from "../_db.js";
 import { normalizeCourierRateImportRows, parseCourierRateFile, suggestedCourierRateField } from "./courier-rate-parser.js";
-import { normalizeLocation } from "../../shared/delivery-match.js";
-import { classifyCourierRateDuplicates } from "../../shared/courier-rate-dedup.js";
+import { normalizeLocation } from "../../../shared/delivery-match.js";
+import { classifyCourierRateDuplicates } from "../../../shared/courier-rate-dedup.js";
 
 const fields = ["fromBranch", "destinationDistrict", "destinationCity", "firstKgCharge", "additionalKgCharge"] as const;
 type Mapping = Record<(typeof fields)[number], string>;

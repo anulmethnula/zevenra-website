@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import adminHandler from "../api/admin/[action].js";
-import orderHandler from "../api/orders.js";
-import { adminCookie, makeSession, orderSchema, validOrigin } from "../api/_shared.js";
+import adminHandler from "../server/api-implementation/admin/[action].js";
+import orderHandler from "../server/api-implementation/orders.js";
+import { adminCookie, makeSession, orderSchema, validOrigin } from "../server/api-implementation/_shared.js";
 
 type ResponseState = { status: number; headers: Record<string, string>; body: unknown };
 
@@ -91,7 +91,7 @@ test("web order submission requires a postal code before any database work", asy
 });
 
 test("authenticated account history never claims guest orders by matching email alone", async () => {
-  const source = await readFile(new URL("../api/_data/customers.ts", import.meta.url), "utf8");
+  const source = await readFile(new URL("../server/api-implementation/_data/customers.ts", import.meta.url), "utf8");
   assert.match(source, /WHERE o\.customer_id=\$1 ORDER BY/);
   assert.match(source, /FROM preorders WHERE customer_id=\$1 ORDER BY/);
   assert.equal((source.match(/LIMIT 100/g)||[]).length,2);
@@ -99,7 +99,7 @@ test("authenticated account history never claims guest orders by matching email 
 });
 
 test("production runtime database code uses DATABASE_URL only", async () => {
-  const source = await readFile(new URL("../api/_db.ts", import.meta.url), "utf8");
+  const source = await readFile(new URL("../server/api-implementation/_db.ts", import.meta.url), "utf8");
   assert.match(source, /process\.env\.DATABASE_URL/);
   assert.doesNotMatch(source, /E2E_DATABASE_URL/);
 });

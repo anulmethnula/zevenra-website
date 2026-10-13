@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { FulfillmentConfigError, resolveFulfillment, validateFulfillmentConfig } from "../api/_data/fulfillment.ts";
+import { FulfillmentConfigError, resolveFulfillment, validateFulfillmentConfig } from "../server/api-implementation/_data/fulfillment.ts";
 import { clearCheckoutToastSource, selectActiveFulfillment } from "../src/utils/checkoutFulfillment.ts";
 
 const method=(type:"flat"|"area_group"|"pickup",active=false)=>({type,displayName:type,active,fee:type==="flat"?425:null,minimumDeliveryDays:type==="pickup"?null:2,maximumDeliveryDays:type==="pickup"?null:3,sortOrder:1});
@@ -48,7 +48,7 @@ test("successful pickup quote clears an old delivery toast only",()=>{
 });
 
 test("checkout config and checkout notifications are never stale or hidden",async()=>{
-  const endpoint=await readFile(new URL("../api/checkout-config.ts",import.meta.url),"utf8");
+  const endpoint=await readFile(new URL("../server/api-implementation/checkout-config.ts",import.meta.url),"utf8");
   const hook=await readFile(new URL("../src/hooks/usePublicData.ts",import.meta.url),"utf8");
   const checkout=await readFile(new URL("../src/pages/CheckoutPage.tsx",import.meta.url),"utf8");
   assert.match(endpoint,/private, no-store/);assert.doesNotMatch(endpoint,/stale-while-revalidate/);
