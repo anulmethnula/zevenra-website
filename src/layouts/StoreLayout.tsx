@@ -264,6 +264,7 @@ function MobileMenu({
   instagram: string;
   tiktok: string;
 }) {
+  const [expanded,setExpanded]=useState("");
   return (
     <motion.div
       className="mobile-menu"
@@ -274,7 +275,7 @@ function MobileMenu({
     >
       <div className="mobile-menu__top">
         <img src={logo} alt="ZEVENRA" />
-        <button onClick={close} aria-label="Close menu">
+        <button type="button" onClick={close} aria-label="Close menu">
           <X />
         </button>
       </div>
@@ -286,46 +287,41 @@ function MobileMenu({
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.15 + index * 0.045 }}
           >
-            {item.external ? (
-              <a href={item.to} target="_blank" rel="noreferrer noopener">
-                <span>{String(index + 1).padStart(2, "0")}</span>
-                {item.label}
-                <ArrowUpRight />
-              </a>
-            ) : (
-              <Link to={item.to}>
-                <span>{String(index + 1).padStart(2, "0")}</span>
-                {item.label}
-                <ArrowUpRight />
-              </Link>
-            )}
-            {item.children && item.children.length > 0 && (
-              <div className="mobile-subcategories">
+            <div className="mobile-menu__row">
+              {item.external ? <a href={item.to} target="_blank" rel="noreferrer noopener" onClick={close}>{item.label}</a> : <Link to={item.to} onClick={close}>{item.label}</Link>}
+              {item.children?.length ? <button type="button" aria-label={`${expanded===item.id?"Collapse":"Expand"} ${item.label}`} aria-expanded={expanded===item.id} onClick={()=>setExpanded(current=>current===item.id?"":item.id)}><span aria-hidden="true">{expanded===item.id?"−":"+"}</span></button> : <ArrowUpRight aria-hidden="true"/>}
+            </div>
+            <AnimatePresence initial={false}>
+            {item.children && item.children.length > 0 && expanded===item.id && (
+              <motion.div className="mobile-subcategories" initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} transition={{duration:.24,ease:[.4,0,.2,1]}}>
                 {item.children.map((child) => (
-                  <Link key={child.id} to={"/category/" + child.slug}>
+                  <Link key={child.id} to={"/category/" + child.slug} onClick={close}>
                     {child.name.toUpperCase()}
                   </Link>
                 ))}
-              </div>
+              </motion.div>
             )}
+            </AnimatePresence>
           </motion.div>
         ))}
       </nav>
       <div className="mobile-menu__foot">
-        <Link to="/shop?focusSearch=1">SEARCH</Link>
-        <Link to="/account">ACCOUNT</Link>
-        <Link to="/track-order">TRACK ORDER</Link>
+        <Link to="/shop?focusSearch=1" onClick={close}>Search</Link>
+        <Link to="/account" onClick={close}>Account</Link>
+        <Link to="/track-order" onClick={close}>Track order</Link>
+        <Link to="/contact" onClick={close}>Contact</Link>
+      </div>
+      <div className="mobile-menu__social">
         {instagram && (
           <a href={instagram} target="_blank" rel="noreferrer noopener">
-            INSTAGRAM
+            Instagram
           </a>
         )}
         {tiktok && (
           <a href={tiktok} target="_blank" rel="noreferrer noopener">
-            TIKTOK
+            TikTok
           </a>
         )}
-        <Link to="/contact">CONTACT</Link>
       </div>
     </motion.div>
   );
