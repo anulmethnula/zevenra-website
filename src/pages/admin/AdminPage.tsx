@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { Link, useLocation, useParams } from "react-router-dom";
 import {
   ChevronLeft,
@@ -2530,19 +2530,10 @@ function Preorders() {
               product = resolveCurrentProduct(store.data.products, item),
               image = product?.media.find((media) => media.type === "image"),
               phone = waNumber(item.whatsapp || item.phone),
-              callNumber = String(item.phone || item.whatsapp || "").replace(/[^+\d]/g, ""),
               finalPrice = Number(item.requestedPrice || 0),
               claimLink=claimLinks[item.requestId]||"",
               nextStatus = next[item.status],
-              statusIndex = [
-                "awaiting_payment",
-                "payment_submitted",
-                "paid",
-                "confirmed",
-                "in_transit",
-                "arrived",
-                "ready",
-              ].indexOf(item.status === "batched" ? "confirmed" : item.status),
+              progressIndex = item.status === "converted" ? 4 : item.status === "ready" ? 3 : ["in_transit","arrived"].includes(item.status) ? 2 : ["confirmed","ordered","batched"].includes(item.status) ? 1 : 0,
               waMessage = item.status==="notified"&&claimLink
                 ? "Your ZEVENRA pre-order has arrived 🤍\nYour "+item.productName+" — "+item.size+" is reserved for you.\nComplete your order here:\n"+claimLink+"\n\nReserved for 48 hours."
                 : "Hi " +
@@ -2583,6 +2574,8 @@ function Preorders() {
                           <span className="preorder-batch">{item.batchId}</span>
                         )}
                       </div>
+                      <p className="truncate text-sm font-medium text-black/75">{item.productName} · {item.size} · Qty {item.quantity}</p>
+                      <p className="truncate text-xs text-black/50">{item.customerName} · {money(item.requestedPrice*item.quantity)}</p>
                       <p>
                         {new Date(item.createdAt).toLocaleString("en-LK", {
                           year: "numeric",
@@ -2594,9 +2587,14 @@ function Preorders() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-2"><a href={wa} target="_blank" rel="noreferrer" className="btn" aria-label={`WhatsApp ${item.customerName}`}><MessageCircle size={14} /> WhatsApp</a><a href={`tel:${callNumber}`} className="btn" aria-label={`Call ${item.customerName}`}>Call</a><button type="button" className="btn btn-dark" onClick={()=>setOpen(open===item.requestId?"":item.requestId)}>{open===item.requestId?"Close":"View"}</button></div>
+                  <div className="flex flex-wrap gap-2"><a href={wa} target="_blank" rel="noreferrer" className="btn" aria-label={`WhatsApp ${item.customerName}`}><MessageCircle size={14} /> WhatsApp</a>{nextStatus&&<button type="button" disabled={busy===item.requestId||(nextStatus==="paid"&&!item.paymentReceiptUrl)} onClick={()=>void change(item,nextStatus)} className="btn btn-dark">{nextText[item.status]}</button>}<button type="button" className="btn" onClick={()=>setOpen(item.requestId)}>View</button></div>
                 </div>
+                <AnimatePresence>
                 {open===item.requestId&&<>
+                <motion.button type="button" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} aria-label="Close pre-order details" onClick={()=>setOpen("")} className="admin-drawer-backdrop" />
+                <motion.aside initial={{x:"100%"}} animate={{x:0}} exit={{x:"100%"}} transition={{duration:.26,ease:[.4,0,.2,1]}} className="admin-drawer preorder-admin-drawer" role="dialog" aria-modal="true" aria-label={`Pre-order ${item.requestId}`}>
+                <div className="admin-drawer__header"><div><p className="eyebrow text-black/45">Pre-order details</p><h2>{item.requestId}</h2></div><button type="button" className="btn" onClick={()=>setOpen("")}>Close</button></div>
+                <div className="admin-drawer__body">
                 <div className="preorder-admin-grid">
                   <section className="preorder-product-box">
                     {product ? (
@@ -2613,15 +2611,14 @@ function Preorders() {
                         {item.color} / {item.size} · Qty {item.quantity}
                       </p>
                       <p>
-                        Display price:{" "}
-                        <b>{money(Number(item.requestedPrice))}</b>
+                        Product total:{" "}
+                        <b>{money(Number(item.requestedPrice) * item.quantity)}</b>
                       </p>
-                      <p>SKU: {item.sku || "—"}</p>
-                      {product ? <Link to={`/admin/products/${product.id}`} className="mt-2 inline-block text-xs font-medium underline underline-offset-4">View product →</Link> : <p className="mt-2 text-xs font-medium text-amber-800">Product unavailable</p>}
+                      {!product && <p className="mt-2 text-xs font-medium text-amber-800">Product unavailable</p>}
                     </div>
                   </section>
                   <section className="preorder-customer-box">
-                    <small>Customer & delivery</small>
+                    <small>Customer</small>
                     <h3>{item.customerName}</h3>
                     <p>
                       <b>Mobile:</b> {item.phone}
@@ -2634,10 +2631,7 @@ function Preorders() {
                         <b>Email:</b> {item.email}
                       </p>
                     )}
-                    <p>
-                      <b>Area:</b> {item.city || "—"}
-                    </p>
-                    <p>
+                    {item.status==="ready"&&<><p><b>Area:</b> {item.city || "—"}</p><p>
                       <b>Delivery address:</b>{" "}
                       {[
                         item.address1,
@@ -2648,14 +2642,15 @@ function Preorders() {
                       ]
                         .filter(Boolean)
                         .join(", ") || "Collect before final order"}
-                    </p>
+                    </p></>}
                   </section>
                   <section className="preorder-next-box">
                     <small>What to do next</small>
                     <h3>{guidance[item.status]}</h3>
-                    <div className="mb-3 grid gap-1 text-xs text-black/60"><span>Product price: <b>{money(item.requestedPrice*item.quantity)}</b></span><span>Payment: <b>{item.paymentVerifiedAt?"PAID":item.paymentSubmittedAt?"SUBMITTED":"AWAITING PAYMENT"}</b></span><span>ETA: <b>3–4 weeks</b></span><span>Courier fee: <b>{item.convertedOrderDeliveryFee==null?"Collected on delivery":money(item.convertedOrderDeliveryFee)}</b></span>{item.paymentReceiptUrl&&<ProtectedReceipt url={item.paymentReceiptUrl}/>}</div>
+                    <div className="mb-3 grid gap-1 text-xs text-black/60"><span>Amount due: <b>{money(item.requestedPrice*item.quantity)}</b></span><span>Payment status: <b>{item.paymentVerifiedAt?"PAID":item.paymentSubmittedAt?"SUBMITTED":"AWAITING PAYMENT"}</b></span><span>ETA: <b>3–4 weeks</b></span><span>Courier fee: <b>{item.convertedOrderDeliveryFee==null?"Paid separately on delivery":money(item.convertedOrderDeliveryFee)}</b></span>{item.paymentReceiptUrl&&item.status!=="awaiting_payment"&&<ProtectedReceipt url={item.paymentReceiptUrl}/>}</div>
+                    {item.status === "awaiting_payment" && <a href={wa} target="_blank" rel="noreferrer" className="btn mb-2 w-full justify-center"><MessageCircle size={14} /> WhatsApp customer</a>}
                     {item.status==="converted"&&item.convertedOrderId&&<Link className="btn justify-center" to={`/admin/orders/${encodeURIComponent(item.convertedOrderId)}`}>Converted to {item.convertedOrderId} · {item.convertedOrderStatus === "shipped" ? "Dispatched" : item.convertedOrderStatus === "pending" ? "Pending dispatch" : item.convertedOrderStatus || "Order"}</Link>}
-                    {nextStatus && (
+                    {nextStatus && item.status!=="awaiting_payment" && (
                       <button
                         disabled={
                           busy === item.requestId ||
@@ -2699,26 +2694,16 @@ function Preorders() {
                   </section>
                 </div>
                 <div className="preorder-admin-card__progress">
-                  {(
-                    [
-                      "awaiting_payment",
-                      "payment_submitted",
-                      "paid",
-                      "confirmed",
-                      "in_transit",
-                      "arrived",
-                      "ready",
-                    ] as PreorderStatus[]
-                  ).map((status, index) => (
+                  {["Payment","Confirmed","In transit","Ready","Delivery"].map((label,index) => (
                     <span
-                      key={status}
-                      className={index <= statusIndex ? "is-done" : ""}
+                      key={label}
+                      className={index <= progressIndex ? "is-done" : ""}
                     >
-                      {labels[status]}
+                      {label}
                     </span>
                   ))}
                 </div>
-                <div className="preorder-edit-row">
+                {item.status==="ready"&&<div className="preorder-edit-row">
                   <div><span className="block text-[8px] font-semibold uppercase tracking-[.12em] text-black/45">Product price</span><b className="mt-2 block text-sm">{money(item.requestedPrice)} each</b></div>
                   <label>
                     <span>Private admin note</span>
@@ -2737,8 +2722,8 @@ function Preorders() {
                   >
                     Save details
                   </button>
-                </div>
-                <details className="mt-4 rounded-xl border border-black/10 bg-white/35 p-4">
+                </div>}
+                {item.status==="ready"&&<details className="mt-4 rounded-xl border border-black/10 bg-white/35 p-4">
                   <summary className="cursor-pointer text-xs font-semibold">
                     Delivery details for final order
                   </summary>
@@ -2810,8 +2795,11 @@ function Preorders() {
                       />
                     </label>
                   </div>
-                </details>
+                </details>}
+                </div>
+                </motion.aside>
                 </>}
+                </AnimatePresence>
               </article>
             );
           })

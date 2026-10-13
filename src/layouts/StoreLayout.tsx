@@ -265,9 +265,24 @@ function MobileMenu({
   tiktok: string;
 }) {
   const [expanded,setExpanded]=useState("");
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [close]);
   return (
     <motion.div
       className="mobile-menu"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Navigation menu"
       initial={{ clipPath: "inset(0 0 100% 0)" }}
       animate={{ clipPath: "inset(0 0 0% 0)" }}
       exit={{ clipPath: "inset(0 0 100% 0)" }}
@@ -275,7 +290,7 @@ function MobileMenu({
     >
       <div className="mobile-menu__top">
         <img src={logo} alt="ZEVENRA" />
-        <button type="button" onClick={close} aria-label="Close menu">
+        <button type="button" onClick={close} aria-label="Close menu" autoFocus>
           <X />
         </button>
       </div>
