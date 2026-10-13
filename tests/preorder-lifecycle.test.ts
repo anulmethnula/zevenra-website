@@ -11,6 +11,10 @@ import {
 } from "../shared/preorder-lifecycle.ts";
 
 test("preorder lifecycle accepts only forward/admin-safe transitions", () => {
+  assert.equal(isPreorderTransitionAllowed("awaiting_payment","payment_submitted"),true);
+  assert.equal(isPreorderTransitionAllowed("payment_submitted","paid"),true);
+  assert.equal(isPreorderTransitionAllowed("paid","confirmed"),true);
+  assert.equal(isPreorderTransitionAllowed("awaiting_payment","confirmed"),false);
   assert.equal(isPreorderTransitionAllowed("new", "contacted"), true);
   assert.equal(isPreorderTransitionAllowed("contacted", "confirmed"), true);
   assert.equal(isPreorderTransitionAllowed("confirmed", "ordered"), true);
@@ -18,6 +22,26 @@ test("preorder lifecycle accepts only forward/admin-safe transitions", () => {
   assert.equal(isPreorderTransitionAllowed("batched", "ordered"), true);
   assert.equal(isPreorderTransitionAllowed("ready", "converted"), false);
   assert.equal(isPreorderTransitionAllowed("converted", "cancelled"), false);
+});
+
+test("payment-first preorder uses snapshotted price and verified protected receipt",async()=>{
+  const source=await readFile(new URL("../api/_data/preorders.ts",import.meta.url),"utf8");
+  const create=source.slice(source.indexOf("export async function createPreorder"),source.indexOf("export async function listPreorders"));
+  const conversion=source.slice(source.indexOf("export async function convertPreorderToOrder"));
+  assert.match(create,/status,claim_token_hash\).*'awaiting_payment'/s);
+  assert.match(source,/verifyReceiptAsset\(input\.paymentReceiptUrl/);
+  assert.match(source,/status='payment_submitted'.*payment_submitted_at=now\(\).*claim_token_hash=NULL/s);
+  assert.match(source,/nextStatus==="paid"&&!current\.payment_receipt_public_id/);
+  assert.match(source,/nextStatus==="confirmed"&&current\.status!=="paid"/);
+  assert.match(conversion,/Number\(preorder\.requested_price\)/);
+  assert.doesNotMatch(conversion,/Number\(preorder\.confirmed_price\)/);
+});
+
+test("paid preorder lifecycle has no automatic release path",async()=>{
+  const source=await readFile(new URL("../api/_data/preorders.ts",import.meta.url),"utf8");
+  const release=source.slice(source.indexOf("export async function releasePreorderToStock"),source.indexOf("export async function getPreorderClaim"));
+  assert.match(release,/preorder\.status!=="notified"/);
+  assert.doesNotMatch(release,/status='paid'/);
 });
 
 test("preorder conversion requires a complete address and exact postal code", () => {

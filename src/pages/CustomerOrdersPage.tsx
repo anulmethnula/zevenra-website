@@ -17,10 +17,13 @@ import { AccountLoading } from "./AccountPage";
 
 const preorderLabels: Record<PreorderStatus, string> = {
   new: "Request received",
+  awaiting_payment:"Awaiting payment",
+  payment_submitted:"Payment submitted",
+  paid:"Paid",
   contacted: "We contacted you",
   confirmed: "Confirmed",
-  batched: "In supplier batch",
-  ordered: "Supplier order placed",
+  batched: "Legacy batched",
+  ordered: "Legacy ordered",
   in_transit: "On the way",
   arrived: "Arrived",
   ready: "Ready for you",
@@ -30,16 +33,17 @@ const preorderLabels: Record<PreorderStatus, string> = {
   expired: "Reservation expired",
 };
 const preorderHelp: Record<PreorderStatus, string> = {
-  new: "We received your request. ZEVENRA will contact you on WhatsApp before any supplier order is placed.",
-  contacted: "Please confirm the item and final price with us on WhatsApp.",
-  confirmed:
-    "You confirmed the item. ZEVENRA will place the supplier order next.",
-  batched: "Your confirmed piece has been grouped into a supplier batch.",
-  ordered: "The supplier order has been placed.",
+  new: "We received this legacy request.",
+  awaiting_payment:"Pay the full product price by bank transfer and upload your receipt.",
+  payment_submitted:"Your receipt is waiting for verification.",
+  paid:"Your product payment has been verified.",
+  contacted: "We are reviewing this legacy request.",
+  confirmed:"Your paid pre-order is confirmed. Estimated arrival is 3–4 weeks.",
+  batched: "This is a legacy pre-order record.",
+  ordered: "This is a legacy pre-order record.",
   in_transit: "Your piece is on the way to Sri Lanka.",
   arrived: "Your piece has arrived and is being checked.",
-  ready:
-    "Your piece is ready. We will arrange the normal order/payment with you.",
+  ready:"Your piece is ready for its delivery order. The courier fee is collected on delivery.",
   notified:"Your piece is reserved. Use the secure link sent by ZEVENRA to complete your order.",
   converted:
     "This pre-order is finished and has been converted into a normal order. Check the Orders tab.",
@@ -422,7 +426,7 @@ function PreordersView({ requests }: { requests: CustomerPreorder[] }) {
             <section className="customer-preorder-next">
               <small>What happens now</small>
               <p>{preorderHelp[item.status]}</p>
-              {item.batchId && <span>Supplier batch: {item.batchId}</span>}
+              {item.batchId && <span>Legacy batch: {item.batchId}</span>}
             </section>
           </div>
         </article>

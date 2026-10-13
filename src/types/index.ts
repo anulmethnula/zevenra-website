@@ -444,7 +444,7 @@ export type CustomerPreorder = Omit<
   "customerId" | "phone" | "email" | "notes"
 >;
 export type PreorderClaim={
-  requestId:string;customerName:string;phone:string;whatsapp:string;email:string;
+  requestId:string;status?:string;customerName:string;phone:string;whatsapp:string;email:string;
   address1:string;address2:string;city:string;district:string;postalCode:string;
   productId:string;variantId:string;productName:string;color:string;size:string;
   quantity:number;confirmedPrice:number;reservationExpiresAt:string;imageUrl:string;

@@ -2476,7 +2476,7 @@ function Preorders() {
           [
             "Waiting confirmation",
             contacted,
-            "Final price + customer approval",
+            "Receipt and payment verification",
           ],
           [
             "Confirmed requests",
@@ -2508,6 +2508,9 @@ function Preorders() {
           {(
             [
               "new",
+              "awaiting_payment",
+              "payment_submitted",
+              "paid",
               "contacted",
               "confirmed",
               "batched",
@@ -2540,14 +2543,13 @@ function Preorders() {
               claimLink=claimLinks[item.requestId]||"",
               nextStatus = next[item.status],
               statusIndex = [
-                "new",
-                "contacted",
+                "awaiting_payment",
+                "payment_submitted",
+                "paid",
                 "confirmed",
-                "ordered",
                 "in_transit",
                 "arrived",
                 "ready",
-                "notified",
               ].indexOf(item.status === "batched" ? "confirmed" : item.status),
               waMessage = item.status==="notified"&&claimLink
                 ? "Your ZEVENRA pre-order has arrived 🤍\nYour "+item.productName+" — "+item.size+" is reserved for you.\nComplete your order here:\n"+claimLink+"\n\nReserved for 48 hours."
@@ -2659,7 +2661,7 @@ function Preorders() {
                   <section className="preorder-next-box">
                     <small>What to do next</small>
                     <h3>{guidance[item.status]}</h3>
-                    <div className="mb-3 grid gap-1 text-xs text-black/60"><span>Product price: <b>{money(item.requestedPrice*item.quantity)}</b></span><span>Payment: <b>{labels[item.status]}</b></span><span>ETA: <b>3–4 weeks</b></span><span>Courier fee: <b>{item.convertedOrderDeliveryFee==null?"Collected on delivery":money(item.convertedOrderDeliveryFee)}</b></span>{item.paymentReceiptUrl&&<ProtectedReceipt url={item.paymentReceiptUrl}/>}</div>
+                    <div className="mb-3 grid gap-1 text-xs text-black/60"><span>Product price: <b>{money(item.requestedPrice*item.quantity)}</b></span><span>Payment: <b>{item.paymentVerifiedAt?"PAID":item.paymentSubmittedAt?"SUBMITTED":"AWAITING PAYMENT"}</b></span><span>ETA: <b>3–4 weeks</b></span><span>Courier fee: <b>{item.convertedOrderDeliveryFee==null?"Collected on delivery":money(item.convertedOrderDeliveryFee)}</b></span>{item.paymentReceiptUrl&&<ProtectedReceipt url={item.paymentReceiptUrl}/>}</div>
                     {item.status==="converted"&&item.convertedOrderId&&<Link className="btn justify-center" to={`/admin/orders/${encodeURIComponent(item.convertedOrderId)}`}>Converted to {item.convertedOrderId} · {item.convertedOrderStatus === "shipped" ? "Dispatched" : item.convertedOrderStatus === "pending" ? "Pending dispatch" : item.convertedOrderStatus || "Order"}</Link>}
                     {nextStatus && (
                       <button

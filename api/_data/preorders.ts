@@ -53,15 +53,15 @@ export async function getPreorderClaim(token:string){
   if(!token)return null;
   const row=(await query<Record<string,unknown>>(
     `SELECT pr.request_id,pr.customer_name,pr.phone,pr.whatsapp,pr.email,pr.address1,pr.address2,pr.city,pr.district,pr.postal_code,
-            pr.product_id,pr.variant_id,pr.product_name,pr.color,pr.size,pr.quantity,pr.confirmed_price,pr.reservation_expires_at,p.media
+            pr.product_id,pr.variant_id,pr.product_name,pr.color,pr.size,pr.quantity,pr.requested_price,pr.confirmed_price,pr.status,pr.reservation_expires_at,p.media
        FROM preorders pr LEFT JOIN products p ON p.id=pr.product_id
-      WHERE pr.claim_token_hash=$1 AND pr.status='notified' AND pr.released_at IS NULL AND pr.converted_order_id IS NULL AND pr.reservation_expires_at>now()
+      WHERE pr.claim_token_hash=$1 AND ((pr.status='awaiting_payment') OR (pr.status='notified' AND pr.reservation_expires_at>now())) AND pr.released_at IS NULL AND pr.converted_order_id IS NULL
       LIMIT 1`,
     [hashPreorderClaimToken(token)],
   )).rows[0];
   if(!row)return null;
   const media=Array.isArray(row.media)?row.media as Array<Record<string,unknown>>:[];
-  return{requestId:String(row.request_id),customerName:String(row.customer_name),phone:String(row.phone),whatsapp:String(row.whatsapp),email:String(row.email||""),address1:String(row.address1||""),address2:String(row.address2||""),city:String(row.city||""),district:String(row.district||""),postalCode:String(row.postal_code||""),productId:String(row.product_id),variantId:String(row.variant_id),productName:String(row.product_name),color:String(row.color),size:String(row.size),quantity:Number(row.quantity),confirmedPrice:Number(row.confirmed_price),reservationExpiresAt:String(row.reservation_expires_at),imageUrl:String(media.find(item=>item.type==="image")?.url||"")};
+  return{requestId:String(row.request_id),status:String(row.status),customerName:String(row.customer_name),phone:String(row.phone),whatsapp:String(row.whatsapp),email:String(row.email||""),address1:String(row.address1||""),address2:String(row.address2||""),city:String(row.city||""),district:String(row.district||""),postalCode:String(row.postal_code||""),productId:String(row.product_id),variantId:String(row.variant_id),productName:String(row.product_name),color:String(row.color),size:String(row.size),quantity:Number(row.quantity),confirmedPrice:Number(row.confirmed_price||row.requested_price),reservationExpiresAt:String(row.reservation_expires_at||""),imageUrl:String(media.find(item=>item.type==="image")?.url||"")};
 }
 
 export async function quotePreorderClaim(input:Record<string,unknown>){

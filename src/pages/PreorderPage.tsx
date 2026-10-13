@@ -85,6 +85,7 @@ export default function PreorderPage() {
       });
       setDone(created.requestId);
       setPaymentToken(created.paymentToken||"");
+      if(created.paymentToken)window.history.replaceState(null,"",`/preorder/complete?token=${encodeURIComponent(created.paymentToken)}`);
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -156,7 +157,7 @@ export default function PreorderPage() {
               </p>
               <p className="mt-2 break-words text-sm">
                 {money(product.price)}{" "}
-                <span className="text-xs text-ink/45">current display price</span>
+                <span className="text-xs text-ink/45">product price</span>
               </p>
             </div>
           </div>
