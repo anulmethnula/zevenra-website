@@ -96,7 +96,7 @@ export default function PreorderPage() {
         </h1>
         <p className="mx-auto mt-5 max-w-xl text-sm leading-7 text-ink/60">
           No payment has been taken. We will contact you on WhatsApp with the
-          final price before your piece is added to a supplier batch.
+          final price before placing the supplier order.
         </p>
         <p className="mt-4 break-all text-xs text-ink/45">Reference: {done}</p>
         <div className="mx-auto mt-8 flex w-full max-w-md flex-col justify-center gap-3 sm:flex-row sm:flex-wrap">
@@ -164,8 +164,8 @@ export default function PreorderPage() {
             <div>
               <b>3</b>
               <span>
-                <strong>Supplier batch</strong>
-                <small>Confirmed pieces are grouped before we order.</small>
+                <strong>Supplier order</strong>
+                <small>We place the order after you confirm the final price.</small>
               </span>
             </div>
             <div>
@@ -256,7 +256,7 @@ export default function PreorderPage() {
             </p>
           )}
           <button disabled={busy} className="btn btn-dark w-full disabled:opacity-50">
-            {busy ? "Sending request…" : "Send pre-order request"}
+            {busy ? "Sending request…" : "Pre-order"}
           </button>
         </form>
       </div>

@@ -31,7 +31,7 @@ const preorderHelp: Record<PreorderStatus, string> = {
   new: "We received your request. ZEVENRA will contact you on WhatsApp before any supplier order is placed.",
   contacted: "Please confirm the item and final price with us on WhatsApp.",
   confirmed:
-    "You confirmed the item. It is waiting to join the next supplier batch.",
+    "You confirmed the item. ZEVENRA will place the supplier order next.",
   batched: "Your confirmed piece has been grouped into a supplier batch.",
   ordered: "The supplier order has been placed.",
   in_transit: "Your piece is on the way to Sri Lanka.",

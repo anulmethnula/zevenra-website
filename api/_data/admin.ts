@@ -55,7 +55,7 @@ export async function dashboard() {
       `SELECT COALESCE(sum(oi.quantity),0)::int AS count FROM order_items oi JOIN orders o ON o.order_id=oi.order_id WHERE o.order_status='delivered' AND lower(o.payment_status) IN('paid','verified')`,
     ),
     query<Record<string, unknown>>(
-      `SELECT count(*) FILTER(WHERE status='new')::int AS new_count,COALESCE(sum(quantity) FILTER(WHERE status='confirmed' AND NULLIF(btrim(batch_id),'') IS NULL),0)::int AS confirmed_count FROM preorders`,
+      `SELECT count(*) FILTER(WHERE status='new')::int AS new_count FROM preorders`,
     ),
     recentOrders(10),
   ]),
@@ -78,8 +78,6 @@ export async function dashboard() {
     deliveryCollected: Number(row.delivery_collected) || 0,
     itemsSold: Number(items.rows[0]?.count) || 0,
     preorderNew: Number(pre.new_count) || 0,
-    preorderConfirmed: Number(pre.confirmed_count) || 0,
-    preorderBatchTarget: 5,
     topProducts: top.rows.map((item) => ({
       productId: String(item.product_id || ""),
       name: String(item.name || ""),

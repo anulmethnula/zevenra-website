@@ -12,7 +12,7 @@ export const preorderActiveStatuses = [
 const transitions: Record<string, readonly string[]> = {
   new: ["new", "contacted", "cancelled"],
   contacted: ["contacted", "confirmed", "cancelled"],
-  confirmed: ["confirmed", "cancelled"],
+  confirmed: ["confirmed", "ordered", "cancelled"],
   batched: ["batched", "ordered", "cancelled"],
   ordered: ["ordered", "in_transit", "cancelled"],
   in_transit: ["in_transit", "arrived"],

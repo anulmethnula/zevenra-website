@@ -240,13 +240,6 @@ function Dashboard() {
           ["Delivery collected", money(stats?.deliveryCollected || 0), "/admin/orders?status=delivered"],
           ["Items sold", stats?.itemsSold || 0, "/admin/orders?status=delivered"],
           ["Pre-order requests", stats?.preorderNew || 0, "/admin/preorders?status=new"],
-          [
-            "Batch progress",
-            (stats?.preorderConfirmed || 0) +
-              " / " +
-              (stats?.preorderBatchTarget || 6),
-            "/admin/preorders?status=confirmed",
-          ],
         ] as Array<[string,string|number,string]>).map(([label, value, to]) => (
           <Link key={label} to={to} aria-label={`View ${label}`} className="admin-metric-card block border p-4 transition hover:-translate-y-0.5 hover:border-bronze/50 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bronze sm:p-5">
             <p className="text-xs text-black/50">{label}</p>
@@ -2206,9 +2199,7 @@ function Preorders() {
     [drafts, setDrafts] = useState<Record<string, PreorderAdminDraft>>({}),
     [fulfillment,setFulfillment]=useState<PreorderFulfillmentConfig|null>(null),
     [conversion,setConversion]=useState<Record<string,{method:"flat"|"area_group"|"pickup";pickupLocationId:string}>>({}),
-    pageSize = 20,
-    batchTarget = 6,
-    batchMinimum = 5;
+    pageSize = 20;
   useEffect(()=>{void adminApi.get<PreorderFulfillmentConfig>("getFulfillmentConfig").then(setFulfillment).catch(reason=>setMessage(reason instanceof Error?reason.message:"Could not load fulfillment settings."));},[]);
   const labels: Record<PreorderStatus, string> = {
     new: "New request",
@@ -2225,6 +2216,7 @@ function Preorders() {
   const next: Partial<Record<PreorderStatus, PreorderStatus>> = {
     new: "contacted",
     contacted: "confirmed",
+    confirmed: "ordered",
     batched: "ordered",
     ordered: "in_transit",
     in_transit: "arrived",
@@ -2233,6 +2225,7 @@ function Preorders() {
   const nextText: Partial<Record<PreorderStatus, string>> = {
     new: "Mark customer contacted",
     contacted: "Confirm customer",
+    confirmed: "Mark supplier order placed",
     batched: "Mark supplier order placed",
     ordered: "Mark in transit",
     in_transit: "Mark arrived",
@@ -2243,9 +2236,9 @@ function Preorders() {
     contacted:
       "Enter the final selling price, then confirm the customer only after they agree.",
     confirmed:
-      "This request is ready for the next supplier batch. Only confirmed pieces count toward the batch target.",
+      "The customer has confirmed. Place the supplier order, then mark this request ordered.",
     batched:
-      "This piece is grouped into a supplier batch. Place the SHEIN order, then mark it ordered.",
+      "Legacy batched request. Place the supplier order, then mark it ordered.",
     ordered:
       "Supplier order has been placed. Mark it in transit when tracking starts moving.",
     in_transit:
@@ -2262,9 +2255,7 @@ function Preorders() {
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     ),
     needle = query.trim().toLowerCase(),
-    confirmedItems = all
-      .filter((x) => x.status === "confirmed" && !x.batchId)
-      .reduce((n, x) => n + Number(x.quantity || 0), 0),
+    confirmedCount = all.filter((x) => x.status === "confirmed").length,
     newCount = all.filter((x) => x.status === "new").length,
     contacted = all.filter((x) => x.status === "contacted").length,
     readyCount = all.filter((x) => x.status === "ready").length;
@@ -2443,41 +2434,6 @@ function Preorders() {
       setBusy("");
     }
   }
-  async function batch() {
-    if (confirmedItems < batchMinimum) return;
-    if (
-      !confirm(
-        "Create a SHEIN batch with " + confirmedItems + " confirmed piece(s)?",
-      )
-    )
-      return;
-    setBusy("batch");
-    setMessage("");
-    try {
-      const result = await adminApi.post<{
-        batchId: string;
-        requests: number;
-        items: number;
-      }>("createPreorderBatch", {});
-      await store.refreshPreorders();
-      setMessage(
-        result.batchId +
-          " created with " +
-          result.items +
-          " piece(s) from " +
-          result.requests +
-          " customer request(s).",
-      );
-    } catch (reason) {
-      setMessage(
-        reason instanceof Error
-          ? reason.message
-          : "Could not create supplier batch.",
-      );
-    } finally {
-      setBusy("");
-    }
-  }
   const waNumber = (value: string) => {
     const digits = String(value || "").replace(/\D/g, "");
     return digits.startsWith("0") ? "94" + digits.slice(1) : digits;
@@ -2485,25 +2441,12 @@ function Preorders() {
   return (
     <>
       <Head
-        eyebrow="Supplier planning"
+        eyebrow="Manual management"
         title="Pre-orders"
-        action={
-          <button
-            disabled={confirmedItems < batchMinimum || busy === "batch"}
-            onClick={() => void batch()}
-            className="btn btn-dark disabled:opacity-40"
-          >
-            {busy === "batch"
-              ? "Creating batch…"
-              : confirmedItems < batchMinimum
-                ? "Need " + (batchMinimum - confirmedItems) + " more confirmed"
-                : "Create SHEIN batch"}
-          </button>
-        }
       />
       <div className="admin-help-card mt-5">
         <b>Simple flow:</b> Request → WhatsApp contact → Final price agreed →
-        Confirmed → Supplier batch → Ordered → In transit → Arrived → Ready →
+        Confirmed → Ordered → In transit → Arrived → Ready →
         Normal order. <span>No payment is collected at the request stage.</span>
       </div>
       <div className="mt-6 grid grid-cols-2 gap-3 xl:grid-cols-4">
@@ -2515,9 +2458,9 @@ function Preorders() {
             "Final price + customer approval",
           ],
           [
-            "Confirmed pieces",
-            confirmedItems,
-            "Minimum " + batchMinimum + " · target " + batchTarget,
+            "Confirmed requests",
+            confirmedCount,
+            "Ready to mark ordered",
           ],
           ["Ready to convert", readyCount, "Turn arrived pieces into orders"],
         ].map(([label, value, help]) => (
@@ -2569,6 +2512,7 @@ function Preorders() {
               product = resolveCurrentProduct(store.data.products, item),
               image = product?.media.find((media) => media.type === "image"),
               phone = waNumber(item.whatsapp || item.phone),
+              callNumber = String(item.phone || item.whatsapp || "").replace(/[^+\d]/g, ""),
               finalPrice = Number(
                 draft.confirmedPrice || item.confirmedPrice || 0,
               ),
@@ -2577,12 +2521,11 @@ function Preorders() {
                 "new",
                 "contacted",
                 "confirmed",
-                "batched",
                 "ordered",
                 "in_transit",
                 "arrived",
                 "ready",
-              ].indexOf(item.status),
+              ].indexOf(item.status === "batched" ? "confirmed" : item.status),
               waMessage =
                 "Hi " +
                 item.customerName +
@@ -2636,7 +2579,7 @@ function Preorders() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex gap-2"><a href={wa} target="_blank" rel="noreferrer" className="btn" aria-label={`WhatsApp ${item.customerName}`}><MessageCircle size={14} /> WhatsApp</a><button type="button" className="btn btn-dark" onClick={()=>setOpen(open===item.requestId?"":item.requestId)}>{open===item.requestId?"Close":"View"}</button></div>
+                  <div className="flex flex-wrap gap-2"><a href={wa} target="_blank" rel="noreferrer" className="btn" aria-label={`WhatsApp ${item.customerName}`}><MessageCircle size={14} /> WhatsApp</a><a href={`tel:${callNumber}`} className="btn" aria-label={`Call ${item.customerName}`}>Call</a><button type="button" className="btn btn-dark" onClick={()=>setOpen(open===item.requestId?"":item.requestId)}>{open===item.requestId?"Close":"View"}</button></div>
                 </div>
                 {open===item.requestId&&<>
                 <div className="preorder-admin-grid">
@@ -2695,12 +2638,6 @@ function Preorders() {
                   <section className="preorder-next-box">
                     <small>What to do next</small>
                     <h3>{guidance[item.status]}</h3>
-                    {item.status === "confirmed" && (
-                      <p className="preorder-batch-progress">
-                        {confirmedItems} / {batchTarget} confirmed pieces ready
-                        for the next batch.
-                      </p>
-                    )}
                     {nextStatus && (
                       <button
                         disabled={
@@ -2714,12 +2651,6 @@ function Preorders() {
                           ? "Saving…"
                           : nextText[item.status]}
                       </button>
-                    )}
-                    {item.status === "confirmed" && (
-                      <p className="preorder-small-note">
-                        Use “Create SHEIN batch” when you have at least{" "}
-                        {batchMinimum} confirmed pieces.
-                      </p>
                     )}
                     {item.status === "ready" && (
                       <div className="grid gap-2">
@@ -2761,7 +2692,6 @@ function Preorders() {
                       "new",
                       "contacted",
                       "confirmed",
-                      "batched",
                       "ordered",
                       "in_transit",
                       "arrived",

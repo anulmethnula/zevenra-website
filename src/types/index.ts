@@ -438,8 +438,6 @@ export type DashboardData = {
   deliveryCollected: number;
   itemsSold: number;
   preorderNew?: number;
-  preorderConfirmed?: number;
-  preorderBatchTarget?: number;
   topProducts: DashboardTopProduct[];
   recent: Order[];
 };

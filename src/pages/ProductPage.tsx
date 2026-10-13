@@ -244,7 +244,7 @@ export default function ProductPage() {
                   to={`/preorder/${product.slug}?variant=${encodeURIComponent(variant.id)}&quantity=${qty}`}
                   className="btn btn-dark flex-1"
                 >
-                  Request pre-order
+                  Pre-order
                 </Link>
               ) : (
                 <button
@@ -306,7 +306,7 @@ export default function ProductPage() {
             to={`/preorder/${product.slug}?variant=${encodeURIComponent(variant.id)}&quantity=${qty}`}
             className="btn btn-dark w-full"
           >
-            Request pre-order · {money(product.price)}
+            Pre-order · {money(product.price)}
           </Link>
         ) : (
           <button

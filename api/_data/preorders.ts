@@ -165,30 +165,6 @@ export async function updatePreorder(input: Record<string, unknown>) {
   });
 }
 
-export async function createPreorderBatch() {
-  return withTransaction(async (client) => {
-    const rows = await client.query<Record<string, unknown>>(
-        "SELECT * FROM preorders WHERE status='confirmed' AND batch_id='' FOR UPDATE",
-      ),
-      pieces = rows.rows.reduce((sum, row) => sum + Number(row.quantity), 0);
-    if (pieces < 5)
-      throw new Error(
-        "Confirm at least 5 pieces before creating a supplier batch.",
-      );
-    const timestamp = new Date().toISOString().replace(/\D/g, "").slice(0, 14),
-      batchId = `SHEIN-${timestamp}-${randomBytes(2).toString("hex").toUpperCase()}`;
-    await client.query(
-      "UPDATE preorders SET batch_id=$1,status='batched',updated_at=now() WHERE status='confirmed' AND batch_id=''",
-      [batchId],
-    );
-    await client.query(
-      "INSERT INTO audit_logs(actor,action,entity_type,entity_id,details) VALUES('owner','batch','preorder',$1,$2::jsonb)",
-      [batchId, JSON.stringify({ requests: rows.rowCount, items: pieces })],
-    );
-    return { batchId, requests: rows.rowCount || 0, items: pieces };
-  });
-}
-
 export async function convertPreorderToOrder(input: Record<string, unknown>) {
   return withTransaction(async (client) => {
     const preorder = (

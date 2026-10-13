@@ -12,7 +12,9 @@ import {
 test("preorder lifecycle accepts only forward/admin-safe transitions", () => {
   assert.equal(isPreorderTransitionAllowed("new", "contacted"), true);
   assert.equal(isPreorderTransitionAllowed("contacted", "confirmed"), true);
+  assert.equal(isPreorderTransitionAllowed("confirmed", "ordered"), true);
   assert.equal(isPreorderTransitionAllowed("confirmed", "batched"), false);
+  assert.equal(isPreorderTransitionAllowed("batched", "ordered"), true);
   assert.equal(isPreorderTransitionAllowed("ready", "converted"), false);
   assert.equal(isPreorderTransitionAllowed("converted", "cancelled"), false);
 });
@@ -60,4 +62,23 @@ test("admin preorder list is bounded and selects only mapped fields", async () =
   assert.doesNotMatch(listQuery, /SELECT\s+\*/i);
   assert.match(listQuery, /LIMIT 100/);
   assert.match(listQuery, /request_id,created_at,updated_at/);
+});
+
+test("preorder requests use configured variants without deducting stock",async()=>{
+  const source=await readFile(new URL("../api/_data/preorders.ts",import.meta.url),"utf8");
+  const create=source.slice(source.indexOf("export async function createPreorder"),source.indexOf("export async function listPreorders"));
+  assert.match(create,/JOIN variants v ON v\.product_id=p\.id WHERE p\.id=\$1 AND v\.id=\$2/);
+  assert.match(create,/Number\(product\.stock\) > 0/);
+  assert.match(create,/FROM preorders WHERE variant_id=\$1 AND status=ANY/);
+  assert.match(create,/already have an active pre-order request/);
+  assert.doesNotMatch(create,/UPDATE\s+variants/i);
+});
+
+test("supplier batch creation is no longer exposed",async()=>{
+  const [dataSource,actionSource]=await Promise.all([
+    readFile(new URL("../api/_data/preorders.ts",import.meta.url),"utf8"),
+    readFile(new URL("../api/admin/[action].ts",import.meta.url),"utf8"),
+  ]);
+  assert.doesNotMatch(dataSource,/createPreorderBatch|SHEIN-|at least 5 pieces/);
+  assert.doesNotMatch(actionSource,/createPreorderBatch/);
 });

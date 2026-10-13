@@ -37,7 +37,6 @@ import {
 } from "../_data/orders.js";
 import {
   convertPreorderToOrder,
-  createPreorderBatch,
   listPreorders,
   updatePreorder,
 } from "../_data/preorders.js";
@@ -99,7 +98,7 @@ const mutationActions = new Set([
   "saveSizeChart", "deleteSizeChart", "saveNavigation", "deleteNavigation",
   "saveHomepageSection", "deleteHomepageSection", "duplicateHomepageSection", "reorderHomepageSections",
   "updateOrder", "updateOrderDetails", "createReturn", "updateReturn",
-  "updatePreorder", "createPreorderBatch", "convertPreorderToOrder", "createManualOrder",
+  "updatePreorder", "convertPreorderToOrder", "createManualOrder",
   "saveSettings", "saveDeliveryRates", "saveCourierConfig", "importCourierRateSheet",
   "validateCourierRateSheet", "confirmCourierRateSheet",
   "setCourierRateCardStatus", "previewDeliveryZoneTemplate", "applyDeliveryZoneTemplate",
@@ -216,8 +215,6 @@ async function execute(action: string, payload: Record<string, unknown>) {
       return updateReturn(payload);
     case "updatePreorder":
       return updatePreorder(payload);
-    case "createPreorderBatch":
-      return createPreorderBatch();
     case "convertPreorderToOrder":
       return convertPreorderToOrder(preorderConversionSchema.parse(payload));
     case "createManualOrder":
