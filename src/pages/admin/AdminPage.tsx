@@ -6,6 +6,8 @@ import {
   ChevronRight,
   Copy,
   Download,
+  Eye,
+  EyeOff,
   ExternalLink,
   MoreHorizontal,
   MessageCircle,
@@ -4443,9 +4445,44 @@ function ExplicitSettings({ focus }: { focus: string }) {
           <SectionSave section="store" label="Save Store Settings" busy={busy.store} status={status.store} save={submit}/>
         </Panel>
         {focus !== "delivery" && <DiscountManager />}
+        {focus !== "delivery" && <AdminSecurity />}
       </div>
     </>
   );
+}
+
+function SecurityPassword({name,label,show,setShow,autoComplete}:{name:string;label:string;show:boolean;setShow:(value:boolean)=>void;autoComplete:string}){
+  return <label className="label block">{label}<span className="mt-2 flex items-center border border-black/15 bg-white"><input className="field min-w-0 flex-1 border-0" name={name} type={show?"text":"password"} autoComplete={autoComplete} required/><button type="button" className="grid h-11 w-11 shrink-0 place-items-center text-black/50" onClick={()=>setShow(!show)} aria-label={`${show?"Hide":"Show"} ${label.toLowerCase()}`}>{show?<EyeOff size={16}/>:<Eye size={16}/>}</button></span></label>;
+}
+function AdminSecurity(){
+  const [security,setSecurity]=useState<{username:string;recoveryConfigured:boolean}|null>(null),[status,setStatus]=useState(""),[busy,setBusy]=useState(""),[recoveryCode,setRecoveryCode]=useState(""),[shows,setShows]=useState<Record<string,boolean>>({});
+  const load=useCallback(async()=>{try{setSecurity(await adminApi.get("getAdminSecurity"));}catch(reason){setStatus(reason instanceof Error?reason.message:"Could not load security settings.");}},[]);
+  useEffect(()=>{void load();},[load]);
+  const visibility=(name:string)=>({show:Boolean(shows[name]),setShow:(value:boolean)=>setShows(current=>({...current,[name]:value}))});
+  async function submit(event:React.FormEvent<HTMLFormElement>,action:string){event.preventDefault();setBusy(action);setStatus("");setRecoveryCode("");const form=event.currentTarget;try{const result=await adminApi.post<{message:string;username?:string;recoveryCode?:string}>(action,Object.fromEntries(new FormData(form)));setStatus(result.message);if(result.recoveryCode)setRecoveryCode(result.recoveryCode);form.reset();await load();}catch(reason){setStatus(reason instanceof Error?reason.message:"Could not update admin security.");}finally{setBusy("");}}
+  async function copyRecovery(){if(!recoveryCode)return;try{await navigator.clipboard.writeText(recoveryCode);setStatus("Recovery code copied.");}catch{setStatus("Copy failed. Select and copy the code manually.");}}
+  return <Panel title="Admin security">
+    <p className="mb-5 text-xs leading-5 text-black/50">Manage the private sign-in details for this admin account.</p>
+    <div className="space-y-6">
+      <form onSubmit={event=>void submit(event,"changeAdminUsername")} className="border border-black/10 bg-white/35 p-4">
+        <h3 className="text-sm font-semibold">Username</h3><p className="mt-1 text-xs text-black/45">Current username: <b className="text-black/70">{security?.username||"Loading…"}</b></p>
+        <div className="mt-4 grid gap-3"><label className="label block">New username<input key={security?.username} className="field mt-2" name="newUsername" defaultValue={security?.username||""} required/></label><SecurityPassword name="currentPassword" label="Current password" autoComplete="current-password" {...visibility("username")}/></div>
+        <button className="btn btn-dark mt-4 w-full justify-center" disabled={busy!==""}>{busy==="changeAdminUsername"?"Saving…":"Save username"}</button>
+      </form>
+      <form onSubmit={event=>void submit(event,"changeAdminPassword")} className="border border-black/10 bg-white/35 p-4">
+        <h3 className="text-sm font-semibold">Password</h3><p className="mt-1 text-xs text-black/45">Use at least 10 characters with letters and numbers.</p>
+        <div className="mt-4 grid gap-3"><SecurityPassword name="currentPassword" label="Current password" autoComplete="current-password" {...visibility("passwordCurrent")}/><SecurityPassword name="newPassword" label="New password" autoComplete="new-password" {...visibility("passwordNew")}/><SecurityPassword name="confirmPassword" label="Confirm new password" autoComplete="new-password" {...visibility("passwordConfirm")}/></div>
+        <button className="btn btn-dark mt-4 w-full justify-center" disabled={busy!==""}>{busy==="changeAdminPassword"?"Saving…":"Save password"}</button>
+      </form>
+      <form onSubmit={event=>void submit(event,"generateAdminRecoveryCode")} className="border border-black/10 bg-white/35 p-4">
+        <h3 className="text-sm font-semibold">Recovery code</h3><p className="mt-1 text-xs leading-5 text-black/45">{security?.recoveryConfigured?"Generating a new code invalidates the previous one.":"Create a recovery code for forgotten-password access."}</p>
+        <div className="mt-4"><SecurityPassword name="currentPassword" label="Current password" autoComplete="current-password" {...visibility("recovery")}/></div>
+        <button className="btn btn-dark mt-4 w-full justify-center" disabled={busy!==""}>{busy==="generateAdminRecoveryCode"?"Generating…":"Generate new recovery code"}</button>
+        {recoveryCode&&<div className="mt-4 border border-amber-800/20 bg-amber-50 p-4"><p className="text-xs font-semibold text-amber-950">Save this securely. It will only be shown once.</p><div className="mt-3 flex gap-2"><code className="min-w-0 flex-1 break-all border border-black/10 bg-white p-3 text-xs">{recoveryCode}</code><button type="button" className="btn shrink-0" onClick={()=>void copyRecovery()}><Copy size={15}/> Copy</button></div></div>}
+      </form>
+    </div>
+    {status&&<p className={`mt-4 text-xs ${/updated|generated|copied/.test(status)?"text-emerald-800":"text-red-800"}`} role="status">{status}</p>}
+  </Panel>;
 }
 
 type AdminDiscount={id:string;code:string;type:"percentage"|"fixed";value:number;minimumSubtotal:number;maximumDiscount:number|null;active:boolean;startsAt:string|null;expiresAt:string|null;usageLimit:number|null;usageCount:number};

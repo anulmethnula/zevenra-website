@@ -14,8 +14,12 @@ export default function LoginPage() {
   const navigate = useNavigate(),
     [params] = useSearchParams(),
     [error, setError] = useState(""),
+    [success,setSuccess]=useState(""),
     [busy, setBusy] = useState(false),
     [showPassword, setShowPassword] = useState(false),
+    [recoveryMode,setRecoveryMode]=useState(false),
+    [showRecovery,setShowRecovery]=useState(false),
+    [showConfirm,setShowConfirm]=useState(false),
     next = params.get("next"),
     safeNext =
       next && next.startsWith("/admin") && !next.startsWith("//")
@@ -35,9 +39,11 @@ export default function LoginPage() {
   }, [navigate, safeNext]);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const form=event.currentTarget;
     setError("");
+    setSuccess("");
     setBusy(true);
-    const credentials = Object.fromEntries(new FormData(event.currentTarget));
+    const credentials = Object.fromEntries(new FormData(form));
     try {
       if (import.meta.env.VITE_DEMO_MODE === "true") {
         if (!credentials.username || !credentials.password)
@@ -46,7 +52,7 @@ export default function LoginPage() {
         navigate(safeNext);
         return;
       }
-      const response = await fetch("/api/admin/login", {
+      const response = await fetch(recoveryMode?"/api/admin/recover":"/api/admin/login", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(credentials),
@@ -58,8 +64,9 @@ export default function LoginPage() {
         throw new Error(
           response.status >= 500
             ? payload.error || "Admin login is temporarily unavailable."
-            : "Invalid credentials. Please try again.",
+            : payload.error||(recoveryMode?"Recovery details could not be verified.":"Invalid credentials. Please try again."),
         );
+      if(recoveryMode){setRecoveryMode(false);setSuccess("Password reset. Sign in with your new password.");form.reset();return;}
       navigate(safeNext, { replace: true });
     } catch (reason) {
       setError(
@@ -104,14 +111,11 @@ export default function LoginPage() {
           </div>
           <div className="admin-login__heading">
             <h1 className="display">
-              Welcome
+              {recoveryMode?"Recover":"Welcome"}
               <br />
-              <em>back.</em>
+              <em>{recoveryMode?"access.":"back."}</em>
             </h1>
-            <p>
-              Enter the private workspace for managing products, orders, and the
-              ZEVENRA story.
-            </p>
+            <p>{recoveryMode?"Enter your recovery details and choose a new password.":"Enter the private workspace for managing products, orders, and the ZEVENRA story."}</p>
           </div>
           <div className="admin-login__fields">
             <label>
@@ -126,15 +130,19 @@ export default function LoginPage() {
                 />
               </div>
             </label>
+            {recoveryMode&&<label>
+              <span>Recovery code</span>
+              <div className="admin-login__field"><ShieldCheck/><input name="recoveryCode" type={showRecovery?"text":"password"} autoComplete="off" placeholder="Enter your recovery code" required/><button type="button" onClick={()=>setShowRecovery(value=>!value)} aria-label={showRecovery?"Hide recovery code":"Show recovery code"}>{showRecovery?<EyeOff/>:<Eye/>}</button></div>
+            </label>}
             <label>
-              <span>Password</span>
+              <span>{recoveryMode?"New password":"Password"}</span>
               <div className="admin-login__field">
                 <LockKeyhole />
                 <input
-                  name="password"
+                  name={recoveryMode?"newPassword":"password"}
                   type={showPassword ? "text" : "password"}
-                  autoComplete="current-password"
-                  placeholder="Enter your password"
+                  autoComplete={recoveryMode?"new-password":"current-password"}
+                  placeholder={recoveryMode?"At least 10 characters":"Enter your password"}
                   required
                 />
                 <button
@@ -146,16 +154,23 @@ export default function LoginPage() {
                 </button>
               </div>
             </label>
+            {recoveryMode&&<label>
+              <span>Confirm new password</span>
+              <div className="admin-login__field"><LockKeyhole/><input name="confirmPassword" type={showConfirm?"text":"password"} autoComplete="new-password" placeholder="Repeat your new password" required/><button type="button" onClick={()=>setShowConfirm(value=>!value)} aria-label={showConfirm?"Hide confirmed password":"Show confirmed password"}>{showConfirm?<EyeOff/>:<Eye/>}</button></div>
+            </label>}
           </div>
+          {!recoveryMode&&<button type="button" className="mt-3 text-[10px] text-white/45 underline-offset-4 hover:text-white hover:underline" onClick={()=>{setRecoveryMode(true);setError("");setSuccess("");}}>Forgot password?</button>}
           {error && (
             <p role="alert" className="admin-login__error">
               {error}
             </p>
           )}
+          {success&&<p role="status" className="admin-login__error border-emerald-500/60 bg-emerald-500/10 text-emerald-200">{success}</p>}
           <button disabled={busy} className="admin-login__submit">
-            <span>{busy ? "Signing in…" : "Enter control room"}</span>
+            <span>{busy?(recoveryMode?"Resetting…":"Signing in…"):(recoveryMode?"Reset password":"Enter control room")}</span>
             <ArrowUpRight />
           </button>
+          {recoveryMode&&<button type="button" className="mt-4 w-full text-center text-[10px] uppercase tracking-[.16em] text-white/45 hover:text-white" onClick={()=>{setRecoveryMode(false);setError("");}}>Back to sign in</button>}
           <p className="admin-login__note">
             <ShieldCheck /> Protected by a secure server session
           </p>

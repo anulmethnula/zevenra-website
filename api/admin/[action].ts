@@ -55,17 +55,19 @@ import {
   previewDeliveryZoneTemplate,
 } from "../_data/delivery-zone-template.js";
 import {
+  adminCookie,
   authEnv,
   body,
   json,
   manualOrderSchema,
+  makeSession,
   preorderConversionSchema,
   validOrigin,
-  validSession,
 } from "../_shared.js";
 import { CourierRateFileError } from "../_data/courier-rate-parser.js";
 import { deleteDiscount, DiscountConflictError, discountDeleteSchema, listDiscounts, saveDiscount } from "../_data/discounts.js";
 import { FulfillmentConfigError, listFulfillmentConfig, saveFulfillmentConfig } from "../_data/fulfillment.js";
+import { changeAdminPassword,changeAdminUsername,generateAdminRecoveryCode,getAdminAuth,validAdminPassword,validAdminSession,validAdminUsername } from "../_admin-auth.js";
 
 const readActions = new Set([
   "bootstrap",
@@ -89,6 +91,7 @@ const readActions = new Set([
   "previewCourierRateCard",
   "listDiscounts",
   "getFulfillmentConfig",
+  "getAdminSecurity",
 ]);
 const mutationActions = new Set([
   "saveProduct", "setProductStatus", "archiveProduct", "deleteProduct",
@@ -102,6 +105,7 @@ const mutationActions = new Set([
   "setCourierRateCardStatus", "previewDeliveryZoneTemplate", "applyDeliveryZoneTemplate",
   "saveDiscount", "deleteDiscount",
   "saveFulfillmentConfig",
+  "changeAdminPassword", "changeAdminUsername", "generateAdminRecoveryCode",
 ]);
 const allowed = new Set([...readActions, ...mutationActions]);
 
@@ -143,6 +147,25 @@ async function execute(action: string, payload: Record<string, unknown>) {
       return listDiscounts();
     case "getFulfillmentConfig":
       return listFulfillmentConfig();
+    case "getAdminSecurity": {
+      const credential=await getAdminAuth();
+      return {username:credential?.username||"",recoveryConfigured:Boolean(credential?.recoveryCodeHash)};
+    }
+    case "changeAdminPassword": {
+      const currentPassword=String(payload.currentPassword||""),newPassword=String(payload.newPassword||""),confirmPassword=String(payload.confirmPassword||"");
+      if(newPassword!==confirmPassword)throw new Error("PASSWORD_CONFIRM_MISMATCH");
+      if(!validAdminPassword(newPassword))throw new Error("PASSWORD_INVALID");
+      return {ok:true,message:"Password updated.",_sessionVersion:await changeAdminPassword(currentPassword,newPassword)};
+    }
+    case "changeAdminUsername": {
+      const currentPassword=String(payload.currentPassword||""),newUsername=String(payload.newUsername||"").trim();
+      if(!validAdminUsername(newUsername))throw new Error("USERNAME_INVALID");
+      return {ok:true,username:newUsername,message:"Username updated.",_sessionVersion:await changeAdminUsername(currentPassword,newUsername)};
+    }
+    case "generateAdminRecoveryCode": {
+      const generated=await generateAdminRecoveryCode(String(payload.currentPassword||""));
+      return {ok:true,recoveryCode:generated.recoveryCode,message:"New recovery code generated.",_sessionVersion:generated.sessionVersion};
+    }
     case "saveFulfillmentConfig":
       return saveFulfillmentConfig(payload);
     case "saveDiscount":
@@ -270,7 +293,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     res.setHeader("Cache-Control", "private, no-store");
     const config = authEnv();
-    if (!validSession(req, config.SESSION_SECRET))
+    if (!await validAdminSession(req, config.SESSION_SECRET))
       return json(res, { error: "Session expired" }, 401);
     if (expectedMethod === "POST" && !validOrigin(req, config))
       return json(res, { error: "Invalid request origin" }, 403);
@@ -285,7 +308,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               ]),
           )
         : (body(req) as Record<string, unknown>);
-    return json(res, await execute(action, payload));
+    const result=await execute(action,payload);
+    if(result&&typeof result==="object"&&"_sessionVersion" in result){
+      const {_sessionVersion,...response}=result as Record<string,unknown>;
+      return json(res,response,200,{"Set-Cookie":adminCookie(makeSession(config.SESSION_SECRET,Number(_sessionVersion)))});
+    }
+    return json(res,result);
   } catch (error) {
     if (error instanceof FulfillmentConfigError)
       return json(res, { error: error.message }, 400);
@@ -299,6 +327,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         { error: (error as Error & { issues?: { message?: string }[] }).issues?.[0]?.message || "Please check the submitted details." },
         400,
       );
+    if(error instanceof Error&&error.message==="CURRENT_PASSWORD_INVALID")return json(res,{error:"Current password is incorrect."},400);
+    if(error instanceof Error&&error.message==="PASSWORD_INVALID")return json(res,{error:"Use at least 10 characters with letters and numbers."},400);
+    if(error instanceof Error&&error.message==="PASSWORD_CONFIRM_MISMATCH")return json(res,{error:"New passwords do not match."},400);
+    if(error instanceof Error&&error.message==="USERNAME_INVALID")return json(res,{error:"Use 3–50 letters, numbers, dots, dashes, or underscores."},400);
     const conflict = databaseConflictMessage(action, error);
     if (conflict) return json(res, { error: conflict }, 409);
     console.error("admin action failed", error);

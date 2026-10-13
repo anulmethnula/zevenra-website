@@ -53,8 +53,8 @@ export function required(name: string) {
 export function authEnv(): AuthEnv {
   return {
     SESSION_SECRET: required("SESSION_SECRET"),
-    ADMIN_USERNAME: required("ADMIN_USERNAME"),
-    ADMIN_PASSWORD_HASH: required("ADMIN_PASSWORD_HASH"),
+    ADMIN_USERNAME: process.env.ADMIN_USERNAME || "",
+    ADMIN_PASSWORD_HASH: process.env.ADMIN_PASSWORD_HASH || "",
     ALLOWED_ORIGIN: required("ALLOWED_ORIGIN"),
   };
 }
@@ -155,9 +155,9 @@ export async function verifyCustomerPassword(
     return false;
   }
 }
-export function makeSession(secret: string) {
+export function makeSession(secret: string,sessionVersion=0) {
   const payload = b64(
-    JSON.stringify({ sub: "owner", exp: Date.now() + 1000 * 60 * 60 * 8 }),
+    JSON.stringify({ sub: "owner", v:sessionVersion, exp: Date.now() + 1000 * 60 * 60 * 8 }),
   );
   return `${payload}.${signature(payload, secret)}`;
 }
@@ -166,7 +166,7 @@ export function adminCookie(value: string, maxAge = 60 * 60 * 8) {
     process.env.NODE_ENV === "production" || Boolean(process.env.VERCEL);
   return `zevenra_session=${value}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secure ? "; Secure" : ""}`;
 }
-export function validSession(request: VercelRequest, secret: string) {
+export function validSession(request: VercelRequest, secret: string,sessionVersion?:number) {
   const header = request.headers.cookie;
   const cookie = (
     Array.isArray(header) ? header.join("; ") : header || ""
@@ -181,9 +181,10 @@ export function validSession(request: VercelRequest, secret: string) {
   try {
     const data = JSON.parse(
       Buffer.from(payload, "base64url").toString("utf8"),
-    ) as { sub?: string; exp?: number };
+    ) as { sub?: string;v?:number; exp?: number };
     return (
       data.sub === "owner" &&
+      (sessionVersion===undefined||Number(data.v||0)===sessionVersion) &&
       typeof data.exp === "number" &&
       data.exp > Date.now()
     );
@@ -572,4 +573,8 @@ export async function verifyAdminPassword(password: string, stored: string) {
     }
   }
   return (await sha256(password)) === stored;
+}
+export async function hashAdminPassword(password:string,salt=randomBytes(24).toString("base64url")){
+  const hash=(await scrypt(password,salt,64)) as Buffer;
+  return `scrypt$${salt}$${hash.toString("base64url")}`;
 }

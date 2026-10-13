@@ -5,13 +5,13 @@ import {
   json,
   methodNotAllowed,
   validOrigin,
-  validSession,
 } from "../_shared.js";
-export default function handler(req: VercelRequest, res: VercelResponse) {
+import { validAdminSession } from "../_admin-auth.js";
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return methodNotAllowed(res, ["POST"]);
   try {
     const config = cloudinaryEnv();
-    if (!validSession(req, config.SESSION_SECRET))
+    if (!await validAdminSession(req, config.SESSION_SECRET))
       return json(res, { error: "Session expired" }, 401);
     if (!validOrigin(req, config))
       return json(res, { error: "Invalid request origin" }, 403);

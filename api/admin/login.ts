@@ -12,6 +12,7 @@ import {
   validOrigin,
   verifyAdminPassword,
 } from "../_shared.js";
+import { loginAdmin } from "../_admin-auth.js";
 
 const WINDOW_MS = 15 * 60 * 1000,
   MAX_ATTEMPTS = 5;
@@ -35,17 +36,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!parsed.success) {
       return json(res, { error: "Invalid credentials" }, 401);
     }
-    const credentials = parsed.data,
-      usernameMatch = credentials.username === config.ADMIN_USERNAME,
-      passwordHashMatch = await verifyAdminPassword(
-        credentials.password,
-        config.ADMIN_PASSWORD_HASH,
-      );
-    if (!usernameMatch || !passwordHashMatch) {
+    const credentials = parsed.data;
+    let credential;
+    try{credential=await loginAdmin(credentials.username,credentials.password,{username:config.ADMIN_USERNAME,passwordHash:config.ADMIN_PASSWORD_HASH});}
+    catch(error){
+      const missingTable=error&&typeof error==="object"&&"code" in error&&(error as {code?:unknown}).code==="42P01";
+      if(!missingTable)throw error;
+      const matches=credentials.username===config.ADMIN_USERNAME&&await verifyAdminPassword(credentials.password,config.ADMIN_PASSWORD_HASH);
+      if(matches)credential={sessionVersion:0};
+    }
+    if (!credential) {
       return json(res, { error: "Invalid credentials" }, 401);
     }
     return json(res, { ok: true }, 200, {
-      "Set-Cookie": adminCookie(makeSession(config.SESSION_SECRET)),
+      "Set-Cookie": adminCookie(makeSession(config.SESSION_SECRET,credential.sessionVersion)),
     });
   } catch (error) {
     return error instanceof ConfigurationError
