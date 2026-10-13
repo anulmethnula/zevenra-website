@@ -54,6 +54,7 @@ test("discount deletion requires an authenticated admin session", async () => {
   process.env.ADMIN_USERNAME = "owner";
   process.env.ADMIN_PASSWORD_HASH = "unused";
   process.env.ALLOWED_ORIGIN = "https://shop.example";
+  delete process.env.DATABASE_URL;
   const { res, state } = response();
   await adminHandler(request("POST", "deleteDiscount", { origin: "https://shop.example" }, { id: "discount-one" }), res);
   assert.equal(state.status, 401);

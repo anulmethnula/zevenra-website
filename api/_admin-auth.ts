@@ -17,6 +17,7 @@ export async function getAdminAuth(run:Runner=defaultRunner):Promise<AdminAuthRe
 }
 
 export async function validAdminSession(request:VercelRequest,secret:string,run:Runner=defaultRunner){
+  if(!validSession(request,secret))return false;
   try{return validSession(request,secret,(await getAdminAuth(run))?.sessionVersion??0);}
   catch(error){if(error&&typeof error==="object"&&"code" in error&&(error as {code?:unknown}).code==="42P01")return validSession(request,secret,0);throw error;}
 }
