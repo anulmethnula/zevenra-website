@@ -39,3 +39,7 @@ SET payment_receipt_public_id = '',
     payment_receipt_format = ''
 WHERE source_preorder_request_id IS NOT NULL
   AND payment_receipt_public_id <> '';
+
+INSERT INTO schema_migrations(version)
+VALUES ('024_preorder_order_linking')
+ON CONFLICT(version) DO NOTHING;
