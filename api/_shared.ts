@@ -7,6 +7,8 @@ import {
 } from "node:crypto";
 import { promisify } from "node:util";
 import { z } from "zod";
+import { sriLankaDistricts } from "../shared/sri-lanka-districts.js";
+export { sriLankaDistricts } from "../shared/sri-lanka-districts.js";
 
 export type AuthEnv = {
   SESSION_SECRET: string;
@@ -261,33 +263,6 @@ export function validOrigin(
     : "";
   return origin === config.ALLOWED_ORIGIN || origin === requestOrigin;
 }
-export const sriLankaDistricts = [
-  "Ampara",
-  "Anuradhapura",
-  "Badulla",
-  "Batticaloa",
-  "Colombo",
-  "Galle",
-  "Gampaha",
-  "Hambantota",
-  "Jaffna",
-  "Kalutara",
-  "Kandy",
-  "Kegalle",
-  "Kilinochchi",
-  "Kurunegala",
-  "Mannar",
-  "Matale",
-  "Matara",
-  "Monaragala",
-  "Mullaitivu",
-  "Nuwara Eliya",
-  "Polonnaruwa",
-  "Puttalam",
-  "Ratnapura",
-  "Trincomalee",
-  "Vavuniya",
-] as const;
 export const phoneSchema = z
   .string()
   .trim()

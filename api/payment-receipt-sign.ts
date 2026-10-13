@@ -32,8 +32,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       signature,
       apiKey: config.CLOUDINARY_API_KEY,
       cloudName: config.CLOUDINARY_CLOUD_NAME,
-      maxBytes: 15_000_000,
-      allowed: ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif", "application/pdf"],
+      maxBytes: 10_000_000,
+      allowed: ["image/jpeg", "image/png", "image/webp", "application/pdf"],
     });
   } catch {
     return json(

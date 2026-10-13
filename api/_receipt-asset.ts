@@ -1,4 +1,4 @@
-const imageFormats=new Set(["jpg","jpeg","png","webp","heic","heif","pdf"]);
+const imageFormats=new Set(["jpg","jpeg","png","webp","pdf"]);
 export type ReceiptAsset={publicId:string;resourceType:"image"|"raw"|"";format:string};
 export function receiptAsset(value:string|undefined,cloudName=process.env.CLOUDINARY_CLOUD_NAME):ReceiptAsset{
   if(!value)return{publicId:"",resourceType:"",format:""};
@@ -23,6 +23,6 @@ export async function verifyReceiptAsset(value:string|undefined,config:{CLOUDINA
   const metadata=await response.json() as Record<string,unknown>;
   const secureUrl=String(metadata.secure_url||""),bytes=Number(metadata.bytes),format=String(metadata.format||"").toLowerCase(),type=String(metadata.type||""),resourceType=String(metadata.resource_type||"");
   const verified=receiptAsset(secureUrl,config.CLOUDINARY_CLOUD_NAME);
-  if(type!=="authenticated"||resourceType!==asset.resourceType||verified.publicId!==asset.publicId||format!==asset.format||!Number.isFinite(bytes)||bytes<1||bytes>15_000_000)throw new Error("Invalid payment receipt URL.");
+  if(type!=="authenticated"||resourceType!==asset.resourceType||verified.publicId!==asset.publicId||format!==asset.format||!Number.isFinite(bytes)||bytes<1||bytes>10_000_000)throw new Error("Invalid payment receipt URL.");
   return asset;
 }

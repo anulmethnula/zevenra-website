@@ -729,7 +729,7 @@ function BankTransferAmount({ amounts, status }: { amounts: ReturnType<typeof ch
   );
 }
 function ReceiptUpload({ ready, busy, url, name, error, clearError, upload, remove }: { ready: boolean; busy: boolean; url: string; name: string; error?: string; clearError: () => void; upload: (file?: File) => Promise<void>; remove: () => void }) {
-  const accept = "image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf",
+  const accept = "image/jpeg,image/png,image/webp,application/pdf",
     change = (file?: File) => {
       clearError();
       void upload(file);

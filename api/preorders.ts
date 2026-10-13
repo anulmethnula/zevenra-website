@@ -13,6 +13,21 @@ import {
   readCustomerSession,
   validOrigin,
 } from "./_shared.js";
+const preorderFieldMessages:Record<string,string>={
+  customerName:"Enter your full name.",
+  whatsapp:"Enter a valid WhatsApp number.",
+  email:"Enter a valid email or leave it blank.",
+  address1:"Enter your delivery address.",
+  city:"Enter your city or area.",
+  district:"Choose your district.",
+  postalCode:"Enter a valid 5-digit postal code.",
+  paymentReceiptUrl:"Upload a valid payment receipt.",
+};
+function preorderValidationErrors(error:unknown){
+  const issues=(error as {issues?:Array<{path?:unknown[]}>})?.issues||[],fieldErrors:Record<string,string>={};
+  for(const issue of issues){const field=String(issue.path?.[0]||"");if(preorderFieldMessages[field]&&!fieldErrors[field])fieldErrors[field]=preorderFieldMessages[field];}
+  return fieldErrors;
+}
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const action=String(req.query.action||"");
   if (req.method !== "POST"&&req.method!=="GET") return methodNotAllowed(res, ["GET","POST"]);
@@ -70,12 +85,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         { error: "Your customer session is invalid. Please sign in again." },
         401,
       );
-    if (error instanceof Error && error.name === "ZodError")
-      return json(
-        res,
-        { error: "Please review the preorder information." },
-        400,
-      );
+    if (error instanceof Error && error.name === "ZodError") {
+      const fieldErrors=preorderValidationErrors(error),first=Object.values(fieldErrors)[0]||"Please review your pre-order details.";
+      return json(res,{error:first,fieldErrors},400);
+    }
     if (/already have an active/i.test(message))
       return json(res, { error: message }, 409);
     if (/unavailable/i.test(message))

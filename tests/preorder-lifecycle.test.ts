@@ -43,6 +43,15 @@ test("new preorder submission requires a protected payment receipt",()=>{
   assert.equal(preorderSchema.safeParse({...base,paymentReceiptUrl:"https://res.cloudinary.com/cloud/image/authenticated/v1/zevenra/payment-receipts/test.jpg"}).success,true);
 });
 
+test("preorder API maps validation failures to safe field messages",async()=>{
+  const source=await readFile(new URL("../api/preorders.ts",import.meta.url),"utf8");
+  assert.match(source,/district:"Choose your district\."/);
+  assert.match(source,/postalCode:"Enter a valid 5-digit postal code\."/);
+  assert.match(source,/whatsapp:"Enter a valid WhatsApp number\."/);
+  assert.match(source,/fieldErrors/);
+  assert.doesNotMatch(source,/error\.issues\[0\]\.message/);
+});
+
 test("paid preorder lifecycle has no automatic release path",async()=>{
   const source=await readFile(new URL("../api/_data/preorders.ts",import.meta.url),"utf8");
   const release=source.slice(source.indexOf("export async function releasePreorderToStock"),source.indexOf("export async function getPreorderClaim"));
