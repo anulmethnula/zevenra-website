@@ -15,7 +15,7 @@ import { checkoutAmounts } from "../utils/checkoutAmounts";
 import { deliveryAddressReady, hydrateUntouchedDeliveryAddress, paymentReadinessMessage, postalCodeError, type DeliveryAddress } from "../utils/checkoutValidation";
 import { rememberGuestOrder } from "../utils/guestOrders";
 import { useCheckoutConfig } from "../hooks/usePublicData";
-import { clearCheckoutToastSource, selectActiveFulfillment, type CheckoutFulfillmentType, type CheckoutToast } from "../utils/checkoutFulfillment";
+import { checkoutDeliveryQuoteInput, clearCheckoutToastSource, selectActiveFulfillment, type CheckoutFulfillmentType, type CheckoutToast } from "../utils/checkoutFulfillment";
 
 const districts = ["Ampara", "Anuradhapura", "Badulla", "Batticaloa", "Colombo", "Galle", "Gampaha", "Hambantota", "Jaffna", "Kalutara", "Kandy", "Kegalle", "Kilinochchi", "Kurunegala", "Mannar", "Matale", "Matara", "Monaragala", "Mullaitivu", "Nuwara Eliya", "Polonnaruwa", "Puttalam", "Ratnapura", "Trincomalee", "Vavuniya"] as const;
 const schema = z.object({
@@ -163,14 +163,12 @@ export default function CheckoutPage() {
   }, [discountCode, discountItems]);
   useEffect(()=>{
     if(!fulfillmentMethod||!fulfillmentMethods.some(method=>method.type===fulfillmentMethod)){setDeliveryQuote(null);setDeliveryQuoteError("");setDeliveryQuoteLoading(false);return;}
-    const postalError=postalCodeError(postalCode);
-    if(!discountItems.length){setDeliveryQuote(null);return;}
-    if(fulfillmentMethod==="pickup"&&!pickupLocationId){setDeliveryQuote(null);setDeliveryQuoteError("");return;}
-    if(fulfillmentMethod==="area_group"&&(!district||city.trim().length<2||postalError||postalCode.length!==5)){setDeliveryQuote(null);setDeliveryQuoteError("");setDeliveryQuoteLoading(false);return;}
+    const quoteInput=checkoutDeliveryQuoteInput({fulfillmentMethod,items:discountItems,pickupLocationId,city,district,postalCode});
+    if(!quoteInput){setDeliveryQuote(null);setDeliveryQuoteError("");setDeliveryQuoteLoading(false);return;}
     let current=true;
     const timer=window.setTimeout(()=>{
       setDeliveryQuoteLoading(true);setDeliveryQuoteError("");setToast(value=>clearCheckoutToastSource(value,"delivery"));
-      void api.deliveryQuote({fulfillmentMethod,pickupLocationId:fulfillmentMethod==="pickup"?pickupLocationId:undefined,city:fulfillmentMethod==="pickup"?undefined:city,district:fulfillmentMethod==="pickup"?undefined:district||undefined,postalCode:fulfillmentMethod==="pickup"?undefined:postalCode,items:discountItems}).then(result=>{if(current){setDeliveryQuote(result);setToast(value=>clearCheckoutToastSource(value,"delivery"));}}).catch(reason=>{if(current){const message=reason instanceof Error?reason.message:"Delivery could not be calculated.";setDeliveryQuote(null);setDeliveryQuoteError(message);setToast({source:"delivery",message});}}).finally(()=>{if(current)setDeliveryQuoteLoading(false);});
+      void api.deliveryQuote(quoteInput).then(result=>{if(current){setDeliveryQuote(result);setToast(value=>clearCheckoutToastSource(value,"delivery"));}}).catch(reason=>{if(current){const message=reason instanceof Error?reason.message:"Delivery could not be calculated.";setDeliveryQuote(null);setDeliveryQuoteError(message);setToast({source:"delivery",message});}}).finally(()=>{if(current)setDeliveryQuoteLoading(false);});
     },250);
     return()=>{current=false;window.clearTimeout(timer);};
   },[city,district,postalCode,discountItems,fulfillmentMethod,fulfillmentMethods,pickupLocationId]);
@@ -432,7 +430,7 @@ export default function CheckoutPage() {
                   <div className="mt-5 space-y-3 text-sm">
                     <SummaryLine label="Subtotal" value={money(amounts.subtotal)} />
                     {discount ? <SummaryLine label={`Discount (${discount.code})`} value={`-${money(amounts.discountAmount)}`} /> : null}
-                    <SummaryLine label="Shipping" value={!amounts.ready ? "Enter delivery details" : amounts.deliveryFee ? money(amounts.deliveryFee) : "Free"} />
+                    <SummaryLine label="Shipping" value={!deliveryQuote ? "Enter delivery details" : deliveryFee ? money(deliveryFee) : "Free"} />
                     <div className="border-t border-black/15 pt-4 text-lg">
                       <SummaryLine label="Total" value={amounts.total === undefined ? "—" : money(amounts.total)} />
                     </div>
@@ -538,7 +536,7 @@ export default function CheckoutPage() {
                         <b className="block text-sm">{fulfillmentMethods.find((method) => method.type === fulfillmentMethod)?.displayName || "No delivery method available"}</b>
                         <small className="mt-1 block text-xs text-ink/50">{deliveryQuote ? deliveryQuote.minimumDeliveryDays&&deliveryQuote.maximumDeliveryDays?`${deliveryQuote.minimumDeliveryDays}–${deliveryQuote.maximumDeliveryDays} Business Days`:fulfillmentMethod==="pickup"?"Ready for collection":"Delivery available" : deliveryQuoteLoading ? "Calculating delivery…" : deliveryQuoteError || (fulfillmentMethod?"Enter your delivery details to calculate the rate.":"Please contact us for assistance.")}</small>
                       </span>
-                      {amounts.ready ? <b className="text-sm">{amounts.deliveryFee ? money(amounts.deliveryFee) : "Free"}</b> : null}
+                      {deliveryQuote ? <b className="text-sm">{deliveryFee ? money(deliveryFee) : "Free"}</b> : null}
                     </div>
                   </div>
                 </div>

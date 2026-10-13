@@ -693,3 +693,102 @@ textarea.field{padding-block:1rem}
  .shop-product-grid .product-card__info h3{font-size:11px}
  .shop-product-grid .product-card__swatches>span{width:15px;height:15px}
 }
+
+/* Customer storefront: final phone-scale polish */
+@media(max-width:767px){
+ html,body{max-width:100%;overflow-x:hidden}
+ .container{width:calc(100% - 32px)}
+ .section{padding-block:40px}
+ .home-hero~.section{padding-block:40px}
+ .section-heading{align-items:end;gap:16px;margin-bottom:22px}
+ .section-heading h2{font-size:clamp(24px,7vw,28px);line-height:1.05}
+ .home-category-heading{margin-bottom:20px}
+ .home-category-heading h2{font-size:clamp(22px,6.5vw,27px);line-height:1.1}
+ .home-category-rail{grid-auto-columns:82%;gap:8px}
+ .home-category-tile span{right:14px;bottom:13px;left:14px;font-size:24px;line-height:1.05}
+
+ .site-header{padding-top:env(safe-area-inset-top)}
+ .site-header--announced{top:28px}
+ .site-header__inner,.site-header--solid .site-header__inner{width:calc(100% - 16px);height:52px;margin-top:7px;padding-inline:5px;grid-template-columns:40px 1fr auto}
+ .site-logo{width:clamp(125px,34vw,138px);height:34px}
+ .nav-icon{width:40px;min-width:40px;height:40px}
+ .header-actions{gap:0}
+ .bag-count{top:0;right:0;min-width:16px;height:16px;font-size:8px}
+
+ .mobile-menu{padding:calc(10px + env(safe-area-inset-top)) calc(18px + env(safe-area-inset-right)) calc(14px + env(safe-area-inset-bottom)) calc(18px + env(safe-area-inset-left))}
+ .mobile-menu__top img{width:clamp(125px,35vw,140px);height:34px}
+ .mobile-menu__top button{width:42px;height:42px}
+ .mobile-menu nav{margin-top:clamp(18px,4vh,32px)}
+ .mobile-menu nav>div>a{min-height:44px;grid-template-columns:23px minmax(0,1fr) 19px;padding:8px 0;font-size:clamp(27px,calc(6.36vw + 6.64px),34px);line-height:.96}
+ .mobile-menu nav>div>a svg{width:18px;height:18px}
+ .mobile-menu nav span{font-size:9px}
+ .mobile-subcategories{gap:5px;padding:5px 0 7px 23px}
+ .mobile-subcategories a{min-height:28px;padding:5px 0;font-size:10px;line-height:1.2}
+ .mobile-menu__foot{gap:9px 12px;margin-top:20px;padding-top:12px;font-size:10px}
+
+ .shop-search{height:48px;margin-bottom:20px}
+ .shop-page{padding-top:100px;padding-bottom:64px}
+ .shop-page h1.text-5xl{font-size:clamp(32px,9vw,38px);line-height:1.05}
+ .shop-page>.mb-5{gap:14px;margin-bottom:18px}
+ .shop-search input{font-size:16px}
+ .shop-style-filter{margin-bottom:22px;padding-block:13px 16px}
+ .shop-style-filter__head{margin-bottom:10px}
+ .shop-style-filter__head h2{font-size:22px}
+ .shop-product-grid{column-gap:10px!important;row-gap:26px!important}
+ .shop-product-grid .product-card__info{padding-top:8px}
+ .shop-product-grid .product-card__info h3{font-size:12px;line-height:1.35}
+ .shop-product-grid .product-card__price{font-size:11px}
+ .shop-product-grid .product-card__badge{top:7px!important;left:7px!important;padding:5px 7px!important}
+
+ .product-page{padding-top:88px!important;padding-bottom:64px!important}
+ .product-detail-grid{gap:20px}
+ .product-gallery{width:100%}
+ .product-detail-panel{padding-inline:16px}
+ .product-detail-panel>h1{margin-top:9px;font-size:clamp(30px,8.5vw,36px);line-height:1.02;overflow-wrap:anywhere}
+ .product-detail-panel>h1+div{margin-top:12px}
+ .product-detail-panel>h1+div+p{margin-top:14px;font-size:14px;line-height:1.6}
+ .product-detail-panel>div.mt-8,.product-detail-panel>div.mt-7{margin-top:20px}
+ .product-detail-panel>div.mt-9{margin-top:24px}
+ .product-page .btn{min-height:50px;font-size:13px;letter-spacing:.12em}
+
+ .checkout-page input,.checkout-page select,.checkout-page textarea,
+ .account-auth input,.account-page input,.account-page select,.account-page textarea,
+ main.min-h-\[75vh\] input{font-size:16px}
+ .checkout-page .label{font-size:14px}
+ .checkout-page h2.text-4xl{font-size:32px;line-height:1.05}
+ .account-auth{padding-top:76px}
+ .account-auth__panel{min-height:calc(100dvh - 76px);padding:28px 18px calc(20px + env(safe-area-inset-bottom))}
+ .account-auth__logo{width:132px}
+ .account-auth__box{margin:30px auto 22px}
+ .account-auth__box h1{font-size:clamp(32px,9.5vw,38px);line-height:1.02}
+ .account-auth__intro{margin-top:14px;font-size:14px;line-height:1.65}
+ .account-auth__form{gap:15px;margin-top:24px}
+ .account-auth__form input{min-height:52px;font-size:16px}
+ .account-auth__primary,.account-auth__secondary{min-height:50px;font-size:11px}
+ .account-page{padding:112px 0 56px}
+ .account-page h1{font-size:clamp(32px,9.5vw,38px);line-height:1.02}
+ .account-page__lead{margin-top:16px;font-size:14px;line-height:1.65}
+ .account-grid{margin-top:32px}
+ .account-card{min-height:136px;padding:22px 18px}
+
+ main.min-h-\[75vh\]{padding-top:108px;padding-bottom:56px}
+ main.min-h-\[75vh\] h1.text-5xl{font-size:clamp(32px,9vw,38px);line-height:1.05}
+ main.min-h-\[75vh\] form{margin-top:26px;padding:18px 16px;gap:16px}
+
+ .container.min-h-\[70vh\]{padding-top:112px;padding-bottom:64px}
+ .container.min-h-\[70vh\]>h1.text-5xl{font-size:clamp(32px,9vw,38px);line-height:1.05}
+ .container.min-h-\[70vh\]>div.mt-10{margin-top:28px;gap:32px}
+ .container.min-h-\[70vh\] aside{padding:20px}
+
+ .btn{font-size:12px;letter-spacing:.14em}
+ .field{min-height:50px;font-size:16px}
+}
+
+@media(max-width:380px){
+ .site-logo{width:125px}
+ .header-actions .nav-icon:nth-child(1),.header-actions .nav-icon:nth-child(2){display:none}
+ .mobile-menu{padding-inline:16px}
+ .mobile-menu nav>div>a{font-size:clamp(27px,8.4vw,29px)}
+ .mobile-menu__foot{grid-template-columns:repeat(2,minmax(0,max-content))}
+ .account-auth__split{grid-template-columns:1fr}
+}
