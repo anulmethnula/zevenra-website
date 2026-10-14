@@ -15,6 +15,7 @@ if(connectionString===process.env.DATABASE_URL||connectionString===process.env.D
   throw new Error("E2E_DATABASE_URL must be isolated from production database URLs.");
 const pool = new Pool({ connectionString, max: 1 });
 try {
+  await pool.query("SELECT pg_advisory_lock(hashtext('zevenra_schema_migrations'))");
   const directory = path.resolve("database/migrations"),
     files = (await readdir(directory))
       .filter((file) => /^\d+.*\.sql$/.test(file))
@@ -39,5 +40,6 @@ try {
     console.log(`applied ${version}`);
   }
 } finally {
+  await pool.query("SELECT pg_advisory_unlock(hashtext('zevenra_schema_migrations'))").catch(() => {});
   await pool.end();
 }
