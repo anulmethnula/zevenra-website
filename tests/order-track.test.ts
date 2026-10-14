@@ -5,6 +5,7 @@ import { createOrderTrackHandler } from "../server/api-implementation/order-trac
 import { normalizeOrderIdForLookup, normalizeSriLankanPhoneForLookup } from "../server/api-implementation/_order-track-normalization.js";
 import { getRecentGuestOrders, orderIdFromSearch, rememberGuestOrder } from "../src/utils/guestOrders.js";
 import { createOrderPdf } from "../src/utils/orderPdf.js";
+import { invoicePaymentStatus } from "../src/utils/invoicePdf.js";
 import { safeHttpsUrl } from "../src/utils/orderTracking.js";
 
 type State = { status: number; headers: Record<string, string>; body: unknown };
@@ -186,4 +187,11 @@ test("PDF helper handles single, long, and multi-page orders", async () => {
   assert.equal(single.getNumberOfPages(), 1);
   const many = await createOrderPdf({ ...base, items: Array.from({ length: 45 }, (_, index) => ({ name: `Test product with a safely wrapping long name ${index + 1}`, color: "Black / limited seasonal colour", size: "M", quantity: 1, unitPrice: 250 })) });
   assert.ok(many.getNumberOfPages() > 1);
+});
+
+test("invoice payment status reflects confirmed order payment state", () => {
+  assert.equal(invoicePaymentStatus({ paymentMethod: "cod", paymentStatus: "pending" }), "Pay on delivery");
+  assert.equal(invoicePaymentStatus({ paymentMethod: "bank", paymentStatus: "pending_verification" }), "Pending verification");
+  assert.equal(invoicePaymentStatus({ paymentMethod: "bank", paymentStatus: "verified" }), "Paid");
+  assert.equal(invoicePaymentStatus({ paymentMethod: "bank", paymentStatus: "paid" }), "Paid");
 });

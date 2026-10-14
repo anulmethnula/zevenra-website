@@ -624,7 +624,9 @@ function CustomerToast({message,dismiss}:{message:string;dismiss:()=>void}){
 function OrderSuccessModal({ order, viewOrder, continueShopping }: { order: Order; viewOrder: () => void; continueShopping: () => void }) {
   const dialogRef = useRef<HTMLDivElement>(null),
     viewRef = useRef<HTMLButtonElement>(null),
-    shopRef = useRef<HTMLButtonElement>(null);
+    shopRef = useRef<HTMLButtonElement>(null),
+    [invoiceBusy, setInvoiceBusy] = useState(false),
+    [invoiceError, setInvoiceError] = useState("");
   useEffect(() => {
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -644,6 +646,18 @@ function OrderSuccessModal({ order, viewOrder, continueShopping }: { order: Orde
     } else if (!event.shiftKey && document.activeElement === last) {
       event.preventDefault();
       first.focus();
+    }
+  };
+  const downloadInvoice = async () => {
+    setInvoiceBusy(true);
+    setInvoiceError("");
+    try {
+      const { downloadInvoicePdf } = await import("../utils/invoicePdf");
+      await downloadInvoicePdf(order);
+    } catch {
+      setInvoiceError("We couldn't prepare your invoice. Please try again.");
+    } finally {
+      setInvoiceBusy(false);
     }
   };
   return (
@@ -668,9 +682,13 @@ function OrderSuccessModal({ order, viewOrder, continueShopping }: { order: Orde
           <button ref={viewRef} type="button" className="btn btn-dark w-full" onClick={viewOrder}>
             View Order
           </button>
-          <button ref={shopRef} type="button" className="btn w-full" onClick={continueShopping}>
+          <button type="button" className="btn w-full justify-center border-black/25 bg-white/40 hover:border-bronze hover:text-bronze disabled:cursor-wait disabled:opacity-60" disabled={invoiceBusy} onClick={() => void downloadInvoice()}>
+            {invoiceBusy ? "PREPARING INVOICE…" : "DOWNLOAD INVOICE"}
+          </button>
+          <button ref={shopRef} type="button" className="btn w-full justify-center border-transparent bg-transparent hover:border-black/15" onClick={continueShopping}>
             Continue Shopping
           </button>
+          {invoiceError ? <p role="alert" className="text-xs leading-5 text-red-900">{invoiceError}</p> : null}
         </div>
       </motion.div>
     </motion.div>
