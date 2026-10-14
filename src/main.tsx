@@ -92,6 +92,7 @@ const router = createBrowserRouter([
       { path: "/admin/preorders", element: <Admin /> },
       { path: "/admin/orders", element: <Admin /> },
       { path: "/admin/orders/:id", element: <Admin /> },
+      { path: "/admin/finance", element: <Admin /> },
       {
         path: "/admin/size-charts",
         element: <Navigate to="/admin/products" replace />,

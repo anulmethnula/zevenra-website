@@ -12,6 +12,7 @@ import {
   Menu,
   Search,
   Settings,
+  Wallet,
   Truck,
   X,
 } from "lucide-react";
@@ -26,6 +27,7 @@ const links = [
   ["/admin/collections", FolderKanban, "Collections"],
   ["/admin/preorders", Inbox, "Pre-orders"],
   ["/admin/orders", BarChart3, "Orders"],
+  ["/admin/finance", Wallet, "Finance"],
   ["/admin/homepage", Home, "Homepage"],
   ["/admin/delivery", Truck, "Couriers & Delivery"],
   ["/admin/settings", Settings, "Settings"],

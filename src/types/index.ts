@@ -477,3 +477,18 @@ export type DashboardData = {
   topProducts: DashboardTopProduct[];
   recent: Order[];
 };
+export type FinanceData = {
+  period: "today" | "7" | "30" | "all";
+  productSales: number;
+  discounts: number;
+  productRevenue: number;
+  deliveryCollected: number;
+  deliveredOrders: number;
+  itemsSold: number;
+  cogs: number | null;
+  grossProfit: number | null;
+  grossMargin: number | null;
+  profitDataComplete: boolean;
+  topProducts: Array<{productId:string;name:string;quantity:number;revenue:number;cogs:number|null;grossProfit:number|null}>;
+  recentSales: Array<{orderId:string;createdAt:string;customerName:string;productRevenue:number;discount:number;delivery:number;status:string}>;
+};

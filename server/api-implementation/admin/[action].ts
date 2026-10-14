@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { adminBootstrap, dashboard } from "../_data/admin.js";
+import { adminBootstrap, dashboard, finance } from "../_data/admin.js";
 import {
   archiveProduct,
   deleteEntity,
@@ -76,6 +76,7 @@ import { changeAdminPassword,changeAdminUsername,generateAdminRecoveryCode,getAd
 const readActions = new Set([
   "bootstrap",
   "dashboard",
+  "finance",
   "listProducts",
   "listAdminProducts",
   "getProduct",
@@ -119,6 +120,8 @@ async function execute(action: string, payload: Record<string, unknown>) {
       return adminBootstrap(String(payload.section || "/admin"));
     case "dashboard":
       return dashboard();
+    case "finance":
+      return finance(String(payload.period || "30"));
     case "listProducts":
       return listProducts();
     case "listAdminProducts":

@@ -92,6 +92,56 @@ export async function dashboard() {
   };
 }
 
+export type FinancePeriod = "today" | "7" | "30" | "all";
+
+export async function finance(periodInput = "30") {
+  const period: FinancePeriod = ["today", "7", "30", "all"].includes(periodInput)
+      ? periodInput as FinancePeriod
+      : "30",
+    periodStart = period === "all"
+      ? ""
+      : `AND o.created_at >= ((date_trunc('day', now() AT TIME ZONE 'Asia/Colombo') - interval '${period === "today" ? 0 : Number(period) - 1} days') AT TIME ZONE 'Asia/Colombo')`,
+    delivered = `o.order_status='delivered' AND lower(o.payment_status) IN('paid','verified') ${periodStart}`;
+  const [summary,topProducts,recentSales] = await Promise.all([
+    query<Record<string, unknown>>(
+      `SELECT COALESCE(sum(o.subtotal),0) AS product_sales,
+        COALESCE(sum(COALESCE(o.discount_amount,0)),0) AS discounts,
+        COALESCE(sum(o.subtotal-COALESCE(o.discount_amount,0)),0) AS product_revenue,
+        COALESCE(sum(o.delivery_fee),0) AS delivery_collected,
+        count(*)::int AS delivered_orders,
+        COALESCE((SELECT sum(oi.quantity)::int FROM order_items oi JOIN orders item_order ON item_order.order_id=oi.order_id WHERE item_order.order_status='delivered' AND lower(item_order.payment_status) IN('paid','verified') ${periodStart.replaceAll("o.", "item_order.")}),0)::int AS items_sold
+       FROM orders o WHERE ${delivered}`,
+    ),
+    query<Record<string, unknown>>(
+      `SELECT oi.product_id,oi.product_name AS name,sum(oi.quantity)::int AS quantity,
+        sum(oi.line_total-CASE WHEN o.subtotal>0 THEN COALESCE(o.discount_amount,0)*(oi.line_total/o.subtotal) ELSE 0 END) AS revenue
+       FROM order_items oi JOIN orders o ON o.order_id=oi.order_id
+       WHERE ${delivered}
+       GROUP BY oi.product_id,oi.product_name ORDER BY revenue DESC,quantity DESC LIMIT 10`,
+    ),
+    query<Record<string, unknown>>(
+      `SELECT o.order_id,o.created_at,o.customer_name,o.subtotal,COALESCE(o.discount_amount,0) AS discount_amount,
+        o.subtotal-COALESCE(o.discount_amount,0) AS product_revenue,o.delivery_fee,o.order_status
+       FROM orders o WHERE ${delivered} ORDER BY o.created_at DESC LIMIT 10`,
+    ),
+  ]), row=summary.rows[0]||{};
+  return {
+    period,
+    productSales:Number(row.product_sales)||0,
+    discounts:Number(row.discounts)||0,
+    productRevenue:Number(row.product_revenue)||0,
+    deliveryCollected:Number(row.delivery_collected)||0,
+    deliveredOrders:Number(row.delivered_orders)||0,
+    itemsSold:Number(row.items_sold)||0,
+    cogs:null,
+    grossProfit:null,
+    grossMargin:null,
+    profitDataComplete:false,
+    topProducts:topProducts.rows.map(item=>({productId:String(item.product_id||""),name:String(item.name||""),quantity:Number(item.quantity)||0,revenue:Number(item.revenue)||0,cogs:null,grossProfit:null})),
+    recentSales:recentSales.rows.map(item=>({orderId:String(item.order_id),createdAt:new Date(String(item.created_at)).toISOString(),customerName:String(item.customer_name||""),productRevenue:Number(item.product_revenue)||0,discount:Number(item.discount_amount)||0,delivery:Number(item.delivery_fee)||0,status:String(item.order_status)})),
+  };
+}
+
 export async function adminBootstrap(section = "/admin") {
   const productEditorId = section.match(/^\/admin\/products\/([^/]+)$/)?.[1],
     isProducts = section === "/admin/products" || section === "/admin/products/new" || Boolean(productEditorId),
