@@ -9,6 +9,7 @@ import { validateDiscount } from "./discounts.js";
 import { resolveFulfillment } from "./fulfillment.js";
 import { paymentMethodAvailable } from "../../../shared/payment-availability.js";
 import { enforceOnlineStoreAvailability } from "../../../shared/order-source.js";
+import { createAdminNotification } from "./notifications.js";
 
 export {
   findGuestOrder,
@@ -348,6 +349,7 @@ export async function createOrder(
         }),
       ],
     );
+    await createAdminNotification(client,{type:input.paymentMethod==="bank"?"payment_verification":"new_order",title:input.paymentMethod==="bank"?"Payment awaiting verification":"New order received",description:`${orderId} · ${input.customerName}`,href:`/admin/orders/${encodeURIComponent(orderId)}`,entityType:"order",entityId:orderId});
 
     return mapOrder(
       (

@@ -157,7 +157,7 @@ export default function CustomerOrdersPage() {
             </button>
           </div>
         ) : tab === "orders" ? (
-          <OrdersView orders={orders} open={open} setOpen={setOpen} />
+          <OrdersView orders={orders} open={open} setOpen={setOpen} onChanged={load} />
         ) : (
           <PreordersView requests={preorders} />
         )}
@@ -169,11 +169,15 @@ function OrdersView({
   orders,
   open,
   setOpen,
+  onChanged,
 }: {
   orders: CustomerOrder[];
   open: string;
   setOpen: (id: string) => void;
+  onChanged:()=>Promise<void>;
 }) {
+  const [cancelReason,setCancelReason]=useState("Changed my mind"),[cancelling,setCancelling]=useState(""),[cancelError,setCancelError]=useState("");
+  async function cancel(order:CustomerOrder){if(!window.confirm("Are you sure you want to cancel this order?"))return;let customReason="";if(cancelReason==="Other"){customReason=window.prompt("Tell us why you are cancelling:")?.trim()||"";if(!customReason)return;}setCancelling(order.orderId);setCancelError("");try{await api.cancelCustomerOrder({orderId:order.orderId,reason:cancelReason,customReason});await onChanged();}catch(reason){setCancelError(reason instanceof Error?reason.message:"Could not cancel this order.");}finally{setCancelling("");}}
   if (!orders.length)
     return (
       <div className="account-state">
@@ -353,6 +357,8 @@ function OrdersView({
                 </div>
               </dl>
               <DocumentButton label="DOWNLOAD INVOICE" run={()=>downloadInvoicePdf(order)}/>
+              {order.paymentMethod==="cod"&&["Pending","Confirmed"].includes(order.orderStatus)?<div className="mt-4 border border-red-900/15 bg-red-950/[.03] p-4"><p className="text-xs font-semibold uppercase tracking-wider text-red-900">Cancel order</p><select className="field mt-3" value={cancelReason} onChange={event=>setCancelReason(event.target.value)}><option>Changed my mind</option><option>Ordered by mistake</option><option>Need to change the order</option><option>Other</option></select><button type="button" className="btn mt-3 text-red-900" disabled={cancelling===order.orderId} onClick={()=>void cancel(order)}>{cancelling===order.orderId?"CANCELLING…":"CANCEL ORDER"}</button>{cancelError?<p role="alert" className="mt-2 text-xs text-red-900">{cancelError}</p>:null}</div>:order.paymentMethod==="bank"&&!(["Delivered","Cancelled"].includes(order.orderStatus))?<p className="mt-4 text-xs text-ink/55">Contact ZEVENRA for cancellation assistance.</p>:order.orderStatus==="Dispatched"?<p className="mt-4 text-xs text-ink/55">This order has already been dispatched. Contact ZEVENRA if you need help.</p>:null}
+              {order.orderStatus==="Cancelled"&&order.cancellationReason?<p className="mt-4 text-xs text-red-900">Cancelled: {order.cancellationReason}</p>:null}
             </div>
           )}
         </article>

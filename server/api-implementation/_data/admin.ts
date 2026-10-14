@@ -35,7 +35,7 @@ async function recentOrdersWithItems(limit = 50) {
 export async function dashboard() {
   const [counts,products,top,items,preorders,recent] = await Promise.all([
     query<Record<string, unknown>>(
-      `SELECT count(*) FILTER(WHERE (created_at AT TIME ZONE 'Asia/Colombo')::date=(now() AT TIME ZONE 'Asia/Colombo')::date)::int AS orders_today,count(*) FILTER(WHERE order_status='pending')::int AS pending,count(*) FILTER(WHERE order_status='confirmed')::int AS confirmed,count(*) FILTER(WHERE order_status='packed')::int AS packed,count(*) FILTER(WHERE order_status='shipped')::int AS shipped,count(*) FILTER(WHERE order_status='delivered')::int AS delivered,count(*) FILTER(WHERE order_status='cancelled')::int AS cancelled,COALESCE(sum(subtotal-COALESCE(discount_amount,0)) FILTER(WHERE order_status='delivered' AND lower(payment_status) IN('paid','verified')),0) AS product_revenue,COALESCE(sum(delivery_fee) FILTER(WHERE order_status='delivered' AND lower(payment_status) IN('paid','verified')),0) AS delivery_collected FROM orders`,
+      `SELECT count(*) FILTER(WHERE (created_at AT TIME ZONE 'Asia/Colombo')::date=(now() AT TIME ZONE 'Asia/Colombo')::date)::int AS orders_today,count(*) FILTER(WHERE order_status='pending')::int AS pending,count(*) FILTER(WHERE order_status='confirmed')::int AS confirmed,count(*) FILTER(WHERE order_status IN('dispatched','packed','shipped','sourcing'))::int AS dispatched,count(*) FILTER(WHERE order_status='delivered')::int AS delivered,count(*) FILTER(WHERE order_status='cancelled')::int AS cancelled,COALESCE(sum(subtotal-COALESCE(discount_amount,0)) FILTER(WHERE order_status='delivered' AND lower(payment_status) IN('paid','verified')),0) AS product_revenue,COALESCE(sum(delivery_fee) FILTER(WHERE order_status='delivered' AND lower(payment_status) IN('paid','verified')),0) AS delivery_collected FROM orders`,
     ),
     query<Record<string, unknown>>(
       `SELECT
@@ -69,8 +69,7 @@ export async function dashboard() {
     ordersToday: Number(row.orders_today) || 0,
     pending: Number(row.pending) || 0,
     confirmed: Number(row.confirmed) || 0,
-    packed: Number(row.packed) || 0,
-    shipped: Number(row.shipped) || 0,
+    dispatched: Number(row.dispatched) || 0,
     delivered: Number(row.delivered) || 0,
     cancelled: Number(row.cancelled) || 0,
     revenue: Number(row.product_revenue) || 0,

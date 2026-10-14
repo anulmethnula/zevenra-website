@@ -245,7 +245,7 @@ function Dashboard() {
     ], activity=[
       {label:"Orders Today",value:stats?.ordersToday||0,to:"/admin/orders?date=today"},{label:"Items Sold",value:stats?.itemsSold||0,to:deliveredOrders},{label:"Delivery Collected",value:money(stats?.deliveryCollected||0),to:finance,help:"Delivery fees are shown separately and are not included in product revenue or gross profit."},{label:"Active Pre-orders",value:stats?.preorderNew||0,to:"/admin/preorders?status=active"},
     ], operations=[
-      {label:"Pending Orders",value:stats?.pending||0,to:"/admin/orders?status=pending"},{label:"Confirmed",value:stats?.confirmed||0,to:"/admin/orders?status=confirmed"},{label:"Packed",value:stats?.packed||0,to:"/admin/orders?status=packed"},{label:"Shipped",value:stats?.shipped||0,to:"/admin/orders?status=shipped"},{label:"Delivered",value:stats?.delivered||0,to:deliveredOrders},{label:"Cancelled",value:stats?.cancelled||0,to:"/admin/orders?status=cancelled"},
+      {label:"Pending Orders",value:stats?.pending||0,to:"/admin/orders?status=pending"},{label:"Confirmed",value:stats?.confirmed||0,to:"/admin/orders?status=confirmed"},{label:"Dispatched",value:stats?.dispatched||0,to:"/admin/orders?status=dispatched"},{label:"Delivered",value:stats?.delivered||0,to:deliveredOrders},{label:"Cancelled",value:stats?.cancelled||0,to:"/admin/orders?status=cancelled"},
     ], storeCards=[{label:"Published Products",value:stats?.publishedProducts||0,to:"/admin/products?status=published"},{label:"Low Stock",value:stats?.lowStockProducts||0,to:"/admin/products?stock=low"}];
   return (
     <>
@@ -2623,9 +2623,9 @@ function Preorders() {
                   <div><span>Created</span><b>{new Date(item.createdAt).toLocaleString("en-LK", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</b></div>
                   <div><span>Estimated arrival</span><b>3–4 weeks</b></div>
                 </section>
-                {item.paymentReceiptUrl&&<section className="preorder-drawer-section">
-                  <div className="grid gap-3"><small>Payment receipt</small><ProtectedReceipt url={item.paymentReceiptUrl}/>
-                    {item.status==="payment_submitted"&&<div className="flex flex-wrap gap-2"><button type="button" disabled={busy===item.requestId||!item.paymentReceiptUrl} onClick={()=>void change(item,"paid")} className="btn btn-dark">Verify payment</button><button type="button" disabled={busy===item.requestId} onClick={()=>{setRejecting(item);setRejectionReason("");setCustomRejectionReason("");}} className="btn text-red-800">Request new receipt</button></div>}
+                {item.paymentReceiptUrl&&<section className="preorder-drawer-section pb-4">
+                  <div className="grid gap-4"><small>Payment receipt</small><ProtectedReceipt url={item.paymentReceiptUrl}/>
+                    {item.status==="payment_submitted"&&<div className="flex flex-wrap gap-3 pb-1"><button type="button" disabled={busy===item.requestId||!item.paymentReceiptUrl} onClick={()=>void change(item,"paid")} className="btn btn-dark">Verify payment</button><button type="button" disabled={busy===item.requestId} onClick={()=>{setRejecting(item);setRejectionReason("");setCustomRejectionReason("");}} className="btn text-red-800">Request new receipt</button></div>}
                   </div>
                 </section>}
                 <div className="preorder-admin-grid">
@@ -2959,8 +2959,8 @@ function Orders() {
     const matchesOrder =
       orderFilter === "all" ||
       String(order.orderStatus).toLowerCase() === orderFilter ||
+      (orderFilter === "dispatched" && ["dispatched","sourcing","packed","shipped"].includes(String(order.orderStatus).toLowerCase())) ||
       (orderFilter === "needs_payment" && order.paymentMethod === "bank" && !["paid", "verified"].includes(payment)) ||
-      (orderFilter === "ready_to_pack" && ["confirmed", "sourcing"].includes(String(order.orderStatus).toLowerCase())) ||
       (orderFilter === "returns" && Number(order.returnCount) > 0);
     const matchesSource = sourceFilter === "all" || (sourceFilter === "preorder" ? Boolean(order.sourcePreorderRequestId) : !order.sourcePreorderRequestId);
     const matchesQuery =
@@ -3131,8 +3131,7 @@ function Orders() {
           String(order.paymentStatus || "").toLowerCase(),
         ),
     ).length,
-    readyToPack = orders.filter((order) => ["confirmed", "sourcing"].includes(String(order.orderStatus).toLowerCase())).length,
-    shipped = orders.filter((order) => String(order.orderStatus).toLowerCase() === "shipped").length,
+    dispatched = orders.filter((order) => ["dispatched","sourcing","packed","shipped"].includes(String(order.orderStatus).toLowerCase())).length,
     returns = orders.filter((order) => Number(order.returnCount) > 0).length;
   return (
     <>
@@ -3392,8 +3391,7 @@ function Orders() {
           ["All", orders.length, "all"],
           ["Pending", pending, "pending"],
           ["Needs payment", bankVerify, "needs_payment"],
-          ["Ready to pack", readyToPack, "ready_to_pack"],
-          ["Shipped", shipped, "shipped"],
+          ["Dispatched", dispatched, "dispatched"],
           ["Returns", returns, "returns"],
         ].map(([label, value, filter]) => (
           <button type="button" onClick={() => setOrderFilter(String(filter))} key={label} className={`flex min-h-11 items-center gap-3 border px-4 text-xs transition ${orderFilter===filter?"border-black bg-black text-white":"border-black/10 bg-[#f6f3ed] hover:border-black/30"}`}>
@@ -3422,14 +3420,11 @@ function Orders() {
         >
           <option value="all">All order statuses</option>
           <option value="needs_payment">Needs payment</option>
-          <option value="ready_to_pack">Ready to pack</option>
           <option value="returns">Returns</option>
           {[
             "pending",
             "confirmed",
-            "sourcing",
-            "packed",
-            "shipped",
+            "dispatched",
             "delivered",
             "cancelled",
           ].map((value) => (
@@ -3651,45 +3646,35 @@ function Orders() {
                                 ).toLowerCase()}
                                 onChange={(e) => {
                                   const value = e.target.value;
-                                  if (
-                                    value === "cancelled" &&
-                                    !window.confirm(
-                                      "Cancel this order? Reserved stock will be returned to available inventory.",
-                                    )
-                                  )
-                                    return;
-                                  void change(order.orderId, {
-                                    orderStatus: value,
-                                  });
+                                  if(value==="cancelled"){
+                                    const reason=window.prompt("CANCEL ORDER\n\nEnter one reason exactly or add a short custom reason:\nCustomer requested cancellation\nUnable to fulfil\nPayment issue\nDuplicate order\nIncorrect order\nOther");
+                                    if(!reason?.trim())return;
+                                    void change(order.orderId,{orderStatus:value,cancellationReason:reason.trim(),cancelledBy:"owner"});return;
+                                  }
+                                  void change(order.orderId,{orderStatus:value});
                                 }}
                               >
                                 {[
                                   String(detail.orderStatus).toLowerCase(),
                                   ...(
                                     detail.sourcePreorderRequestId ? {
-                                      pending: ["shipped", "cancelled"],
-                                      shipped: ["delivered"],
+                                      pending: ["dispatched", "cancelled"],
+                                      dispatched: ["delivered"],
                                       delivered: [],
-                                      cancelled: [],
+                                      cancelled: [detail.cancelledFromStatus||"pending"],
                                     } : {
                                       pending: ["confirmed", "cancelled"],
-                                      confirmed: [
-                                        "sourcing",
-                                        "packed",
-                                        "cancelled",
-                                      ],
-                                      sourcing: ["packed", "cancelled"],
-                                      packed: ["shipped", "cancelled"],
-                                      shipped: ["delivered"],
+                                      confirmed: ["dispatched","cancelled"],
+                                      dispatched: ["delivered"],
                                       delivered: [],
-                                      cancelled: [],
+                                      cancelled: [detail.cancelledFromStatus||"pending"],
                                     } as Record<string, string[]>
                                   )[
                                     String(detail.orderStatus).toLowerCase()
                                   ],
                                 ].map((value) => (
                                   <option key={value} value={value}>
-                                    {detail.sourcePreorderRequestId && value === "pending" ? "pending dispatch" : detail.sourcePreorderRequestId && value === "shipped" ? "dispatched" : value}
+                                    {value===String(detail.cancelledFromStatus||"")&&String(detail.orderStatus).toLowerCase()==="cancelled"?`Restore to ${value}`:value}
                                   </option>
                                 ))}
                               </select>
@@ -4036,7 +4021,7 @@ type AdminReturn = {
 
 function ReturnsPanel({ order, onMessage }: { order: AdminOrderDetail; onMessage: (value: string) => void }) {
   const [returns, setReturns] = useState<AdminReturn[]>([]), [loading, setLoading] = useState(false), [creating, setCreating] = useState(false);
-  const eligible = order.orderStatus === "shipped" || order.orderStatus === "delivered";
+  const eligible = ["dispatched","shipped"].includes(order.orderStatus) || order.orderStatus === "delivered";
   const load = useCallback(async () => { setLoading(true); try { setReturns(await adminApi.get<AdminReturn[]>("listReturns", { orderId: order.orderId })); } catch (reason) { onMessage(reason instanceof Error ? reason.message : "Could not load returns."); } finally { setLoading(false); } }, [onMessage, order.orderId]);
   useEffect(() => { void load(); }, [load]);
   async function create(event: React.FormEvent<HTMLFormElement>) { event.preventDefault(); const raw = new FormData(event.currentTarget), items = order.items.map((item) => ({ orderItemId: item.orderItemId, quantity: Number(raw.get(`qty-${item.orderItemId}`) || 0) })).filter((item) => item.orderItemId && item.quantity > 0); try { await adminApi.post("createReturn", { orderId: order.orderId, type: raw.get("type"), reason: raw.get("reason"), notes: raw.get("notes"), refundRequired: raw.get("refundRequired") === "on", items }); setCreating(false); onMessage("Return created. Stock has not been changed."); await load(); } catch (reason) { onMessage(reason instanceof Error ? reason.message : "Could not create return."); } }
@@ -4045,7 +4030,7 @@ function ReturnsPanel({ order, onMessage }: { order: AdminOrderDetail; onMessage
 }
 function OrderDetailsEditor({ order, onSaved }: { order: AdminOrderDetail; onSaved: (order: AdminOrderDetail) => void }) {
   const [editing,setEditing]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState("");
-  const locked=["shipped","delivered","cancelled"].includes(String(order.orderStatus).toLowerCase());
+  const locked=["dispatched","shipped","delivered","cancelled"].includes(String(order.orderStatus).toLowerCase());
   async function save(event:React.FormEvent<HTMLFormElement>){event.preventDefault();setBusy(true);setError("");try{const raw=Object.fromEntries(new FormData(event.currentTarget));const updated=await adminApi.post<AdminOrderDetail>("updateOrderDetails",{orderId:order.orderId,...raw});onSaved(updated);setEditing(false);}catch(reason){setError(reason instanceof Error?reason.message:"Could not update details.");}finally{setBusy(false);}}
   if(locked)return <p className="border-l-2 border-black/15 pl-3 text-xs leading-5 text-black/45">Customer and delivery details are locked after shipment.</p>;
   if(!editing)return <button type="button" className="btn w-full" onClick={()=>setEditing(true)}>Edit customer & delivery details</button>;

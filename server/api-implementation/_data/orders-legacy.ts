@@ -378,22 +378,21 @@ export async function updateOrder(input: Record<string, unknown>) {
       )
     ).rows[0];
     if (!current) throw new Error("Order not found");
-    const currentStatus = String(current.order_status),
+    const storedStatus = String(current.order_status),
+      currentStatus = ["sourcing","packed","shipped"].includes(storedStatus)?"dispatched":storedStatus,
       nextStatus = String(input.orderStatus ?? currentStatus).toLowerCase(),
       preorderOrder = Boolean(current.source_preorder_request_id),
       transitions: Record<string, string[]> = preorderOrder ? {
-        pending: ["shipped", "cancelled"],
-        shipped: ["delivered"],
+        pending: ["dispatched", "cancelled"],
+        dispatched: ["delivered"],
         delivered: [],
-        cancelled: [],
+        cancelled: ["pending","confirmed"],
       } : {
         pending: ["confirmed", "cancelled"],
-        confirmed: ["sourcing", "packed", "cancelled"],
-        sourcing: ["packed", "cancelled"],
-        packed: ["shipped", "cancelled"],
-        shipped: ["delivered"],
+        confirmed: ["dispatched", "cancelled"],
+        dispatched: ["delivered"],
         delivered: [],
-        cancelled: [],
+        cancelled: ["pending","confirmed"],
       };
     if (nextStatus !== currentStatus && !transitions[currentStatus]?.includes(nextStatus))
       throw new Error(`Order cannot move from ${currentStatus} to ${nextStatus}.`);
@@ -409,8 +408,20 @@ export async function updateOrder(input: Record<string, unknown>) {
     if (current.payment_method === "bank" && nextPayment.toLowerCase() === "rejected" && !["pending", "cancelled"].includes(nextStatus))
       throw new Error("A rejected bank payment cannot progress through fulfilment.");
     const fulfilmentName = String(input.fulfilmentCourierName ?? current.fulfilment_courier_name ?? "").trim();
-    if (nextStatus === "shipped" && !fulfilmentName)
-      throw new Error("Select the actual fulfilment courier before marking this order shipped.");
+    if (nextStatus === "dispatched" && !fulfilmentName)
+      throw new Error("Select the actual fulfilment courier before marking this order dispatched.");
+    const cancellationReason=String(input.cancellationReason||"").trim(),cancelledBy=String(input.cancelledBy||"owner");
+    if(nextStatus==="cancelled"&&!(["pending","confirmed"].includes(currentStatus)))throw new Error("Dispatched or delivered orders must use the return workflow.");
+    if(nextStatus==="cancelled"&&!cancellationReason)throw new Error("Choose a cancellation reason.");
+    const restoring=currentStatus==="cancelled"&&nextStatus!=="cancelled";
+    if(restoring){
+      const previous=String(current.cancelled_from_status||"");
+      if(!["pending","confirmed"].includes(previous)||nextStatus!==previous)throw new Error("This order cannot be restored to that status.");
+      if(current.stock_state==="restored"){
+        const items=await client.query<Record<string,unknown>>("SELECT * FROM order_items WHERE order_id=$1 ORDER BY id FOR UPDATE",[orderId]);
+        for(const item of items.rows)if(!item.is_preorder&&item.variant_id){const updated=await client.query("UPDATE variants SET stock=stock-$2,updated_at=now() WHERE id=$1 AND stock>=$2",[item.variant_id,item.quantity]);if(!updated.rowCount)throw new Error("Order cannot be restored because inventory is no longer available.");}
+      }
+    }
     let restoredUnits = 0;
     if (nextStatus === "cancelled" && currentStatus !== "cancelled" && current.stock_state === "reserved") {
       const items = await client.query<Record<string, unknown>>(
@@ -426,7 +437,7 @@ export async function updateOrder(input: Record<string, unknown>) {
           restoredUnits += Number(item.quantity) || 0;
         }
     }
-    const stockState =
+    const stockState = restoring&&current.stock_state==="restored"?"reserved":
       nextStatus === "cancelled" && current.stock_state === "reserved"
         ? "restored"
         : nextStatus === "delivered" && current.stock_state === "reserved"
@@ -451,6 +462,8 @@ export async function updateOrder(input: Record<string, unknown>) {
       paymentStatus = automaticCodPaid ? "paid" : nextPayment;
     const updates = ["order_status=$2", "stock_state=$3", "payment_status=$4", "updated_at=now()"],
       values: unknown[] = [orderId, nextStatus, stockState, paymentStatus];
+    if(nextStatus==="cancelled"){values.push(cancellationReason);updates.push(`cancellation_reason=$${values.length}`);values.push(cancelledBy);updates.push(`cancelled_by=$${values.length}`);updates.push("cancelled_at=now()");values.push(currentStatus);updates.push(`cancelled_from_status=$${values.length}`);}
+    if(restoring)updates.push("cancelled_at=NULL,cancelled_by=NULL,cancellation_reason=NULL");
     for (const key of fields)
       if (input[key] !== undefined) {
         values.push(input[key] || null);
@@ -482,7 +495,7 @@ export async function updateOrderDetails(input: Record<string, unknown>) {
   return withTransaction(async (client) => {
     const current = (await client.query<Record<string, unknown>>("SELECT * FROM orders WHERE order_id=$1 FOR UPDATE", [orderId])).rows[0];
     if (!current) throw new Error("Order not found");
-    if (["shipped", "delivered", "cancelled"].includes(String(current.order_status)))
+    if (["dispatched", "shipped", "delivered", "cancelled"].includes(String(current.order_status)))
       throw new Error("Customer and delivery details are locked after shipment.");
     const fields = ["customerName","phone","whatsapp","email","address1","address2","city","district","postalCode","deliveryNotes"] as const,
       columns: Record<(typeof fields)[number], string> = { customerName:"customer_name",phone:"phone",whatsapp:"whatsapp",email:"email",address1:"address1",address2:"address2",city:"city",district:"district",postalCode:"postal_code",deliveryNotes:"delivery_notes" },

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   BarChart3,
+  Bell,
   Boxes,
   FolderKanban,
   Gauge,
@@ -19,6 +20,9 @@ import {
 import { useStore } from "../features/store/StoreContext";
 import { AdminToasts } from "../components/admin/AdminToasts";
 import { Seo } from "../components/Seo";
+import { adminApi } from "../services/adminApi";
+
+type AdminNotification={id:string;title:string;description:string;href:string;readAt:string;createdAt:string};
 
 const links = [
   ["/admin", Gauge, "Dashboard"],
@@ -39,6 +43,8 @@ export function AdminLayout() {
     [authorized, setAuthorized] = useState(false),
     [commandOpen, setCommandOpen] = useState(false),
     [commandQuery, setCommandQuery] = useState(""),
+    [notifications,setNotifications]=useState<AdminNotification[]>([]),
+    [notificationsOpen,setNotificationsOpen]=useState(false),
     [sessionError, setSessionError] = useState(""),
     navigate = useNavigate(),
     location = useLocation(),
@@ -85,6 +91,7 @@ export function AdminLayout() {
   useEffect(() => {
     if (authorized) void store.loadAdmin(location.pathname);
   }, [authorized, location.pathname, store.loadAdmin]);
+  useEffect(()=>{if(!authorized||!store.live)return;const controller=new AbortController();void adminApi.get<AdminNotification[]>("listNotifications",{},controller.signal).then(setNotifications).catch(()=>undefined);return()=>controller.abort();},[authorized,store.live]);
   useEffect(() => {
     const shortcut = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
@@ -165,6 +172,9 @@ export function AdminLayout() {
   const pageLabel = links.find(([to]) => to === location.pathname || (to !== "/admin" && location.pathname.startsWith(to)))?.[2] || "Operations";
   const commands = links.filter(([, , label]) => label.toLowerCase().includes(commandQuery.trim().toLowerCase()));
   const runCommand = (to: string) => { setCommandOpen(false); setCommandQuery(""); navigate(to); };
+  const unread=notifications.filter(item=>!item.readAt).length;
+  async function openNotification(item:AdminNotification){setNotificationsOpen(false);if(!item.readAt){setNotifications(current=>current.map(value=>value.id===item.id?{...value,readAt:new Date().toISOString()}:value));await adminApi.post("markNotificationRead",{id:item.id}).catch(()=>undefined);}navigate(item.href);}
+  async function readAll(){setNotifications(current=>current.map(item=>({...item,readAt:item.readAt||new Date().toISOString()})));await adminApi.post("markAllNotificationsRead",{}).catch(()=>undefined);}
   return (
     <div className="admin-shell min-h-dvh">
       <Seo title={pageLabel} noindex />
@@ -191,6 +201,7 @@ export function AdminLayout() {
             <p>ZEVENRA / {pageLabel.toUpperCase()}</p>
           </div>
           <button type="button" className="admin-command-trigger" onClick={() => setCommandOpen(true)} aria-label="Open admin command bar"><Search size={15}/><span>Search admin</span><kbd>⌘K</kbd></button>
+          <div className="relative ml-auto"><button type="button" className="relative grid min-h-11 min-w-11 place-items-center" aria-label={`Notifications${unread?` (${unread} unread)`:""}`} aria-expanded={notificationsOpen} onClick={()=>setNotificationsOpen(value=>!value)}><Bell size={18}/>{unread?<span className="absolute right-1 top-1 grid min-h-5 min-w-5 place-items-center rounded-full bg-red-800 px-1 text-[9px] text-white">{unread>99?"99+":unread}</span>:null}</button>{notificationsOpen?<div className="absolute right-0 top-12 z-50 w-[min(22rem,calc(100vw-2rem))] border border-black/10 bg-[#f6f3ed] p-3 shadow-2xl"><div className="flex items-center justify-between border-b border-black/10 pb-3"><b className="text-sm">Notifications</b><button type="button" className="text-[10px] uppercase tracking-wider underline" onClick={()=>void readAll()}>Mark all as read</button></div><div className="max-h-96 overflow-y-auto">{notifications.length?notifications.map(item=><button type="button" key={item.id} onClick={()=>void openNotification(item)} className={`block w-full border-b border-black/10 p-3 text-left last:border-0 ${item.readAt?"opacity-55":"bg-white/40"}`}><span className="block text-xs font-semibold">{item.title}</span><span className="mt-1 block text-xs text-black/55">{item.description}</span><span className="mt-2 block text-[10px] text-black/40">{new Date(item.createdAt).toLocaleString("en-LK",{timeZone:"Asia/Colombo"})}</span></button>):<p className="p-6 text-center text-xs text-black/45">No notifications yet.</p>}</div></div>:null}</div>
           <span
             className={`admin-live-badge ${store.live ? "is-live" : "is-demo"}`}
           >

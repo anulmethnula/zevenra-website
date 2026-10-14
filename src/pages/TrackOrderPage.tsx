@@ -9,7 +9,7 @@ import { getRecentGuestOrders, orderIdFromSearch, rememberGuestOrder, removeRece
 import { deliveryAddressLines } from "../utils/orderPdf";
 import { downloadInvoicePdf } from "../utils/invoicePdf";
 import { downloadPreorderSummaryPdf } from "../utils/preorderSummaryPdf";
-import { orderProgress, safeHttpsUrl } from "../utils/orderTracking";
+import { customerOrderStatus, orderProgress, safeHttpsUrl } from "../utils/orderTracking";
 
 const failure = "We couldn't find an order with those details. Check your Order ID and mobile number.";
 
@@ -46,8 +46,8 @@ export default function TrackOrderPage() {
 
 function OrderResult({ order }: { order: GuestTrackedOrder }) {
   const [pdfBusy, setPdfBusy] = useState(false), [message, setMessage] = useState(""),
-    cancelled = order.orderStatus.toLowerCase() === "cancelled",
-    currentIndex = orderProgress.findIndex(([status]) => status === order.orderStatus.toLowerCase()),
+    publicStatus=customerOrderStatus(order.orderStatus),cancelled = publicStatus === "cancelled",
+    currentIndex = orderProgress.findIndex(([status]) => status === publicStatus),
     trackingUrl = safeHttpsUrl(order.trackingUrl),
     address = deliveryAddressLines(order);
   async function pdf() { setPdfBusy(true); setMessage(""); try { await downloadInvoicePdf(order); } catch { setMessage("We couldn't prepare the invoice. Please try again."); } finally { setPdfBusy(false); } }

@@ -1,4 +1,5 @@
 import type { CustomerOrder, GuestTrackedOrder, Order } from "../types";
+import { siteConfig } from "../config/site";
 
 export type InvoiceOrder={orderId:string;createdAt:string;customerName:string;phone?:string;email?:string;address1?:string;address2?:string;city?:string;district?:string;postalCode?:string;deliveryMethodName?:string;fulfillmentMethod?:string;pickupBranchName?:string;pickupBranchAddress?:string;fulfilmentCourierName?:string;courierName?:string;paymentMethod:string;paymentStatus?:string;subtotal:number;discountAmount?:number;deliveryFee:number;total:number;items:Array<{name:string;color?:string;size?:string;quantity:number;unitPrice:number}>};
 export type InvoiceOrderSource=Order|GuestTrackedOrder|CustomerOrder|InvoiceOrder;
@@ -15,7 +16,7 @@ export function invoicePaymentStatus(order: Pick<InvoiceOrder, "paymentMethod" |
   return ["paid", "verified"].includes(clean(order.paymentStatus).toLowerCase()) ? "Paid" : "Pending verification";
 }
 
-export async function createInvoicePdf(input: InvoiceOrderSource) {
+export async function createInvoicePdf(input: InvoiceOrderSource,storeContact=siteConfig.whatsapp) {
   const order=normalizeInvoiceOrder(input);
   const [{ jsPDF }, { default: autoTable }] = await Promise.all([
       import("jspdf"),
@@ -176,13 +177,15 @@ export async function createInvoicePdf(input: InvoiceOrderSource) {
     doc.setTextColor(60);
     doc.text("Thank you for shopping with ZEVENRA.", left, 284);
     doc.setFont("helvetica", "normal");
-    doc.text("Keep your Order ID for tracking/support.", left, 289);
+    doc.text(`NEED HELP? Contact ZEVENRA · Phone / WhatsApp: ${clean(storeContact)}`, left, 289);
+    doc.setFontSize(7);
+    doc.text("For order changes, cancellations or support, please contact ZEVENRA.", left, 293);
     doc.text(`Page ${page} of ${pages}`, right, 289, { align: "right" });
   }
   return doc;
 }
 
-export async function downloadInvoicePdf(input: InvoiceOrderSource) {
-  const order=normalizeInvoiceOrder(input),doc = await createInvoicePdf(order);
+export async function downloadInvoicePdf(input: InvoiceOrderSource,storeContact=siteConfig.whatsapp) {
+  const order=normalizeInvoiceOrder(input),doc = await createInvoicePdf(order,storeContact);
   doc.save(`ZEVENRA-Invoice-${order.orderId}.pdf`);
 }

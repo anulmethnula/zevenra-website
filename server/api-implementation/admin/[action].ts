@@ -72,6 +72,7 @@ import { CourierRateFileError } from "../_data/courier-rate-parser.js";
 import { deleteDiscount, DiscountConflictError, discountDeleteSchema, listDiscounts, saveDiscount } from "../_data/discounts.js";
 import { FulfillmentConfigError, listFulfillmentConfig, saveFulfillmentConfig } from "../_data/fulfillment.js";
 import { changeAdminPassword,changeAdminUsername,generateAdminRecoveryCode,getAdminAuth,validAdminPassword,validAdminSession,validAdminUsername } from "../_admin-auth.js";
+import { listAdminNotifications,markAdminNotificationRead,markAllAdminNotificationsRead } from "../_data/notifications.js";
 
 const readActions = new Set([
   "bootstrap",
@@ -97,6 +98,7 @@ const readActions = new Set([
   "listDiscounts",
   "getFulfillmentConfig",
   "getAdminSecurity",
+  "listNotifications",
 ]);
 const mutationActions = new Set([
   "saveProduct", "setProductStatus", "archiveProduct", "deleteProduct",
@@ -111,6 +113,7 @@ const mutationActions = new Set([
   "saveDiscount", "deleteDiscount",
   "saveFulfillmentConfig",
   "changeAdminPassword", "changeAdminUsername", "generateAdminRecoveryCode",
+  "markNotificationRead", "markAllNotificationsRead",
 ]);
 const allowed = new Set([...readActions, ...mutationActions]);
 
@@ -122,6 +125,12 @@ async function execute(action: string, payload: Record<string, unknown>) {
       return dashboard();
     case "finance":
       return finance(String(payload.period || "30"));
+    case "listNotifications":
+      return listAdminNotifications();
+    case "markNotificationRead":
+      return markAdminNotificationRead(String(payload.id||""));
+    case "markAllNotificationsRead":
+      return markAllAdminNotificationsRead();
     case "listProducts":
       return listProducts();
     case "listAdminProducts":
@@ -344,6 +353,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if(error instanceof Error&&error.message==="PASSWORD_INVALID")return json(res,{error:"Choose a password with no more than 200 characters."},400);
     if(error instanceof Error&&error.message==="PASSWORD_CONFIRM_MISMATCH")return json(res,{error:"New passwords do not match."},400);
     if(error instanceof Error&&error.message==="USERNAME_INVALID")return json(res,{error:"Use 3–50 letters, numbers, dots, dashes, or underscores."},400);
+    if(error instanceof Error&&error.message==="Order cannot be restored because inventory is no longer available.")return json(res,{error:error.message},409);
+    if(error instanceof Error&&(/Choose a cancellation reason|Dispatched or delivered orders|cannot be restored to that status|cannot move from/.test(error.message)))return json(res,{error:error.message},400);
     const conflict = databaseConflictMessage(action, error);
     if (conflict) return json(res, { error: conflict }, 409);
     console.error("admin action failed", error);

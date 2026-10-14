@@ -4,6 +4,7 @@ import {
   returnTransitionAllowed,
   validateReturnRequest,
 } from "../../../shared/return-lifecycle.js";
+import { createAdminNotification } from "./notifications.js";
 
 export async function listReturns(orderId?: string) {
   const rows = (
@@ -50,8 +51,8 @@ export async function createReturn(input: Record<string, unknown>) {
       )
     ).rows[0];
     if (!order) throw new Error("Order not found");
-    if (type === "courier_rto" && order.order_status !== "shipped")
-      throw new Error("Courier RTO is available only for shipped orders.");
+    if (type === "courier_rto" && !["dispatched","shipped"].includes(String(order.order_status)))
+      throw new Error("Courier RTO is available only for dispatched orders.");
     if (type === "customer_return" && order.order_status !== "delivered")
       throw new Error("Customer returns are available only for delivered orders.");
 
@@ -100,6 +101,7 @@ export async function createReturn(input: Record<string, unknown>) {
       "INSERT INTO audit_logs(actor,action,entity_type,entity_id,details) VALUES('owner','return_created','order_return',$1,$2::jsonb)",
       [id, JSON.stringify({ orderId, type, reason })],
     );
+    await createAdminNotification(client,{type:"return_request",title:"Return requires attention",description:`${orderId} · ${reason}`,href:`/admin/orders/${encodeURIComponent(orderId)}`,entityType:"return",entityId:id});
     return { id, orderId, type, status: "requested", reason, notes };
   });
 }
@@ -172,8 +174,8 @@ export async function updateReturn(input: Record<string, unknown>) {
       if (!order) throw new Error("Order not found");
 
       if (ret.type === "courier_rto") {
-        if (order.order_status !== "shipped")
-          throw new Error("Courier RTO can only be received while the order is shipped.");
+        if (!["dispatched","shipped"].includes(String(order.order_status)))
+          throw new Error("Courier RTO can only be received while the order is dispatched.");
         const prepaid =
             order.payment_method === "bank" &&
             ["paid", "verified"].includes(
@@ -183,7 +185,7 @@ export async function updateReturn(input: Record<string, unknown>) {
           stockState =
             order.stock_state === "reserved" ? "restored" : order.stock_state;
         await client.query(
-          "UPDATE orders SET order_status='cancelled',stock_state=$2,payment_status=$3,updated_at=now() WHERE order_id=$1",
+          "UPDATE orders SET order_status='cancelled',stock_state=$2,payment_status=$3,cancelled_at=now(),cancelled_by='return_workflow',cancellation_reason='Courier return / RTO',cancelled_from_status=order_status,updated_at=now() WHERE order_id=$1",
           [ret.order_id, stockState, paymentStatus],
         );
       } else if (

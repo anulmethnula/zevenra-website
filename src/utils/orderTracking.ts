@@ -1,11 +1,11 @@
 export const orderProgress = [
   ["pending", "Order received"],
   ["confirmed", "Confirmed"],
-  ["sourcing", "Preparing"],
-  ["packed", "Packed"],
-  ["shipped", "Shipped"],
+  ["dispatched", "Dispatched"],
   ["delivered", "Delivered"],
 ] as const;
+
+export function customerOrderStatus(value:string){const normalized=String(value||"pending").toLowerCase();return ["sourcing","packed","shipped"].includes(normalized)?"dispatched":normalized;}
 
 export function safeHttpsUrl(value?: string) {
   if (!value) return "";

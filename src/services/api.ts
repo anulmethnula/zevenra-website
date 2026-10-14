@@ -51,6 +51,7 @@ export const api = {
     demo
       ? Promise.resolve([])
       : request<CustomerPreorder[]>("/account/preorders"),
+  cancelCustomerOrder:(data:{orderId:string;reason:string;customReason?:string})=>request<{ok:boolean;orderId:string;status:string;cancellationReason:string}>("/account/cancel-order",{method:"POST",body:JSON.stringify(data)}),
   trackOrder: (data: { orderId: string; phone: string }) =>
     request<GuestTrackingResult>("/order-track", {
       method: "POST",

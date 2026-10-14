@@ -12,6 +12,7 @@ import {
 import { assertPaymentMethodAvailable, deliverySnapshot } from "./orders.js";
 import { verifyReceiptAsset } from "../_receipt-asset.js";
 import { cloudinaryEnv } from "../_shared.js";
+import { createAdminNotification } from "./notifications.js";
 
 const orderWithItems = `SELECT o.*,COALESCE(NULLIF(o.payment_receipt_public_id,''),pr.payment_receipt_public_id) AS linked_payment_receipt_public_id,pr.created_at AS source_preorder_created_at,pr.notified_at AS source_preorder_notified_at,pr.confirmed_price AS source_preorder_confirmed_price,COALESCE((SELECT jsonb_agg(to_jsonb(oi) ORDER BY oi.id) FROM order_items oi WHERE oi.order_id=o.order_id),'[]') AS items FROM orders o LEFT JOIN preorders pr ON pr.request_id=o.source_preorder_request_id`;
 const newId = (prefix: string) =>
@@ -194,6 +195,7 @@ export async function createPreorder(input: Record<string, unknown>) {
         }),
       ],
     );
+    await createAdminNotification(client,{type:"preorder_payment",title:"New preorder payment submitted",description:`${requestId} · ${input.customerName}`,href:`/admin/preorders?search=${encodeURIComponent(requestId)}`,entityType:"preorder",entityId:requestId});
     return mapPreorder(result.rows[0]);
   });
 }
@@ -208,6 +210,7 @@ export async function submitPreorderPayment(input:{token:string;paymentReceiptUr
     );
     if(!result.rows[0])throw new Error("Pre-order payment link unavailable");
     await client.query("INSERT INTO audit_logs(actor,action,entity_type,entity_id,details) VALUES('customer','payment_submitted','preorder',$1,$2::jsonb)",[result.rows[0].request_id,JSON.stringify({receipt:true})]);
+    await createAdminNotification(client,{type:"preorder_payment",title:"Replacement preorder receipt submitted",description:`${result.rows[0].request_id} · ${result.rows[0].customer_name}`,href:`/admin/preorders?search=${encodeURIComponent(String(result.rows[0].request_id))}`,entityType:"preorder",entityId:String(result.rows[0].request_id)});
     return mapPreorder(result.rows[0]);
   });
 }

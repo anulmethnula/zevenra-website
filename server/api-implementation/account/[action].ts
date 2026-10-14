@@ -25,6 +25,7 @@ import {
   verifyCustomerPassword,
   type CustomerRecord,
 } from "../_shared.js";
+import { cancelCustomerOrder } from "../_data/order-cancellation.js";
 
 type RouteHandler = {
   methods: readonly string[];
@@ -254,6 +255,7 @@ const ROUTES: Record<string, RouteHandler> = {
         deliveryFee?: unknown;
         total?: unknown;
         orderStatus?: unknown;
+        cancellationReason?: unknown;
         items?: Array<{
           variantId?: unknown;
           productName?: unknown;
@@ -308,6 +310,7 @@ const ROUTES: Record<string, RouteHandler> = {
         deliveryFee: Number(order.deliveryFee) || 0,
         total: Number(order.total) || 0,
         orderStatus: normalizeStatus(order.orderStatus),
+        cancellationReason:String(order.cancellationReason||""),
         items: (Array.isArray(order.items) ? order.items : []).map((item) => ({
           variantId: String(item.variantId || ""),
           name: String(item.productName || ""),
@@ -322,6 +325,14 @@ const ROUTES: Record<string, RouteHandler> = {
         })),
       }));
       return json(res, safeOrders);
+    },
+  },
+  "cancel-order": {
+    methods:["POST"],
+    async run(req:VercelRequest,res:VercelResponse){
+      const identity=readCustomerSession(req,true);if(!identity)throw new Error("CUSTOMER_AUTH_REQUIRED");
+      if(!validOrigin(req,originEnv()))return json(res,{error:"Invalid request origin"},403);
+      return json(res,await cancelCustomerOrder(identity.id,body(req) as Record<string,unknown>));
     },
   },
 } as const;
@@ -361,6 +372,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     if (message.startsWith("CUSTOMER_AUTH_"))
       return json(res, { error: "Authentication required." }, 401);
+    if(message==="ORDER_NOT_CANCELLABLE")return json(res,{error:"This order cannot be cancelled online. Contact ZEVENRA for cancellation assistance."},409);
     if (action === "login")
       return json(res, { error: "Unable to sign in right now." }, 500);
     if (action === "register")
@@ -398,15 +410,8 @@ function safeCustomer(customer: CustomerRecord) {
 
 function normalizeStatus(value: unknown) {
   const normalized = String(value || "pending").toLowerCase();
-  const allowed = [
-    "pending",
-    "confirmed",
-    "sourcing",
-    "packed",
-    "shipped",
-    "delivered",
-    "cancelled",
-  ];
+  if(["sourcing","packed","shipped"].includes(normalized))return "Dispatched";
+  const allowed = ["pending","confirmed","dispatched","delivered","cancelled"];
   return allowed.includes(normalized)
     ? normalized.charAt(0).toUpperCase() + normalized.slice(1)
     : "Pending";

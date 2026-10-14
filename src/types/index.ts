@@ -302,6 +302,10 @@ export type Order = {
   orderStatus: string;
   paymentStatus: string;
   stockState?: string;
+  cancelledAt?: string;
+  cancelledBy?: string;
+  cancellationReason?: string;
+  cancelledFromStatus?: string;
   returnCount?: number;
   items: CartItem[];
 };
@@ -348,11 +352,10 @@ export type CustomerOrder = {
   orderStatus:
     | "Pending"
     | "Confirmed"
-    | "Sourcing"
-    | "Packed"
-    | "Shipped"
+    | "Dispatched"
     | "Delivered"
     | "Cancelled";
+  cancellationReason?: string;
   items: CustomerOrderItem[];
 };
 export type DeliveryPricingMode = "zone" | "flat";
@@ -461,8 +464,7 @@ export type DashboardData = {
   ordersToday: number;
   pending: number;
   confirmed: number;
-  packed: number;
-  shipped: number;
+  dispatched: number;
   delivered: number;
   cancelled: number;
   revenue: number;
