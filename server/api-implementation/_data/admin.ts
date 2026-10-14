@@ -55,7 +55,7 @@ export async function dashboard() {
       `SELECT COALESCE(sum(oi.quantity),0)::int AS count FROM order_items oi JOIN orders o ON o.order_id=oi.order_id WHERE o.order_status='delivered' AND lower(o.payment_status) IN('paid','verified')`,
     ),
     query<Record<string, unknown>>(
-      `SELECT count(*) FILTER(WHERE status='new')::int AS new_count FROM preorders`,
+      `SELECT count(*) FILTER(WHERE status NOT IN('converted','cancelled','expired'))::int AS new_count FROM preorders`,
     ),
     recentOrders(10),
   ]),

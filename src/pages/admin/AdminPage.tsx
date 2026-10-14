@@ -239,7 +239,7 @@ function Dashboard() {
           ],
           ["Delivery collected", money(stats?.deliveryCollected || 0), "/admin/orders?status=delivered"],
           ["Items sold", stats?.itemsSold || 0, "/admin/orders?status=delivered"],
-          ["Pre-order requests", stats?.preorderNew || 0, "/admin/preorders?status=new"],
+          ["Active pre-orders", stats?.preorderNew || 0, "/admin/preorders?status=active"],
         ] as Array<[string,string|number,string]>).map(([label, value, to]) => (
           <Link key={label} to={to} aria-label={`View ${label}`} className="admin-metric-card block border p-4 transition hover:-translate-y-0.5 hover:border-bronze/50 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bronze sm:p-5">
             <p className="text-xs text-black/50">{label}</p>
