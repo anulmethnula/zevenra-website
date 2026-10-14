@@ -39,11 +39,11 @@ export function validateReturnRequest(
   }
   if (requireFullOrder) {
     if (requested.length !== purchased.length)
-      throw new Error("Courier RTO must include the complete shipped order.");
+      throw new Error("Courier RTO must include the complete dispatched order.");
     for (const item of purchased) {
       const returned = requested.find((row) => row.orderItemId === Number(item.id));
       if (!returned || returned.quantity !== Number(item.quantity))
-        throw new Error("Courier RTO must include the complete shipped order.");
+        throw new Error("Courier RTO must include the complete dispatched order.");
     }
   }
 }

@@ -8,6 +8,7 @@ import {
   normalizeSriLankanPhoneForLookup,
 } from "../_order-track-normalization.js";
 import { mapOrder } from "./mappers.js";
+import { normalizeOrderStatus } from "../../../shared/order-status.js";
 
 type OrderInput = {
   customerId?: string;
@@ -368,7 +369,7 @@ export async function findGuestOrder(orderId: string, phone: string) {
   return row || null;
 }
 
-export function normalizeAdminOrderStatus(value:unknown){const status=String(value||"pending").toLowerCase();return ["sourcing","packed","shipped"].includes(status)?"dispatched":status;}
+export const normalizeAdminOrderStatus = normalizeOrderStatus;
 export function validOrderTransition(current:unknown,next:unknown){const from=normalizeAdminOrderStatus(current),to=normalizeAdminOrderStatus(next),transitions:Record<string,string[]>={pending:["confirmed"],confirmed:["dispatched"],dispatched:["delivered"],delivered:[]};return from===to||Boolean(transitions[from]?.includes(to));}
 
 export async function updateOrder(input: Record<string, unknown>) {
@@ -502,7 +503,7 @@ export async function updateOrderDetails(input: Record<string, unknown>) {
   return withTransaction(async (client) => {
     const current = (await client.query<Record<string, unknown>>("SELECT * FROM orders WHERE order_id=$1 FOR UPDATE", [orderId])).rows[0];
     if (!current) throw new Error("Order not found");
-    if (["dispatched", "shipped", "delivered", "cancelled"].includes(String(current.order_status)))
+    if (["dispatched", "delivered", "cancelled"].includes(normalizeOrderStatus(current.order_status)))
       throw new Error("Customer and delivery details are locked after shipment.");
     const fields = ["customerName","phone","whatsapp","email","address1","address2","city","district","postalCode","deliveryNotes"] as const,
       columns: Record<(typeof fields)[number], string> = { customerName:"customer_name",phone:"phone",whatsapp:"whatsapp",email:"email",address1:"address1",address2:"address2",city:"city",district:"district",postalCode:"postal_code",deliveryNotes:"delivery_notes" },
@@ -544,7 +545,7 @@ export async function createReturn(input: Record<string, unknown>) {
   return withTransaction(async(client)=>{
     const order=(await client.query<Record<string,unknown>>("SELECT * FROM orders WHERE order_id=$1 FOR UPDATE",[orderId])).rows[0];
     if(!order) throw new Error("Order not found");
-    if(type==="courier_rto"&&order.order_status!=="shipped") throw new Error("Courier RTO is available only for shipped orders.");
+    if(type==="courier_rto"&&normalizeOrderStatus(order.order_status)!=="dispatched") throw new Error("Courier RTO is available only for dispatched orders.");
     if(type==="customer_return"&&order.order_status!=="delivered") throw new Error("Customer returns are available only for delivered orders.");
     const id=`RET-${randomBytes(6).toString("hex").toUpperCase()}`;
     await client.query("INSERT INTO order_returns(id,order_id,type,status,reason,notes,refund_required) VALUES($1,$2,$3,'requested',$4,$5,$6)",[id,orderId,type,reason,notes,refundRequired]);

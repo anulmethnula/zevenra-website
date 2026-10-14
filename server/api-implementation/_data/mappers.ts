@@ -1,3 +1,5 @@
+import { normalizeOrderStatus } from "../../../shared/order-status.js";
+
 const number = (value: unknown) => Number(value) || 0;
 const bool = (value: unknown) =>
   value === true || String(value).toLowerCase() === "true";
@@ -214,7 +216,7 @@ export function mapOrder(row: Record<string, unknown>) {
     minimumDeliveryDays: row.minimum_delivery_days == null ? undefined : number(row.minimum_delivery_days),
     maximumDeliveryDays: row.maximum_delivery_days == null ? undefined : number(row.maximum_delivery_days),
     total: number(row.total),
-    orderStatus: text(row.order_status),
+    orderStatus: normalizeOrderStatus(row.order_status),
     cancelledAt: date(row.cancelled_at),
     cancelledBy: text(row.cancelled_by),
     cancellationReason: text(row.cancellation_reason),
@@ -280,7 +282,9 @@ export function mapPreorder(row: Record<string, unknown>) {
     reservationExpiresAt: text(row.reservation_expires_at),
     releasedAt: text(row.released_at),
     convertedOrderId: text(row.converted_order_id),
-    convertedOrderStatus: text(row.converted_order_status),
+    convertedOrderStatus: row.converted_order_status == null
+      ? ""
+      : normalizeOrderStatus(row.converted_order_status),
     convertedOrderDeliveryFee: row.converted_order_delivery_fee == null ? undefined : number(row.converted_order_delivery_fee),
     paymentReceiptUrl: text(row.payment_receipt_public_id) ? `preorder:${text(row.request_id)}` : "",
     paymentSubmittedAt: text(row.payment_submitted_at),

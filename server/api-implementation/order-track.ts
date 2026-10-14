@@ -3,6 +3,7 @@ import { z } from "zod";
 import { findGuestOrder } from "./_data/orders.js";
 import { findGuestPreorder } from "./_data/preorders.js";
 import { preorderCustomerStatusLabel } from "../../shared/preorder-customer-status.js";
+import { normalizeOrderStatus } from "../../shared/order-status.js";
 import {
   normalizeOrderIdForLookup,
   normalizeSriLankanPhoneForLookup,
@@ -50,7 +51,7 @@ function safeOrder(row: Record<string, unknown>) {
     city: text(row.city),
     district: text(row.district),
     postalCode: text(row.postal_code ?? row.postalCode),
-    orderStatus: ["sourcing","packed","shipped"].includes(text(row.order_status ?? row.orderStatus).toLowerCase())?"dispatched":text(row.order_status ?? row.orderStatus),
+    orderStatus: normalizeOrderStatus(row.order_status ?? row.orderStatus),
     paymentMethod: text(row.payment_method ?? row.paymentMethod),
     paymentStatus: text(row.payment_status ?? row.paymentStatus),
     deliveryZoneName: text(row.delivery_zone_name ?? row.deliveryZoneName),

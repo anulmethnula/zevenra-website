@@ -1,3 +1,5 @@
+import type { OrderStatus } from "../../shared/order-status";
+
 export type Media = {
   url: string;
   alt: string;
@@ -203,7 +205,7 @@ export type GuestTrackedOrder = {
   city: string;
   district: string;
   postalCode: string;
-  orderStatus: string;
+  orderStatus: OrderStatus;
   paymentMethod: string;
   paymentStatus: string;
   deliveryZoneName: string;
@@ -299,7 +301,7 @@ export type Order = {
   minimumDeliveryDays?: number;
   maximumDeliveryDays?: number;
   total: number;
-  orderStatus: string;
+  orderStatus: OrderStatus;
   paymentStatus: string;
   stockState?: string;
   cancelledAt?: string;
@@ -349,12 +351,7 @@ export type CustomerOrder = {
   discountAmount?: number;
   deliveryFee: number;
   total: number;
-  orderStatus:
-    | "Pending"
-    | "Confirmed"
-    | "Dispatched"
-    | "Delivered"
-    | "Cancelled";
+  orderStatus: OrderStatus;
   cancellationReason?: string;
   items: CustomerOrderItem[];
 };
@@ -436,7 +433,7 @@ export type PreorderRequest = {
   reservationExpiresAt?: string;
   releasedAt?: string;
   convertedOrderId?: string;
-  convertedOrderStatus?: string;
+  convertedOrderStatus?: OrderStatus;
   convertedOrderDeliveryFee?: number;
   paymentReceiptUrl?: string;
   paymentSubmittedAt?: string;

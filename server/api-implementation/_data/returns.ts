@@ -4,7 +4,18 @@ import {
   returnTransitionAllowed,
   validateReturnRequest,
 } from "../../../shared/return-lifecycle.js";
+import { normalizeOrderStatus, type OrderStatus } from "../../../shared/order-status.js";
 import { createAdminNotification } from "./notifications.js";
+
+export function returnTypeAllowedForOrder(
+  status: unknown,
+  type: "customer_return" | "courier_rto",
+) {
+  const normalized: OrderStatus = normalizeOrderStatus(status);
+  return type === "courier_rto"
+    ? normalized === "dispatched"
+    : normalized === "delivered";
+}
 
 export async function listReturns(orderId?: string) {
   const rows = (
@@ -51,9 +62,9 @@ export async function createReturn(input: Record<string, unknown>) {
       )
     ).rows[0];
     if (!order) throw new Error("Order not found");
-    if (type === "courier_rto" && !["dispatched","shipped"].includes(String(order.order_status)))
+    if (type === "courier_rto" && !returnTypeAllowedForOrder(order.order_status, type))
       throw new Error("Courier RTO is available only for dispatched orders.");
-    if (type === "customer_return" && order.order_status !== "delivered")
+    if (type === "customer_return" && !returnTypeAllowedForOrder(order.order_status, type))
       throw new Error("Customer returns are available only for delivered orders.");
 
     if (type === "courier_rto") {
@@ -174,7 +185,7 @@ export async function updateReturn(input: Record<string, unknown>) {
       if (!order) throw new Error("Order not found");
 
       if (ret.type === "courier_rto") {
-        if (!["dispatched","shipped"].includes(String(order.order_status)))
+        if (!returnTypeAllowedForOrder(order.order_status, "courier_rto"))
           throw new Error("Courier RTO can only be received while the order is dispatched.");
         const prepaid =
             order.payment_method === "bank" &&

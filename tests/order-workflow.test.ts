@@ -4,6 +4,9 @@ import { readFile } from "node:fs/promises";
 import { customerOrderStatus,orderProgress } from "../src/utils/orderTracking.js";
 import { cancelCustomerOrder } from "../server/api-implementation/_data/order-cancellation.js";
 import { normalizeAdminOrderStatus,validOrderTransition } from "../server/api-implementation/_data/orders-legacy.js";
+import { mapOrder, mapPreorder } from "../server/api-implementation/_data/mappers.js";
+import { convertedOrderStatusLabel, normalizeOrderStatus } from "../shared/order-status.js";
+import { selectDispatchCourierId, sriLankaDateTimeToIso } from "../shared/dispatch.js";
 
 test("customer lifecycle exposes only pending, confirmed, dispatched and delivered",()=>{
   assert.deepEqual(orderProgress.map(([status])=>status),["pending","confirmed","dispatched","delivered"]);
@@ -25,6 +28,23 @@ test("legacy packed and shipped statuses normalize to dispatched",()=>{
   assert.equal(normalizeAdminOrderStatus("shipped"),"dispatched");
 });
 
+test("mapper exposes canonical dispatched for a legacy shipped row",()=>{
+  assert.equal(mapOrder({order_status:"shipped"}).orderStatus,"dispatched");
+  assert.equal(normalizeOrderStatus("shipped"),"dispatched");
+});
+
+test("preorder converted legacy shipped value displays Dispatched",()=>{
+  const preorder=mapPreorder({converted_order_status:"shipped"});
+  assert.equal(preorder.convertedOrderStatus,"dispatched");
+  assert.equal(convertedOrderStatusLabel(preorder.convertedOrderStatus),"Dispatched");
+});
+
+test("dispatch defaults the only active courier and stores Sri Lanka handover time",()=>{
+  assert.equal(selectDispatchCourierId([{id:"one",active:true},{id:"off",active:false}]),"one");
+  assert.equal(selectDispatchCourierId([{id:"one",active:true},{id:"two",active:true}],"two"),"two");
+  assert.equal(sriLankaDateTimeToIso("2026-10-14T12:30"),"2026-10-14T07:00:00.000Z");
+});
+
 test("owner COD pending cancellation restores normal stock once and creates evidence",async()=>{
   let status="pending",stockState="reserved",stock=2,notifications=0,audits=0;
   const client={query:async(sql:string,values?:unknown[])=>{
@@ -40,6 +60,18 @@ test("owner COD pending cancellation restores normal stock once and creates evid
   await cancelCustomerOrder("CUS-1",{orderId:"ZEV-1",reason:"Changed my mind"},transact);
   await cancelCustomerOrder("CUS-1",{orderId:"ZEV-1",reason:"Changed my mind"},transact);
   assert.equal(stock,4);assert.equal(audits,1);assert.equal(notifications,1);
+});
+
+test("owner COD confirmed cancellation is allowed",async()=>{
+  let status="confirmed";
+  const client={query:async(sql:string)=>{
+    if(sql.startsWith("SELECT * FROM orders"))return{rows:[{order_id:"ZEV-3",customer_id:"CUS-1",customer_name:"Anu",payment_method:"cod",order_status:status,stock_state:"restored"}]};
+    if(sql.startsWith("UPDATE orders"))status="cancelled";
+    return{rowCount:1,rows:[]};
+  }};
+  const transact=(async(work:(value:typeof client)=>Promise<unknown>)=>work(client)) as never;
+  await cancelCustomerOrder("CUS-1",{orderId:"ZEV-3",reason:"Changed my mind"},transact);
+  assert.equal(status,"cancelled");
 });
 
 test("customer cancellation rejects bank, dispatched, and wrong-owner orders",async()=>{
@@ -66,7 +98,10 @@ test("admin status UI blocks duplicates, restores server state, and captures dis
   assert.match(source,/finally[\s\S]*updateInFlight\.current\.delete\(orderId\)/);
   assert.match(source,/adminApi\.get<AdminOrderDetail>\("getOrder"/);
   assert.match(source,/fulfilmentCourierProviderId:dispatchCourierId/);
-  assert.match(source,/courierSentDate:new Date\(dispatchHandover\)\.toISOString\(\)/);
+  assert.match(source,/courierSentDate:sriLankaDateTimeToIso\(dispatchHandover\)/);
   assert.match(source,/Tracking number \(optional\)/);
   assert.match(source,/Tracking URL \(optional\)/);
+  assert.match(source,/CONFIRM HANDOVER/);
+  assert.match(source,/value=\{normalizedOrderStatus\}/);
+  assert.match(source,/onClick=\{\(\)=>setDispatchOrderId\(""\)\}/);
 });

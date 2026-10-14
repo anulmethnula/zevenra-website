@@ -1,5 +1,6 @@
 import { withTransaction } from "../_db.js";
 import { createAdminNotification } from "./notifications.js";
+import { normalizeOrderStatus } from "../../../shared/order-status.js";
 
 const customerReasons=["Changed my mind","Ordered by mistake","Need to change the order","Other"];
 export async function cancelCustomerOrder(customerId:string,input:Record<string,unknown>,transact:typeof withTransaction=withTransaction){
@@ -11,7 +12,7 @@ export async function cancelCustomerOrder(customerId:string,input:Record<string,
   return transact(async client=>{
     const order=(await client.query<Record<string,unknown>>("SELECT * FROM orders WHERE order_id=$1 FOR UPDATE",[orderId])).rows[0];
     if(!order||String(order.customer_id)!==customerId)throw new Error("ORDER_NOT_CANCELLABLE");
-    const status=String(order.order_status);
+    const status=normalizeOrderStatus(order.order_status);
     if(status==="cancelled")return{ok:true,orderId,status:"cancelled"};
     if(order.payment_method!=="cod"||!["pending","confirmed"].includes(status))throw new Error("ORDER_NOT_CANCELLABLE");
     if(order.stock_state==="reserved"){

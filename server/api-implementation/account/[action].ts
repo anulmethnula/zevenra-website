@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { normalizeOrderStatus } from "../../../shared/order-status.js";
 import { randomUUID } from "node:crypto";
 import { durableRateLimit } from "../_rate-limit.js";
 import {
@@ -409,12 +410,7 @@ function safeCustomer(customer: CustomerRecord) {
 }
 
 function normalizeStatus(value: unknown) {
-  const normalized = String(value || "pending").toLowerCase();
-  if(["sourcing","packed","shipped"].includes(normalized))return "Dispatched";
-  const allowed = ["pending","confirmed","dispatched","delivered","cancelled"];
-  return allowed.includes(normalized)
-    ? normalized.charAt(0).toUpperCase() + normalized.slice(1)
-    : "Pending";
+  return normalizeOrderStatus(value);
 }
 
 function normalizePreorderStatus(value: unknown) {

@@ -17,6 +17,7 @@ import type { CustomerOrder, CustomerPreorder, PreorderStatus } from "../types";
 import { AccountLoading } from "./AccountPage";
 import { downloadInvoicePdf } from "../utils/invoicePdf";
 import { downloadPreorderSummaryPdf } from "../utils/preorderSummaryPdf";
+import { orderStatusLabel } from "../../shared/order-status";
 
 const preorderLabels: Record<PreorderStatus, string> = {
   new: "Request received",
@@ -233,7 +234,7 @@ function OrdersView({
                 "order-status order-status--" + order.orderStatus.toLowerCase()
               }
             >
-              {order.orderStatus}
+              {orderStatusLabel(order.orderStatus)}
             </span>
             <ChevronDown />
           </button>
@@ -349,7 +350,7 @@ function OrdersView({
                 </div>
                 <div>
                   <dt>Order status</dt>
-                  <dd>{order.orderStatus}</dd>
+                  <dd>{orderStatusLabel(order.orderStatus)}</dd>
                 </div>
                 <div>
                   <dt>Payment status</dt>
@@ -357,8 +358,8 @@ function OrdersView({
                 </div>
               </dl>
               <DocumentButton label="DOWNLOAD INVOICE" run={()=>downloadInvoicePdf(order)}/>
-              {order.paymentMethod==="cod"&&["Pending","Confirmed"].includes(order.orderStatus)?<div className="mt-4 border border-red-900/15 bg-red-950/[.03] p-4"><p className="text-xs font-semibold uppercase tracking-wider text-red-900">Cancel order</p><select className="field mt-3" value={cancelReason} onChange={event=>setCancelReason(event.target.value)}><option>Changed my mind</option><option>Ordered by mistake</option><option>Need to change the order</option><option>Other</option></select><button type="button" className="btn mt-3 text-red-900" disabled={cancelling===order.orderId} onClick={()=>void cancel(order)}>{cancelling===order.orderId?"CANCELLING…":"CANCEL ORDER"}</button>{cancelError?<p role="alert" className="mt-2 text-xs text-red-900">{cancelError}</p>:null}</div>:order.paymentMethod==="bank"&&!(["Delivered","Cancelled"].includes(order.orderStatus))?<p className="mt-4 text-xs text-ink/55">Contact ZEVENRA for cancellation assistance.</p>:order.orderStatus==="Dispatched"?<p className="mt-4 text-xs text-ink/55">This order has already been dispatched. Contact ZEVENRA if you need help.</p>:null}
-              {order.orderStatus==="Cancelled"&&order.cancellationReason?<p className="mt-4 text-xs text-red-900">Cancelled: {order.cancellationReason}</p>:null}
+              {order.paymentMethod==="cod"&&["pending","confirmed"].includes(order.orderStatus)?<div className="mt-4 border border-red-900/15 bg-red-950/[.03] p-4"><p className="text-xs font-semibold uppercase tracking-wider text-red-900">Cancel order</p><select className="field mt-3" value={cancelReason} onChange={event=>setCancelReason(event.target.value)}><option>Changed my mind</option><option>Ordered by mistake</option><option>Need to change the order</option><option>Other</option></select><button type="button" className="btn mt-3 text-red-900" disabled={cancelling===order.orderId} onClick={()=>void cancel(order)}>{cancelling===order.orderId?"CANCELLING…":"CANCEL ORDER"}</button>{cancelError?<p role="alert" className="mt-2 text-xs text-red-900">{cancelError}</p>:null}</div>:order.paymentMethod==="bank"&&!(["delivered","cancelled"].includes(order.orderStatus))?<p className="mt-4 text-xs text-ink/55">Contact ZEVENRA for cancellation assistance.</p>:order.orderStatus==="dispatched"?<p className="mt-4 text-xs text-ink/55">This order has already been dispatched. Contact ZEVENRA if you need help.</p>:null}
+              {order.orderStatus==="cancelled"&&order.cancellationReason?<p className="mt-4 text-xs text-red-900">Cancelled: {order.cancellationReason}</p>:null}
             </div>
           )}
         </article>

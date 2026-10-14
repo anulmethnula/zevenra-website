@@ -4,6 +4,7 @@ import {
   returnTransitionAllowed,
   validateReturnRequest,
 } from "../shared/return-lifecycle.ts";
+import { returnTypeAllowedForOrder } from "../server/api-implementation/_data/returns.ts";
 
 test("return lifecycle only allows forward operational transitions", () => {
   assert.equal(returnTransitionAllowed("requested", "approved"), true);
@@ -28,7 +29,7 @@ test("partial customer return can cover fewer than all purchased items", () => {
   );
 });
 
-test("courier RTO must cover the complete shipped order", () => {
+test("courier RTO must cover the complete dispatched order", () => {
   assert.throws(
     () =>
       validateReturnRequest(
@@ -39,7 +40,7 @@ test("courier RTO must cover the complete shipped order", () => {
         [{ orderItemId: 1, quantity: 2 }],
         true,
       ),
-    /complete shipped order/,
+    /complete dispatched order/,
   );
   assert.doesNotThrow(() =>
     validateReturnRequest(
@@ -54,6 +55,13 @@ test("courier RTO must cover the complete shipped order", () => {
       true,
     ),
   );
+});
+
+test("return type eligibility uses canonical order statuses", () => {
+  assert.equal(returnTypeAllowedForOrder("dispatched", "courier_rto"), true);
+  assert.equal(returnTypeAllowedForOrder("confirmed", "courier_rto"), false);
+  assert.equal(returnTypeAllowedForOrder("delivered", "customer_return"), true);
+  assert.equal(returnTypeAllowedForOrder("dispatched", "customer_return"), false);
 });
 
 test("return validation rejects duplicate, unknown, and excessive item quantities", () => {
