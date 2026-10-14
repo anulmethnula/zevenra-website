@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { access,readFile } from "node:fs/promises";
 import test from "node:test";
 import { preorderClaimCheckoutSchema,preorderConversionSchema,preorderSchema } from "../server/api-implementation/_shared.ts";
-import {createPreorderClaimToken,hashPreorderClaimToken,releasePreorderToStock} from "../server/api-implementation/_data/preorders.ts";
+import {createPreorderClaimToken,hashPreorderClaimToken,rejectPreorderPayment,releasePreorderToStock} from "../server/api-implementation/_data/preorders.ts";
+import {paymentRetryMessage} from "../src/utils/preorderPayment.ts";
 import {
   isPreorderTransitionAllowed,
   normalizePreorderPaymentMethod,
@@ -22,6 +23,48 @@ test("preorder lifecycle accepts only forward/admin-safe transitions", () => {
   assert.equal(isPreorderTransitionAllowed("batched", "ordered"), true);
   assert.equal(isPreorderTransitionAllowed("ready", "converted"), false);
   assert.equal(isPreorderTransitionAllowed("converted", "cancelled"), false);
+});
+
+test("payment rejection returns a fresh token, stores only its hash, and audits the retained receipt",async()=>{
+  const calls:Array<{text:string;values?:unknown[]}>=[],current={request_id:"PRE-1",status:"payment_submitted",payment_receipt_public_id:"zevenra/payment-receipts/old",payment_receipt_resource_type:"image",payment_receipt_format:"jpg"};
+  const client={query:async(text:string,values?:unknown[])=>{calls.push({text,values});if(text.startsWith("SELECT"))return{rows:[current],rowCount:1};if(text.startsWith("UPDATE preorders"))return{rows:[{...current,status:"awaiting_payment"}],rowCount:1};return{rows:[],rowCount:1};}};
+  const result=await rejectPreorderPayment({requestId:"PRE-1",reason:"Payment not found"},(async work=>work(client)) as never);
+  assert.equal(result.preorder.status,"awaiting_payment");
+  assert.equal(result.reason,"Payment not found");
+  const update=calls.find(call=>call.text.startsWith("UPDATE preorders"));
+  assert.equal(update?.values?.[1],hashPreorderClaimToken(result.token));
+  assert.notEqual(update?.values?.[1],result.token);
+  assert.ok(calls.some(call=>call.text.includes("'payment_rejected'")));
+  const audit=String(calls.find(call=>call.text.includes("'payment_rejected'"))?.values?.[1]);
+  assert.match(audit,/"previousReceiptPresent":true/);
+  assert.match(audit,/zevenra\/payment-receipts\/old/);
+  assert.doesNotMatch(audit,new RegExp(result.token.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")));
+});
+
+test("payment rejection requires an allowed reason and custom text for Other",async()=>{
+  await assert.rejects(()=>rejectPreorderPayment({requestId:"PRE-1",reason:""}),/Choose a payment rejection reason/);
+  await assert.rejects(()=>rejectPreorderPayment({requestId:"PRE-1",reason:"Other"}),/Enter a short reason/);
+});
+
+test("customer WhatsApp retry message contains preorder, reason, and secure link",()=>{
+  const message=paymentRetryMessage({customerName:"Nadia",requestId:"PRE-1",reason:"Receipt appears altered or cannot be verified",retryUrl:"https://example.test/preorder/complete?token=secret",productName:"Linen Dress",productTotal:12500});
+  assert.match(message,/PRE-1/);assert.match(message,/Receipt appears altered or cannot be verified/);assert.match(message,/https:\/\/example\.test\/preorder\/complete\?token=secret/);assert.doesNotMatch(message,/fake receipt|fraud|scam/i);
+});
+
+test("admin keeps protected receipt access for verification and rejection evidence",async()=>{
+  const [ui,data]=await Promise.all([readFile(new URL("../src/pages/admin/AdminPage.tsx",import.meta.url),"utf8"),readFile(new URL("../server/api-implementation/_data/preorders.ts",import.meta.url),"utf8")]);
+  assert.match(ui,/item\.paymentReceiptUrl&&<section[\s\S]*<ProtectedReceipt url=\{item\.paymentReceiptUrl\}/);
+  assert.match(ui,/item\.status==="payment_submitted"[\s\S]*Verify payment[\s\S]*Request new receipt/);
+  assert.match(ui,/item\.status!=="payment_submitted"/);
+  const update=data.slice(data.indexOf("export async function updatePreorder"),data.indexOf("export async function convertPreorderToOrder"));
+  const reject=data.slice(data.indexOf("export async function rejectPreorderPayment"),data.indexOf("export async function notifyPreorder"));
+  assert.doesNotMatch(update,/payment_receipt_public_id\s*=/);
+  assert.doesNotMatch(reject,/payment_receipt_public_id\s*=/);
+});
+
+test("replacement receipt reuses the awaiting-payment claim and returns to submitted",async()=>{
+  const source=await readFile(new URL("../server/api-implementation/_data/preorders.ts",import.meta.url),"utf8"),payment=source.slice(source.indexOf("export async function submitPreorderPayment"),source.indexOf("export async function listPreorders"));
+  assert.match(payment,/status='payment_submitted'/);assert.match(payment,/status='awaiting_payment'/);assert.match(payment,/claim_token_hash=NULL/);assert.match(payment,/payment_receipt_public_id=\$2/);
 });
 
 test("payment-first preorder uses snapshotted price and verified protected receipt",async()=>{

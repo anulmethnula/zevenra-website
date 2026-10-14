@@ -41,6 +41,7 @@ import {
   extendPreorderReservation,
   listPreorders,
   notifyPreorder,
+  rejectPreorderPayment,
   releasePreorderToStock,
   updatePreorder,
 } from "../_data/preorders.js";
@@ -102,7 +103,7 @@ const mutationActions = new Set([
   "saveSizeChart", "deleteSizeChart", "saveNavigation", "deleteNavigation",
   "saveHomepageSection", "deleteHomepageSection", "duplicateHomepageSection", "reorderHomepageSections",
   "updateOrder", "updateOrderDetails", "createReturn", "updateReturn",
-  "updatePreorder", "notifyPreorder", "extendPreorderReservation", "releasePreorderToStock", "convertPreorderToOrder", "createManualOrder",
+  "updatePreorder", "notifyPreorder", "rejectPreorderPayment", "extendPreorderReservation", "releasePreorderToStock", "convertPreorderToOrder", "createManualOrder",
   "saveSettings", "saveDeliveryRates", "saveCourierConfig", "importCourierRateSheet",
   "validateCourierRateSheet", "confirmCourierRateSheet",
   "setCourierRateCardStatus", "previewDeliveryZoneTemplate", "applyDeliveryZoneTemplate",
@@ -221,6 +222,8 @@ async function execute(action: string, payload: Record<string, unknown>) {
       return updatePreorder(payload);
     case "notifyPreorder":
       return notifyPreorder(String(payload.requestId||""));
+    case "rejectPreorderPayment":
+      return rejectPreorderPayment({requestId:String(payload.requestId||""),reason:String(payload.reason||""),customReason:String(payload.customReason||"")});
     case "extendPreorderReservation":
       return extendPreorderReservation(String(payload.requestId||""));
     case "releasePreorderToStock":

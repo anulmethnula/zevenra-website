@@ -435,6 +435,8 @@ export type PreorderRequest = {
   paymentReceiptUrl?: string;
   paymentSubmittedAt?: string;
   paymentVerifiedAt?: string;
+  paymentRejectionReason?: string;
+  paymentRejectedAt?: string;
   paymentToken?: string;
   notes?: string;
   updatedAt: string;
@@ -447,7 +449,7 @@ export type PreorderClaim={
   requestId:string;status?:string;customerName:string;phone:string;whatsapp:string;email:string;
   address1:string;address2:string;city:string;district:string;postalCode:string;
   productId:string;variantId:string;productName:string;color:string;size:string;
-  quantity:number;confirmedPrice:number;reservationExpiresAt:string;imageUrl:string;
+  quantity:number;confirmedPrice:number;reservationExpiresAt:string;imageUrl:string;paymentIssueReason?:string;
 };
 export type DashboardData = {
   publishedProducts: number;

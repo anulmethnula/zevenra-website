@@ -281,6 +281,8 @@ export function mapPreorder(row: Record<string, unknown>) {
     paymentReceiptUrl: text(row.payment_receipt_public_id) ? `preorder:${text(row.request_id)}` : "",
     paymentSubmittedAt: text(row.payment_submitted_at),
     paymentVerifiedAt: text(row.payment_verified_at),
+    paymentRejectionReason: text(row.rejection_reason),
+    paymentRejectedAt: text(row.rejected_at),
     notes: text(row.notes),
   };
 }

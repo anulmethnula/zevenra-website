@@ -23,6 +23,7 @@ import { uploadAdminMedia } from "../../services/cloudinaryUpload";
 import { invalidatePublic } from "../../services/publicDataCache";
 import { useStore } from "../../features/store/StoreContext";
 import { adminToast } from "../../components/admin/AdminToasts";
+import { paymentRejectionReasons, paymentRetryMessage } from "../../utils/preorderPayment";
 import { CourierRateSheetImport } from "../../components/admin/CourierRateSheetImport";
 import HomepageBuilder from "../../components/admin/homepage/HomepageBuilder";
 import type {
@@ -2198,6 +2199,9 @@ function Preorders() {
     [message, setMessage] = useState(""),
     [drafts, setDrafts] = useState<Record<string, PreorderAdminDraft>>({}),
     [claimLinks,setClaimLinks]=useState<Record<string,string>>({}),
+    [rejecting,setRejecting]=useState<PreorderRequest|null>(null),
+    [rejectionReason,setRejectionReason]=useState(""),
+    [customRejectionReason,setCustomRejectionReason]=useState(""),
     [fulfillment,setFulfillment]=useState<PreorderFulfillmentConfig|null>(null),
     [conversion,setConversion]=useState<Record<string,{method:"flat"|"area_group"|"pickup";pickupLocationId:string}>>({}),
     pageSize = 20;
@@ -2337,7 +2341,7 @@ function Preorders() {
         status,
         notes: draft.notes,
       });
-      setMessage(item.requestId + " → " + labels[status] + ".");
+      setMessage(status === "paid" ? "Payment verified" : item.requestId + " → " + labels[status] + ".");
     } catch (reason) {
       setMessage(
         reason instanceof Error
@@ -2385,6 +2389,24 @@ function Preorders() {
       setMessage(item.requestId+" checkout link created.");
     }catch(reason){setMessage(reason instanceof Error?reason.message:"Could not notify customer.");}
     finally{setBusy("");}
+  }
+  async function rejectPayment(){
+    if(!rejecting)return;
+    const reason=rejectionReason==="Other"?customRejectionReason.trim():rejectionReason;
+    if(!reason){setMessage(rejectionReason==="Other"?"Enter a short reason.":"Choose a payment rejection reason.");return;}
+    setBusy(rejecting.requestId);setMessage("");
+    try{
+      const result=await adminApi.post<{token:string;reason:string;rejectedAt:string}>("rejectPreorderPayment",{requestId:rejecting.requestId,reason:rejectionReason,customReason:customRejectionReason});
+      const link=window.location.origin+"/preorder/complete?token="+encodeURIComponent(result.token);
+      setClaimLinks(current=>({...current,[rejecting.requestId]:link}));
+      await store.refreshPreorders();
+      setMessage("New receipt requested for "+rejecting.requestId+".");
+      setRejecting(null);setRejectionReason("");setCustomRejectionReason("");
+    }catch(reason){setMessage(reason instanceof Error?reason.message:"Could not request a new receipt.");}
+    finally{setBusy("");}
+  }
+  async function copyPaymentMessage(message:string){
+    try{await navigator.clipboard.writeText(message);setMessage("WhatsApp message copied.");}catch{setMessage("Could not copy the message.");}
   }
   async function extendReservation(item:PreorderRequest){
     setBusy(item.requestId);setMessage("");
@@ -2531,11 +2553,15 @@ function Preorders() {
               image = product?.media.find((media) => media.type === "image"),
               phone = waNumber(item.whatsapp || item.phone),
               finalPrice = Number(item.requestedPrice || 0),
-              paymentState=item.paymentVerifiedAt?"Verified":item.paymentSubmittedAt?"Submitted":item.status==="awaiting_payment"?"Awaiting payment":"Legacy / not recorded",
+              paymentState=item.paymentVerifiedAt?"Verified":item.status==="awaiting_payment"&&item.paymentRejectionReason?"New receipt requested":item.paymentSubmittedAt?"Submitted":item.status==="awaiting_payment"?"Awaiting payment":"Legacy / not recorded",
               claimLink=claimLinks[item.requestId]||"",
+              rejectionReason=item.paymentRejectionReason||"",
+              rejectionMessage=rejectionReason&&claimLink?paymentRetryMessage({customerName:item.customerName,requestId:item.requestId,reason:rejectionReason,retryUrl:claimLink,productName:item.productName,productTotal:item.requestedPrice*item.quantity}):"",
               nextStatus = next[item.status],
               progressIndex = item.status === "converted" ? 4 : item.status === "ready" ? 3 : ["in_transit","arrived"].includes(item.status) ? 2 : ["confirmed","ordered","batched"].includes(item.status) ? 1 : 0,
-              waMessage = item.status==="notified"&&claimLink
+              waMessage = item.status==="awaiting_payment"&&rejectionMessage
+                ? rejectionMessage
+                : item.status==="notified"&&claimLink
                 ? "Your ZEVENRA pre-order has arrived 🤍\nYour "+item.productName+" — "+item.size+" is reserved for you.\nComplete your order here:\n"+claimLink+"\n\nReserved for 48 hours."
                 : "Hi " +
                 item.customerName +
@@ -2576,7 +2602,7 @@ function Preorders() {
                       <p className="truncate text-xs text-black/50">{item.customerName} · {money(item.requestedPrice*item.quantity)} · Payment {paymentState}</p>
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-2"><a href={wa} target="_blank" rel="noreferrer" className="btn" aria-label={`WhatsApp ${item.customerName}`}><MessageCircle size={14} /> WhatsApp</a>{nextStatus&&<button type="button" disabled={busy===item.requestId||(nextStatus==="paid"&&!item.paymentReceiptUrl)} onClick={()=>void change(item,nextStatus)} className="btn btn-dark">{nextText[item.status]}</button>}<button type="button" className="btn" onClick={()=>setOpen(item.requestId)}>View</button></div>
+                  <div className="flex flex-wrap gap-2"><a href={wa} target="_blank" rel="noreferrer" className="btn" aria-label={`WhatsApp ${item.customerName}`}><MessageCircle size={14} /> WhatsApp</a>{nextStatus&&item.status!=="payment_submitted"&&<button type="button" disabled={busy===item.requestId} onClick={()=>void change(item,nextStatus)} className="btn btn-dark">{nextText[item.status]}</button>}<button type="button" className="btn" onClick={()=>setOpen(item.requestId)}>View</button></div>
                 </div>
                 <AnimatePresence>
                 {open===item.requestId&&<>
@@ -2590,6 +2616,11 @@ function Preorders() {
                   <div><span>Created</span><b>{new Date(item.createdAt).toLocaleString("en-LK", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</b></div>
                   <div><span>Estimated arrival</span><b>3–4 weeks</b></div>
                 </section>
+                {item.paymentReceiptUrl&&<section className="preorder-drawer-section">
+                  <div className="grid gap-3"><small>Payment receipt</small><ProtectedReceipt url={item.paymentReceiptUrl}/>
+                    {item.status==="payment_submitted"&&<div className="flex flex-wrap gap-2"><button type="button" disabled={busy===item.requestId||!item.paymentReceiptUrl} onClick={()=>void change(item,"paid")} className="btn btn-dark">Verify payment</button><button type="button" disabled={busy===item.requestId} onClick={()=>{setRejecting(item);setRejectionReason("");setCustomRejectionReason("");}} className="btn text-red-800">Request new receipt</button></div>}
+                  </div>
+                </section>}
                 <div className="preorder-admin-grid">
                   <section className="preorder-product-box">
                     {product ? (
@@ -2643,10 +2674,11 @@ function Preorders() {
                   <section className="preorder-next-box">
                     <small>Payment</small>
                     <h3>{guidance[item.status]}</h3>
-                    <div className="mb-3 grid gap-2 text-xs text-black/60"><span>Amount: <b>{money(item.requestedPrice*item.quantity)}</b></span><span>Status: <b>{paymentState}</b></span>{item.paymentReceiptUrl&&item.status!=="awaiting_payment"&&<ProtectedReceipt url={item.paymentReceiptUrl}/>}</div>
-                    {item.status === "awaiting_payment" && <a href={wa} target="_blank" rel="noreferrer" className="btn mb-2 w-full justify-center"><MessageCircle size={14} /> WhatsApp customer</a>}
+                    <div className="mb-3 grid gap-2 text-xs text-black/60"><span>Amount: <b>{money(item.requestedPrice*item.quantity)}</b></span><span>Status: <b>{paymentState}</b></span>{item.status==="awaiting_payment"&&rejectionReason&&<><span>Reason: <b>{rejectionReason}</b></span><span>Rejected: <b>{item.paymentRejectedAt?new Date(item.paymentRejectedAt).toLocaleString("en-LK"):"—"}</b></span></>}</div>
+                    {item.status === "awaiting_payment" && rejectionReason && <div className="mb-2 grid gap-2"><a href={wa} target="_blank" rel="noreferrer" className={"btn w-full justify-center "+(!claimLink?"pointer-events-none opacity-40":"")}><MessageCircle size={14} /> Send WhatsApp Message</a><button type="button" className="btn w-full justify-center" disabled={!rejectionMessage} onClick={()=>void copyPaymentMessage(rejectionMessage)}>Copy Message</button></div>}
+                    {item.status === "awaiting_payment" && !rejectionReason && <a href={wa} target="_blank" rel="noreferrer" className="btn mb-2 w-full justify-center"><MessageCircle size={14} /> WhatsApp customer</a>}
                     {item.status==="converted"&&item.convertedOrderId&&<Link className="btn justify-center" to={`/admin/orders/${encodeURIComponent(item.convertedOrderId)}`}>Converted to {item.convertedOrderId} · {item.convertedOrderStatus === "shipped" ? "Dispatched" : item.convertedOrderStatus === "pending" ? "Pending dispatch" : item.convertedOrderStatus || "Order"}</Link>}
-                    {nextStatus && item.status!=="awaiting_payment" && (
+                    {nextStatus && item.status!=="awaiting_payment" && item.status!=="payment_submitted" && (
                       <button
                         disabled={
                           busy === item.requestId ||
@@ -2808,6 +2840,9 @@ function Preorders() {
           </button>
         </div>
       </div>
+      <AnimatePresence>
+        {rejecting&&<><motion.button type="button" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="admin-drawer-backdrop" aria-label="Close payment rejection dialog" onClick={()=>setRejecting(null)}/><motion.div initial={{opacity:0,y:16}} animate={{opacity:1,y:0}} exit={{opacity:0,y:16}} role="dialog" aria-modal="true" aria-labelledby="reject-payment-title" className="fixed left-1/2 top-1/2 z-[80] w-[min(92vw,32rem)] -translate-x-1/2 -translate-y-1/2 border border-black/10 bg-[#f7f4ee] p-6 shadow-2xl"><h2 id="reject-payment-title" className="display text-2xl">Request a new receipt</h2><p className="mt-2 text-sm text-black/55">Choose the reason shown to {rejecting.customerName}. The current receipt remains available as audit evidence.</p><label className="label mt-5">Reason<select className="field mt-2" value={rejectionReason} onChange={event=>setRejectionReason(event.target.value)} required><option value="">Choose a reason</option>{paymentRejectionReasons.map(reason=><option key={reason}>{reason}</option>)}</select></label>{rejectionReason==="Other"&&<label className="label mt-4">Short reason<textarea className="field mt-2 min-h-24" maxLength={240} value={customRejectionReason} onChange={event=>setCustomRejectionReason(event.target.value)} required/></label>}<div className="mt-6 flex justify-end gap-2"><button type="button" className="btn" disabled={busy===rejecting.requestId} onClick={()=>setRejecting(null)}>Cancel</button><button type="button" className="btn btn-dark" disabled={busy===rejecting.requestId||!rejectionReason||(rejectionReason==="Other"&&!customRejectionReason.trim())} onClick={()=>void rejectPayment()}>{busy===rejecting.requestId?"Requesting…":"Request new receipt"}</button></div></motion.div></>}
+      </AnimatePresence>
     </>
   );
 }
@@ -3847,7 +3882,7 @@ function ProtectedReceipt({ url }: { url?: string }) {
             onClick={() => void open()}
             className="btn mt-2 w-full justify-center"
           >
-            {busy ? "Opening secure receipt…" : "Open protected receipt"}{" "}
+            {busy ? "Opening secure receipt…" : "View receipt"}{" "}
             <ExternalLink size={14} />
           </button>
           <p className="mt-2 text-[10px] leading-5 text-black/45">

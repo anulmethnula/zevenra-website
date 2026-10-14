@@ -18,6 +18,28 @@ const newId = (prefix: string) =>
   `${prefix}-${new Date().toISOString().slice(2, 10).replaceAll("-", "")}-${randomBytes(3).toString("hex").toUpperCase()}`;
 export const hashPreorderClaimToken=(token:string)=>createHash("sha256").update(token).digest("hex");
 export function createPreorderClaimToken(){const token=randomBytes(32).toString("base64url");return{token,hash:hashPreorderClaimToken(token)};}
+export const preorderPaymentRejectionReasons = [
+  "Payment not found", "Amount does not match", "Receipt is unclear / unreadable",
+  "Wrong receipt uploaded", "Duplicate / previously used receipt",
+  "Receipt appears altered or cannot be verified", "Other",
+] as const;
+
+export async function rejectPreorderPayment(input:{requestId:string;reason:string;customReason?:string},transact:typeof withTransaction=withTransaction){
+  const selected=String(input.reason||"").trim();
+  if(!preorderPaymentRejectionReasons.includes(selected as typeof preorderPaymentRejectionReasons[number]))throw new Error("Choose a payment rejection reason.");
+  const customReason=String(input.customReason||"").trim();
+  if(selected==="Other"&&!customReason)throw new Error("Enter a short reason.");
+  if(customReason.length>240)throw new Error("Keep the custom reason under 240 characters.");
+  const reason=selected==="Other"?customReason:selected,{token,hash}=createPreorderClaimToken(),rejectedAt=new Date().toISOString();
+  return transact(async(client)=>{
+    const current=(await client.query<Record<string,unknown>>("SELECT * FROM preorders WHERE request_id=$1 FOR UPDATE",[input.requestId])).rows[0];
+    if(!current||current.status!=="payment_submitted")throw new Error("Only a submitted payment can request a new receipt.");
+    if(!current.payment_receipt_public_id)throw new Error("A submitted receipt is required.");
+    const result=await client.query<Record<string,unknown>>("UPDATE preorders SET status='awaiting_payment',claim_token_hash=$2,updated_at=now() WHERE request_id=$1 AND status='payment_submitted' RETURNING *",[input.requestId,hash]);
+    await client.query("INSERT INTO audit_logs(actor,action,entity_type,entity_id,details) VALUES('owner','payment_rejected','preorder',$1,$2::jsonb)",[input.requestId,JSON.stringify({requestId:input.requestId,reason,previousReceiptPresent:true,previousReceipt:{publicId:current.payment_receipt_public_id,resourceType:current.payment_receipt_resource_type,format:current.payment_receipt_format},adminTimestamp:rejectedAt})]);
+    return{preorder:mapPreorder({...result.rows[0],rejection_reason:reason,rejected_at:rejectedAt}),token,reason,rejectedAt};
+  });
+}
 
 export async function notifyPreorder(requestId:string,run:{query:typeof query}={query}){
   const {token,hash}=createPreorderClaimToken();
@@ -53,7 +75,8 @@ export async function getPreorderClaim(token:string){
   if(!token)return null;
   const row=(await query<Record<string,unknown>>(
     `SELECT pr.request_id,pr.customer_name,pr.phone,pr.whatsapp,pr.email,pr.address1,pr.address2,pr.city,pr.district,pr.postal_code,
-            pr.product_id,pr.variant_id,pr.product_name,pr.color,pr.size,pr.quantity,pr.requested_price,pr.confirmed_price,pr.status,pr.reservation_expires_at,p.media
+            pr.product_id,pr.variant_id,pr.product_name,pr.color,pr.size,pr.quantity,pr.requested_price,pr.confirmed_price,pr.status,pr.reservation_expires_at,p.media,
+            (SELECT al.details->>'reason' FROM audit_logs al WHERE al.entity_type='preorder' AND al.entity_id=pr.request_id AND al.action='payment_rejected' ORDER BY al.created_at DESC LIMIT 1) AS payment_issue_reason
        FROM preorders pr LEFT JOIN products p ON p.id=pr.product_id
       WHERE pr.claim_token_hash=$1 AND ((pr.status='awaiting_payment') OR (pr.status='notified' AND pr.reservation_expires_at>now())) AND pr.released_at IS NULL AND pr.converted_order_id IS NULL
       LIMIT 1`,
@@ -61,7 +84,7 @@ export async function getPreorderClaim(token:string){
   )).rows[0];
   if(!row)return null;
   const media=Array.isArray(row.media)?row.media as Array<Record<string,unknown>>:[];
-  return{requestId:String(row.request_id),status:String(row.status),customerName:String(row.customer_name),phone:String(row.phone),whatsapp:String(row.whatsapp),email:String(row.email||""),address1:String(row.address1||""),address2:String(row.address2||""),city:String(row.city||""),district:String(row.district||""),postalCode:String(row.postal_code||""),productId:String(row.product_id),variantId:String(row.variant_id),productName:String(row.product_name),color:String(row.color),size:String(row.size),quantity:Number(row.quantity),confirmedPrice:Number(row.confirmed_price||row.requested_price),reservationExpiresAt:String(row.reservation_expires_at||""),imageUrl:String(media.find(item=>item.type==="image")?.url||"")};
+  return{requestId:String(row.request_id),status:String(row.status),customerName:String(row.customer_name),phone:String(row.phone),whatsapp:String(row.whatsapp),email:String(row.email||""),address1:String(row.address1||""),address2:String(row.address2||""),city:String(row.city||""),district:String(row.district||""),postalCode:String(row.postal_code||""),productId:String(row.product_id),variantId:String(row.variant_id),productName:String(row.product_name),color:String(row.color),size:String(row.size),quantity:Number(row.quantity),confirmedPrice:Number(row.confirmed_price||row.requested_price),reservationExpiresAt:String(row.reservation_expires_at||""),imageUrl:String(media.find(item=>item.type==="image")?.url||""),paymentIssueReason:String(row.payment_issue_reason||"")};
 }
 
 export async function quotePreorderClaim(input:Record<string,unknown>){
@@ -184,7 +207,9 @@ export async function listPreorders(status?: string) {
       `SELECT p.request_id,p.created_at,p.updated_at,p.customer_id,p.customer_name,p.phone,p.whatsapp,p.email,
               p.address1,p.address2,p.city,p.district,p.postal_code,p.product_id,p.variant_id,p.product_name,
               p.sku,p.color,p.size,p.quantity,p.requested_price,p.confirmed_price,p.status,p.batch_id,p.notes,
-              p.notified_at,p.reservation_expires_at,p.released_at,p.converted_order_id,p.payment_receipt_public_id,p.payment_submitted_at,p.payment_verified_at,o.order_status AS converted_order_status,o.delivery_fee AS converted_order_delivery_fee
+              p.notified_at,p.reservation_expires_at,p.released_at,p.converted_order_id,p.payment_receipt_public_id,p.payment_submitted_at,p.payment_verified_at,o.order_status AS converted_order_status,o.delivery_fee AS converted_order_delivery_fee,
+              (SELECT al.details->>'reason' FROM audit_logs al WHERE al.entity_type='preorder' AND al.entity_id=p.request_id AND al.action='payment_rejected' ORDER BY al.created_at DESC LIMIT 1) AS rejection_reason,
+              (SELECT COALESCE(al.details->>'adminTimestamp',al.created_at::text) FROM audit_logs al WHERE al.entity_type='preorder' AND al.entity_id=p.request_id AND al.action='payment_rejected' ORDER BY al.created_at DESC LIMIT 1) AS rejected_at
          FROM preorders p LEFT JOIN orders o ON o.order_id=p.converted_order_id${where}
         ORDER BY p.created_at DESC
         LIMIT 100`,
