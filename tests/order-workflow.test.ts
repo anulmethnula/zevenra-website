@@ -3,12 +3,26 @@ import test from "node:test";
 import { readFile } from "node:fs/promises";
 import { customerOrderStatus,orderProgress } from "../src/utils/orderTracking.js";
 import { cancelCustomerOrder } from "../server/api-implementation/_data/order-cancellation.js";
+import { normalizeAdminOrderStatus,validOrderTransition } from "../server/api-implementation/_data/orders-legacy.js";
 
 test("customer lifecycle exposes only pending, confirmed, dispatched and delivered",()=>{
   assert.deepEqual(orderProgress.map(([status])=>status),["pending","confirmed","dispatched","delivered"]);
   assert.equal(customerOrderStatus("packed"),"dispatched");
   assert.equal(customerOrderStatus("shipped"),"dispatched");
   assert.equal(customerOrderStatus("sourcing"),"dispatched");
+});
+
+test("admin normal order transitions are forward-only",()=>{
+  assert.equal(validOrderTransition("pending","confirmed"),true);
+  assert.equal(validOrderTransition("confirmed","dispatched"),true);
+  assert.equal(validOrderTransition("dispatched","delivered"),true);
+  assert.equal(validOrderTransition("delivered","pending"),false);
+  assert.equal(validOrderTransition("confirmed","pending"),false);
+});
+
+test("legacy packed and shipped statuses normalize to dispatched",()=>{
+  assert.equal(normalizeAdminOrderStatus("packed"),"dispatched");
+  assert.equal(normalizeAdminOrderStatus("shipped"),"dispatched");
 });
 
 test("owner COD pending cancellation restores normal stock once and creates evidence",async()=>{
@@ -38,4 +52,21 @@ test("customer cancellation rejects bank, dispatched, and wrong-owner orders",as
 test("migration carries cancellation metadata, notifications, and dispatched constraint",async()=>{
   const sql=await readFile(new URL("../database/migrations/026_order_workflow_notifications.sql",import.meta.url),"utf8");
   assert.match(sql,/cancelled_from_status/);assert.match(sql,/admin_notifications/);assert.match(sql,/packed','shipped/);assert.match(sql,/dispatched/);
+});
+
+test("forward migration stores only the current order status vocabulary",async()=>{
+  const sql=await readFile(new URL("../database/migrations/027_dispatched_order_status.sql",import.meta.url),"utf8");
+  assert.match(sql,/UPDATE orders SET order_status='dispatched'/);
+  assert.match(sql,/pending','confirmed','dispatched','delivered','cancelled/);
+});
+
+test("admin status UI blocks duplicates, restores server state, and captures dispatch details",async()=>{
+  const source=await readFile(new URL("../src/pages/admin/AdminPage.tsx",import.meta.url),"utf8");
+  assert.match(source,/updateInFlight\.current\.has\(orderId\)/);
+  assert.match(source,/finally[\s\S]*updateInFlight\.current\.delete\(orderId\)/);
+  assert.match(source,/adminApi\.get<AdminOrderDetail>\("getOrder"/);
+  assert.match(source,/fulfilmentCourierProviderId:dispatchCourierId/);
+  assert.match(source,/courierSentDate:new Date\(dispatchHandover\)\.toISOString\(\)/);
+  assert.match(source,/Tracking number \(optional\)/);
+  assert.match(source,/Tracking URL \(optional\)/);
 });

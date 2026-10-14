@@ -2924,6 +2924,11 @@ function Orders() {
     [details, setDetails] = useState<Record<string, AdminOrderDetail>>({}),
     [loadingId, setLoadingId] = useState(""),
     [savingId, setSavingId] = useState(""),
+    [dispatchOrderId, setDispatchOrderId] = useState(""),
+    [dispatchCourierId, setDispatchCourierId] = useState(""),
+    [dispatchTrackingNumber, setDispatchTrackingNumber] = useState(""),
+    [dispatchTrackingUrl, setDispatchTrackingUrl] = useState(""),
+    [dispatchHandover, setDispatchHandover] = useState(""),
     [status, setStatus] = useState(""),
     [creatingManual, setCreatingManual] = useState(false),
     [manualBusy, setManualBusy] = useState(false),
@@ -3008,11 +3013,15 @@ function Orders() {
       setLoadingId("");
     }
   }
+  const updateInFlight = useRef(new Set<string>());
   async function change(orderId: string, patch: Partial<Order>) {
+    if(updateInFlight.current.has(orderId))return false;
+    updateInFlight.current.add(orderId);
     setSavingId(orderId);
     setStatus("");
     try {
-      const updated = await updateOrder({ orderId, ...patch });
+      await updateOrder({ orderId, ...patch });
+      const updated = await adminApi.get<AdminOrderDetail>("getOrder", { orderId });
       setDetails((current) => ({
         ...current,
         [orderId]: {
@@ -3021,11 +3030,14 @@ function Orders() {
         } as AdminOrderDetail,
       }));
       setStatus("Order updated.");
+      return true;
     } catch (reason) {
       setStatus(
         reason instanceof Error ? reason.message : "Could not update order.",
       );
+      return false;
     } finally {
+      updateInFlight.current.delete(orderId);
       setSavingId("");
     }
   }
@@ -3480,7 +3492,8 @@ function Orders() {
               firstImage = firstProduct?.media.find(
                 (media) => media.type === "image",
               ),
-              additionalItems = Math.max(0, (order.items?.length || 0) - 1);
+              additionalItems = Math.max(0, (order.items?.length || 0) - 1),
+              normalizedOrderStatus = ["sourcing","packed","shipped"].includes(String(detail?.orderStatus||order.orderStatus).toLowerCase()) ? "dispatched" : String(detail?.orderStatus||order.orderStatus).toLowerCase();
             return (
               <article
                 key={order.orderId}
@@ -3639,9 +3652,7 @@ function Orders() {
                               <select
                                 disabled={savingId === order.orderId}
                                 className="field mt-2"
-                                value={String(
-                                  detail.orderStatus || "pending",
-                                ).toLowerCase()}
+                                value={normalizedOrderStatus}
                                 onChange={(e) => {
                                   const value = e.target.value;
                                   if(value==="cancelled"){
@@ -3649,11 +3660,17 @@ function Orders() {
                                     if(!reason?.trim())return;
                                     void change(order.orderId,{orderStatus:value,cancellationReason:reason.trim(),cancelledBy:"owner"});return;
                                   }
+                                  if(value==="dispatched"){
+                                    const existingId=detail.fulfilmentCourierProviderId||detail.courierProviderId||"";
+                                    setDispatchOrderId(order.orderId);setDispatchCourierId(existingId);setDispatchTrackingNumber(detail.trackingNumber||"");setDispatchTrackingUrl(detail.trackingUrl||"");
+                                    const now=new Date();setDispatchHandover(new Date(now.getTime()-now.getTimezoneOffset()*60000).toISOString().slice(0,16));return;
+                                  }
+                                  if(value==="delivered"&&!window.confirm("Mark this order as delivered?"))return;
                                   void change(order.orderId,{orderStatus:value});
                                 }}
                               >
                                 {[
-                                  String(detail.orderStatus).toLowerCase(),
+                                  normalizedOrderStatus,
                                   ...(
                                     detail.sourcePreorderRequestId ? {
                                       pending: ["dispatched", "cancelled"],
@@ -3668,7 +3685,7 @@ function Orders() {
                                       cancelled: [detail.cancelledFromStatus||"pending"],
                                     } as Record<string, string[]>
                                   )[
-                                    String(detail.orderStatus).toLowerCase()
+                                    normalizedOrderStatus
                                   ],
                                 ].map((value) => (
                                   <option key={value} value={value}>
@@ -3676,8 +3693,9 @@ function Orders() {
                                   </option>
                                 ))}
                               </select>
+                              {savingId===order.orderId?<span className="mt-2 block text-[11px] text-black/45">Updating…</span>:null}
                             </label>
-                            <label className="block text-xs">
+                            {detail.paymentMethod==="bank"?<label className="block text-xs">
                               Payment status
                               <select
                                 disabled={savingId === order.orderId || Boolean(detail.sourcePreorderRequestId)}
@@ -3689,8 +3707,7 @@ function Orders() {
                                   })
                                 }
                               >
-                                {(detail.paymentMethod === "bank"
-                                  ? [
+                                {[
                                       "verification required",
                                       "receipt submitted",
                                       "paid",
@@ -3698,20 +3715,14 @@ function Orders() {
                                       "rejected",
                                       "refund pending",
                                       "refunded",
-                                    ]
-                                  : [
-                                      "COD",
-                                      "paid",
-                                      "refund pending",
-                                      "refunded",
-                                    ]
-                                ).map((value) => (
+                                    ].map((value) => (
                                   <option key={value} value={value}>
                                     {value}
                                   </option>
                                 ))}
                               </select>
-                            </label>
+                            </label>:<Info label="Payment method" value="Cash on delivery"/>}
+                            {dispatchOrderId===order.orderId?<div className="mt-4 border border-bronze/25 bg-white/45 p-4"><p className="text-xs font-semibold uppercase tracking-wider">Mark as dispatched</p><p className="mt-2 text-xs text-black/55">Confirm that this parcel has been handed over to the courier.</p><div className="mt-4 grid gap-3"><label className="text-xs">Courier<select className="field mt-2" value={dispatchCourierId} onChange={e=>setDispatchCourierId(e.target.value)}><option value="">Select courier</option>{admin.couriers.filter(courier=>courier.active).map(courier=><option key={courier.id} value={courier.id}>{courier.name}</option>)}</select></label><Field label="Tracking number (optional)" value={dispatchTrackingNumber} onChange={setDispatchTrackingNumber}/><Field label="Tracking URL (optional)" value={dispatchTrackingUrl} onChange={setDispatchTrackingUrl}/><label className="text-xs">Handover date<input className="field mt-2" type="datetime-local" value={dispatchHandover} onChange={e=>setDispatchHandover(e.target.value)}/></label><div className="flex gap-2"><button type="button" className="btn btn-dark" disabled={savingId===order.orderId||!dispatchCourierId||!dispatchHandover} onClick={async()=>{const courier=admin.couriers.find(item=>item.id===dispatchCourierId);const url=dispatchTrackingUrl.trim();if(url&&!/^https:\/\//i.test(url)){setStatus("Tracking URL must start with https://");return;}const saved=await change(order.orderId,{orderStatus:"dispatched",fulfilmentCourierProviderId:dispatchCourierId,fulfilmentCourierName:courier?.name||"",trackingNumber:dispatchTrackingNumber.trim(),trackingUrl:url,courierSentDate:new Date(dispatchHandover).toISOString()});if(saved)setDispatchOrderId("");}}>{savingId===order.orderId?"Updating…":"Confirm dispatch"}</button><button type="button" className="btn" disabled={savingId===order.orderId} onClick={()=>setDispatchOrderId("")}>Cancel</button></div></div></div>:null}
                           </Panel>
                           <Panel title="Payment">
                             <div className="space-y-3 text-sm">
@@ -3777,12 +3788,12 @@ function Orders() {
                             </div>
                           </Panel>
                           {detail.sourcePreorderRequestId && <Panel title="Status / timeline"><ol className="space-y-2 text-xs"><li><b>Created</b> · {new Date(detail.createdAt).toLocaleString("en-LK")}</li><li><b>Product payment verified</b> · before conversion</li><li><b>Pre-order converted</b> · {new Date(detail.createdAt).toLocaleString("en-LK")}</li><li className={detail.orderStatus === "shipped" || detail.orderStatus === "delivered" ? "" : "text-black/35"}><b>Dispatched</b>{detail.courierSentDate ? ` · ${new Date(detail.courierSentDate).toLocaleString("en-LK")}` : ""}</li><li className={detail.orderStatus === "delivered" ? "" : "text-black/35"}><b>Delivered</b></li></ol></Panel>}
-                          <FulfilmentPanel
+                          {normalizedOrderStatus==="dispatched"||normalizedOrderStatus==="delivered"?<Panel title="Delivery"><div className="space-y-3 text-sm"><Info label="Status" value={normalizedOrderStatus==="dispatched"?"Dispatched":"Delivered"}/><Info label="Courier" value={detail.fulfilmentCourierName||detail.courierName||"Not added"}/><Info label="Tracking" value={detail.trackingNumber||"Not added"}/><Info label="Handed to courier" value={detail.courierSentDate?new Date(detail.courierSentDate).toLocaleString("en-LK"):"Not added"}/>{detail.trackingUrl?<a className="btn inline-flex" href={detail.trackingUrl} target="_blank" rel="noreferrer">Open courier tracking</a>:null}</div></Panel>:<FulfilmentPanel
                             order={detail}
                             couriers={admin.couriers}
                             busy={savingId === order.orderId}
                             save={(patch) => void change(order.orderId, patch)}
-                          />
+                          />}
                           <ReturnsPanel order={detail} onMessage={setStatus} />
                         </div>
                       </div>

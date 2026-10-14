@@ -354,7 +354,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if(error instanceof Error&&error.message==="PASSWORD_CONFIRM_MISMATCH")return json(res,{error:"New passwords do not match."},400);
     if(error instanceof Error&&error.message==="USERNAME_INVALID")return json(res,{error:"Use 3–50 letters, numbers, dots, dashes, or underscores."},400);
     if(error instanceof Error&&error.message==="Order cannot be restored because inventory is no longer available.")return json(res,{error:error.message},409);
-    if(error instanceof Error&&(/Choose a cancellation reason|Dispatched or delivered orders|cannot be restored to that status|cannot move from/.test(error.message)))return json(res,{error:error.message},400);
+    if(error instanceof Error&&(/Choose a cancellation reason|Dispatched or delivered orders|cannot be restored to that status|cannot move from|actual fulfilment courier|courier handover date|payment status is not valid|bank payment paid|rejected bank payment/.test(error.message)))return json(res,{error:error.message},400);
     const conflict = databaseConflictMessage(action, error);
     if (conflict) return json(res, { error: conflict }, 409);
     console.error("admin action failed", error);

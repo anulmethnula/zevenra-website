@@ -368,6 +368,9 @@ export async function findGuestOrder(orderId: string, phone: string) {
   return row || null;
 }
 
+export function normalizeAdminOrderStatus(value:unknown){const status=String(value||"pending").toLowerCase();return ["sourcing","packed","shipped"].includes(status)?"dispatched":status;}
+export function validOrderTransition(current:unknown,next:unknown){const from=normalizeAdminOrderStatus(current),to=normalizeAdminOrderStatus(next),transitions:Record<string,string[]>={pending:["confirmed"],confirmed:["dispatched"],dispatched:["delivered"],delivered:[]};return from===to||Boolean(transitions[from]?.includes(to));}
+
 export async function updateOrder(input: Record<string, unknown>) {
   const orderId = String(input.orderId || "");
   return withTransaction(async (client) => {
@@ -379,7 +382,7 @@ export async function updateOrder(input: Record<string, unknown>) {
     ).rows[0];
     if (!current) throw new Error("Order not found");
     const storedStatus = String(current.order_status),
-      currentStatus = ["sourcing","packed","shipped"].includes(storedStatus)?"dispatched":storedStatus,
+      currentStatus = normalizeAdminOrderStatus(storedStatus),
       nextStatus = String(input.orderStatus ?? currentStatus).toLowerCase(),
       preorderOrder = Boolean(current.source_preorder_request_id),
       transitions: Record<string, string[]> = preorderOrder ? {
@@ -410,6 +413,10 @@ export async function updateOrder(input: Record<string, unknown>) {
     const fulfilmentName = String(input.fulfilmentCourierName ?? current.fulfilment_courier_name ?? "").trim();
     if (nextStatus === "dispatched" && !fulfilmentName)
       throw new Error("Select the actual fulfilment courier before marking this order dispatched.");
+    if(nextStatus==="dispatched"&&!input.courierSentDate&&!current.courier_sent_date)
+      throw new Error("Add the courier handover date before marking this order dispatched.");
+    if(input.courierSentDate!==undefined&&!Number.isFinite(Date.parse(String(input.courierSentDate))))
+      throw new Error("Add a valid courier handover date.");
     const cancellationReason=String(input.cancellationReason||"").trim(),cancelledBy=String(input.cancelledBy||"owner");
     if(nextStatus==="cancelled"&&!(["pending","confirmed"].includes(currentStatus)))throw new Error("Dispatched or delivered orders must use the return workflow.");
     if(nextStatus==="cancelled"&&!cancellationReason)throw new Error("Choose a cancellation reason.");
