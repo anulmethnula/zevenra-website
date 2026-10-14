@@ -209,7 +209,8 @@ function UploadField({
   );
 }
 function DashboardMetric({label,value,to,help,strong=false}:{label:string;value:string|number;to:string;help?:string;strong?:boolean}) {
-  return <Link to={to} aria-label={`View ${label}`} className={`${strong?"border-bronze/25 bg-white/45":"border-black/10 bg-white/20"} block border p-4 transition hover:-translate-y-0.5 hover:border-bronze/50 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bronze sm:p-5`}><p className="text-[10px] font-semibold uppercase tracking-[.14em] text-black/45">{label}</p><p className={`display mt-3 break-words ${strong?"text-3xl sm:text-4xl":"text-2xl sm:text-3xl"}`}>{value}</p>{help?<p className="mt-3 text-[11px] leading-5 text-black/50">{help}</p>:null}</Link>;
+  const tone=label.includes("Cancelled")||label.includes("Low Stock")?"danger":label.includes("Delivered")?"success":label.includes("Dispatched")?"info":label.includes("Pending")||label.includes("Pre-order")?"warning":label.includes("Confirmed")?"violet":strong||label.includes("Revenue")||label.includes("Delivery Collected")?"bronze":"neutral";
+  return <Link to={to} aria-label={`View ${label}`} data-tone={tone} className={`dashboard-metric ${strong?"dashboard-metric--primary":""}`}><span className="dashboard-metric__top"><span className="dashboard-metric__label"><i aria-hidden="true"/>{label}</span><span aria-hidden="true" className="dashboard-metric__arrow">↗</span></span><strong className="dashboard-metric__value">{value}</strong>{help?<span className="dashboard-metric__help">{help}</span>:<span className="dashboard-metric__help">Open details</span>}</Link>;
 }
 type FinancePeriod = FinanceData["period"];
 function Finance() {
@@ -258,9 +259,9 @@ function Dashboard() {
           </Link>
         }
       />
-      <section className="mt-8"><p className="eyebrow text-bronze">Business overview</p><div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{business.map(card=><DashboardMetric key={card.label} {...card} strong/>)}</div><div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{activity.map(card=><DashboardMetric key={card.label} {...card}/>)}</div></section>
-      <section className="mt-8"><p className="eyebrow text-bronze">Order operations</p><div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">{operations.map(card=><DashboardMetric key={card.label} {...card}/>)}</div></section>
-      <section className="mt-8"><p className="eyebrow text-bronze">Store</p><div className="mt-4 grid max-w-2xl gap-3 sm:grid-cols-2">{storeCards.map(card=><DashboardMetric key={card.label} {...card}/>)}</div></section>
+      <section className="dashboard-metric-group mt-8"><div className="dashboard-metric-group__heading"><div><p className="eyebrow text-bronze">Business overview</p><p>Sales and activity today</p></div></div><div className="dashboard-metric-grid dashboard-metric-grid--business">{business.map(card=><DashboardMetric key={card.label} {...card} strong/>)}{activity.map(card=><DashboardMetric key={card.label} {...card}/>)}</div></section>
+      <section className="dashboard-metric-group mt-8"><div className="dashboard-metric-group__heading"><div><p className="eyebrow text-bronze">Order operations</p><p>Orders by current stage</p></div><Link to="/admin/orders" className="dashboard-section-link">View all</Link></div><div className="dashboard-metric-grid dashboard-metric-grid--operations">{operations.map(card=><DashboardMetric key={card.label} {...card}/>)}</div></section>
+      <section className="dashboard-metric-group mt-8"><div className="dashboard-metric-group__heading"><div><p className="eyebrow text-bronze">Store health</p><p>Products and stock</p></div></div><div className="dashboard-metric-grid dashboard-metric-grid--store">{storeCards.map(card=><DashboardMetric key={card.label} {...card}/>)}</div></section>
       <div className="mt-6 grid gap-5 xl:grid-cols-2">
         <Panel title="Top selling products">
           {stats?.topProducts?.length ? (
