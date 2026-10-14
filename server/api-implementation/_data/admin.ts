@@ -2,14 +2,13 @@ import { query } from "../_db.js";
 import {
   listCategories,
   listCollections,
-  listCouriers,
-  listDeliveryRates,
   listHomepageSections,
   getProductById,
   listProducts,
   listSettings,
   listSizeCharts,
 } from "./catalog.js";
+import { listFulfilmentCouriers } from "./fulfilment-couriers.js";
 import { mapOrder } from "./mappers.js";
 import { recentOrders } from "./orders.js";
 import { listPreorders } from "./preorders.js";
@@ -166,8 +165,8 @@ export async function adminBootstrap(section = "/admin") {
     isOrders ? recentOrdersWithItems(50) : Promise.resolve([]),
     isPreorders ? listPreorders() : Promise.resolve([]),
     isSettings || isDelivery || isOrders ? listSettings() : Promise.resolve([]),
-    isDelivery || isOrders ? listCouriers() : Promise.resolve([]),
-    isDelivery ? listDeliveryRates() : Promise.resolve([]),
+    isDelivery || isOrders ? listFulfilmentCouriers() : Promise.resolve([]),
+    Promise.resolve([]),
   ]);
   return {
     dashboard: dashboardData,

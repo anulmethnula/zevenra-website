@@ -6,8 +6,6 @@ import {
   deleteProduct,
   listCategories,
   listCollections,
-  listCouriers,
-  listDeliveryRates,
   listHomepageSections,
   duplicateHomepageSection,
   reorderHomepageSections,
@@ -19,7 +17,6 @@ import {
   getProductById,
   listSettings,
   listSizeCharts,
-  saveCourierConfig,
   saveEntity,
   saveProduct,
   setProductStatus,
@@ -46,19 +43,6 @@ import {
   updatePreorder,
 } from "../_data/preorders.js";
 import {
-  confirmCourierRateSheet,
-  importCourierRateSheet,
-  listCourierRateCards,
-  previewCourierRateCard,
-  setCourierRateCardStatus,
-  validateCourierRateSheet,
-} from "../_data/courier-rate-cards.js";
-import {
-  applyDeliveryZoneTemplate,
-  DeliveryZoneTemplateError,
-  previewDeliveryZoneTemplate,
-} from "../_data/delivery-zone-template.js";
-import {
   adminCookie,
   authEnv,
   body,
@@ -68,11 +52,11 @@ import {
   preorderConversionSchema,
   validOrigin,
 } from "../_shared.js";
-import { CourierRateFileError } from "../_data/courier-rate-parser.js";
 import { deleteDiscount, DiscountConflictError, discountDeleteSchema, listDiscounts, saveDiscount } from "../_data/discounts.js";
 import { FulfillmentConfigError, listFulfillmentConfig, saveFulfillmentConfig } from "../_data/fulfillment.js";
 import { changeAdminPassword,changeAdminUsername,generateAdminRecoveryCode,getAdminAuth,validAdminPassword,validAdminSession,validAdminUsername } from "../_admin-auth.js";
 import { listAdminNotifications,markAdminNotificationRead,markAllAdminNotificationsRead } from "../_data/notifications.js";
+import { listFulfilmentCouriers,saveFulfilmentCourier } from "../_data/fulfilment-couriers.js";
 
 const readActions = new Set([
   "bootstrap",
@@ -91,10 +75,7 @@ const readActions = new Set([
   "listReturns",
   "listPreorders",
   "getSettings",
-  "listCouriers",
-  "listDeliveryRates",
-  "listCourierRateCards",
-  "previewCourierRateCard",
+  "listFulfilmentCouriers",
   "listDiscounts",
   "getFulfillmentConfig",
   "getAdminSecurity",
@@ -107,9 +88,7 @@ const mutationActions = new Set([
   "saveHomepageSection", "deleteHomepageSection", "duplicateHomepageSection", "reorderHomepageSections",
   "updateOrder", "updateOrderDetails", "createReturn", "updateReturn",
   "updatePreorder", "notifyPreorder", "rejectPreorderPayment", "extendPreorderReservation", "releasePreorderToStock", "convertPreorderToOrder", "createManualOrder",
-  "saveSettings", "saveDeliveryRates", "saveCourierConfig", "importCourierRateSheet",
-  "validateCourierRateSheet", "confirmCourierRateSheet",
-  "setCourierRateCardStatus", "previewDeliveryZoneTemplate", "applyDeliveryZoneTemplate",
+  "saveSettings", "saveFulfilmentCourier",
   "saveDiscount", "deleteDiscount",
   "saveFulfillmentConfig",
   "changeAdminPassword", "changeAdminUsername", "generateAdminRecoveryCode",
@@ -155,10 +134,8 @@ async function execute(action: string, payload: Record<string, unknown>) {
       return listPreorders(String(payload.status || "") || undefined);
     case "getSettings":
       return listSettings();
-    case "listCouriers":
-      return listCouriers();
-    case "listDeliveryRates":
-      return listDeliveryRates();
+    case "listFulfilmentCouriers":
+      return listFulfilmentCouriers();
     case "listDiscounts":
       return listDiscounts();
     case "getFulfillmentConfig":
@@ -184,6 +161,8 @@ async function execute(action: string, payload: Record<string, unknown>) {
     }
     case "saveFulfillmentConfig":
       return saveFulfillmentConfig(payload);
+    case "saveFulfilmentCourier":
+      return saveFulfilmentCourier(payload);
     case "saveDiscount":
       return saveDiscount(payload);
     case "deleteDiscount":
@@ -252,26 +231,6 @@ async function execute(action: string, payload: Record<string, unknown>) {
       );
     case "saveSettings":
       return saveSettings(payload);
-    case "saveCourierConfig":
-      return saveCourierConfig(payload);
-    case "saveDeliveryRates":
-      return saveCourierConfig(payload);
-    case "importCourierRateSheet":
-      return importCourierRateSheet(payload);
-    case "validateCourierRateSheet":
-      return validateCourierRateSheet(payload);
-    case "confirmCourierRateSheet":
-      return confirmCourierRateSheet(String(payload.id || ""));
-    case "listCourierRateCards":
-      return listCourierRateCards(String(payload.courierProviderId || ""));
-    case "previewCourierRateCard":
-      return previewCourierRateCard(String(payload.id || ""), Number(payload.page) || 1);
-    case "setCourierRateCardStatus":
-      return setCourierRateCardStatus(String(payload.id || ""), payload.active === true || String(payload.active) === "true");
-    case "previewDeliveryZoneTemplate":
-      return previewDeliveryZoneTemplate(payload);
-    case "applyDeliveryZoneTemplate":
-      return applyDeliveryZoneTemplate(payload);
     default:
       throw new Error("Unknown action");
   }
@@ -341,8 +300,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return json(res, { error: error.message }, 400);
     if (error instanceof DiscountConflictError)
       return json(res, { error: error.message }, 409);
-    if (error instanceof CourierRateFileError || error instanceof DeliveryZoneTemplateError)
-      return json(res, { error: error.message }, 400);
+    if(error instanceof Error&&(/Courier name is required|Tracking URL template/.test(error.message)))return json(res,{error:error.message},400);
     if (error instanceof Error && error.name === "ZodError")
       return json(
         res,

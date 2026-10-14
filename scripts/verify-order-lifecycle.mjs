@@ -21,10 +21,18 @@ try {
   );
   const counts = await client.query("SELECT order_status,status_count::int FROM (SELECT order_status,count(*) status_count FROM orders GROUP BY order_status) grouped ORDER BY order_status");
   const legacy = await client.query("SELECT count(*)::int count FROM orders WHERE order_status IN ('sourcing','packed','shipped')");
-  const couriers = await client.query("SELECT count(*)::int count FROM courier_providers WHERE active=true");
+  const couriers = await client.query("SELECT count(*)::int count FROM fulfilment_couriers WHERE active=true");
+  const deliveryTables=await client.query("SELECT tablename FROM pg_tables WHERE schemaname='public' AND (tablename LIKE 'delivery_%' OR tablename IN ('pickup_locations','fulfilment_couriers','courier_providers','courier_rates','courier_rate_cards','courier_rate_import_rows')) ORDER BY tablename");
+  const architecture=await client.query(`SELECT
+    (SELECT count(*)::int FROM schema_migrations WHERE version='028_delivery_architecture_cleanup') migration_028,
+    (SELECT count(*)::int FROM fulfilment_couriers) fulfilment_couriers,
+    (SELECT count(*)::int FROM fulfilment_couriers WHERE upper(name) LIKE '%SONIK%') sonik,
+    (SELECT count(*)::int FROM site_settings WHERE key='defaultCourierProviderId') obsolete_setting`);
+  const deliveryMethods=await client.query("SELECT type,display_name,fee,active FROM delivery_methods ORDER BY sort_order,type");
+  const areaGroups=await client.query("SELECT id,name,fee,active,is_fallback FROM delivery_area_groups ORDER BY sort_order,id");
 
   await client.query(`CREATE SCHEMA ${replaySchema}`);
-  await client.query(`SET search_path TO ${replaySchema}, public`);
+  await client.query(`SET search_path TO ${replaySchema}`);
   const directory = path.resolve("database/migrations");
   const files = (await readdir(directory)).filter((file) => /^\d+.*\.sql$/.test(file)).sort();
   for (const file of files) await client.query(await readFile(path.join(directory, file), "utf8"));
@@ -36,7 +44,11 @@ try {
     constraint: constraint.rows[0]?.definition ?? null,
     statusCounts: counts.rows,
     legacyStatusRows: legacy.rows[0]?.count ?? null,
-    activeCourierCount: couriers.rows[0]?.count ?? null,
+    activeFulfilmentCourierCount: couriers.rows[0]?.count ?? null,
+    deliveryTables:deliveryTables.rows.map(row=>row.tablename),
+    architecture:architecture.rows[0],
+    deliveryMethods:deliveryMethods.rows,
+    areaGroups:areaGroups.rows,
     freshReplay: {
       latestVersion: replayLatest.rows[0]?.version ?? null,
       legacyStatusRows: replayLegacy.rows[0]?.count ?? null,

@@ -192,7 +192,7 @@ export function mapOrder(row: Record<string, unknown>) {
     pickupBranchName: text(row.pickup_branch_name),
     pickupBranchAddress: text(row.pickup_branch_address),
     pickupInstructions: text(row.pickup_instructions),
-    fulfilmentCourierProviderId: text(row.fulfilment_courier_provider_id),
+    fulfilmentCourierId: text(row.fulfilment_courier_id),
     fulfilmentCourierName: text(row.fulfilment_courier_name),
     trackingNumber: text(row.tracking_number),
     trackingUrl: text(row.tracking_url),

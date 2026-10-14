@@ -1,158 +1,30 @@
 import { randomBytes } from "node:crypto";
 import type { DatabaseClient } from "../_db.js";
 import { query, withTransaction } from "../_db.js";
-import { sriLankaDistricts } from "../_shared.js";
 import { receiptAsset } from "../_receipt-asset.js";
+import { sriLankaDistricts } from "../_shared.js";
 import {
   normalizeOrderIdForLookup,
   normalizeSriLankanPhoneForLookup,
 } from "../_order-track-normalization.js";
 import { mapOrder } from "./mappers.js";
 import { normalizeOrderStatus } from "../../../shared/order-status.js";
+import { resolveFulfillment } from "./fulfillment.js";
 
-type OrderInput = {
-  customerId?: string;
-  customerName: string;
-  phone: string;
-  whatsapp?: string;
-  email?: string;
-  address1: string;
-  address2?: string;
-  city: string;
-  district: string;
-  postalCode?: string;
-  deliveryNotes?: string;
-  paymentMethod: "cod" | "bank";
-  paymentStatus?: string;
-  paymentReference?: string;
-  paymentReceiptUrl?: string;
-  source?: string;
-  items: Array<{
-    productId: string;
-    variantId: string;
-    quantity: number;
-    unitPrice?: number;
-    isPreorder?: boolean;
-  }>;
-};
-type Line = {
-  productId: string;
-  variantId: string;
-  sku: string;
-  productName: string;
-  color: string;
-  size: string;
-  quantity: number;
-  unitPrice: number;
-  lineTotal: number;
-  isPreorder: boolean;
-};
+type OrderInput={customerId?:string;customerName:string;phone:string;whatsapp?:string;email?:string;address1:string;address2?:string;city:string;district:string;postalCode?:string;deliveryNotes?:string;paymentMethod:"cod"|"bank";paymentStatus?:string;paymentReference?:string;paymentReceiptUrl?:string;source?:string;items:Array<{productId:string;variantId:string;quantity:number;unitPrice?:number;isPreorder?:boolean}>};
+type Line={productId:string;variantId:string;sku:string;productName:string;color:string;size:string;quantity:number;unitPrice:number;lineTotal:number;isPreorder:boolean};
+
+async function deliverySnapshot(client:DatabaseClient,input:OrderInput,subtotal:number){
+  const settings=(await client.query<{key:string;value:unknown}>("SELECT key,value FROM site_settings")).rows;
+  const value=(key:string,fallback:unknown)=>settings.find(row=>row.key===key)?.value??fallback;
+  const enabled=(item:unknown)=>item===true||String(item).toLowerCase()==="true";
+  if(!enabled(value("storeOpen",true))||!enabled(value("ordersEnabled",true)))throw new Error("Online ordering is temporarily unavailable.");
+  const pricing=await resolveFulfillment(client,input);
+  const threshold=Number(value("freeDeliveryThreshold",0))||0;
+  return {courierProviderId:null,courierName:"",pricingMode:"",ratePlan:"",zoneName:pricing.areaGroupName,fee:threshold>0&&subtotal>=threshold?0:pricing.fee};
+}
 
 const orderWithItems = `SELECT o.*,COALESCE(NULLIF(o.payment_receipt_public_id,''),pr.payment_receipt_public_id) AS linked_payment_receipt_public_id,pr.created_at AS source_preorder_created_at,pr.notified_at AS source_preorder_notified_at,pr.confirmed_price AS source_preorder_confirmed_price,COALESCE((SELECT jsonb_agg(to_jsonb(oi) ORDER BY oi.id) FROM order_items oi WHERE oi.order_id=o.order_id),'[]') AS items,(SELECT count(*)::int FROM order_returns r WHERE r.order_id=o.order_id) AS return_count FROM orders o LEFT JOIN preorders pr ON pr.request_id=o.source_preorder_request_id`;
-const normalize = (value: string) =>
-  value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-const postalMatches = (rule: string, postal: string) =>
-  rule.endsWith("*") ? postal.startsWith(rule.slice(0, -1)) : postal === rule;
-const settingValue = (
-  rows: Array<{ key: string; value: unknown }>,
-  key: string,
-  fallback: unknown,
-) => rows.find((row) => row.key === key)?.value ?? fallback;
-const truthy = (value: unknown) =>
-  value === true || String(value).toLowerCase() === "true";
-
-async function deliverySnapshot(
-  client: DatabaseClient,
-  input: OrderInput,
-  subtotal: number,
-) {
-  const settings = (
-    await client.query<{ key: string; value: unknown }>(
-      "SELECT key,value FROM site_settings",
-    )
-  ).rows;
-  if (
-    !truthy(settingValue(settings, "storeOpen", true)) ||
-    !truthy(settingValue(settings, "ordersEnabled", true))
-  )
-    throw new Error("Online ordering is temporarily unavailable.");
-  const defaultId = String(
-    settingValue(settings, "defaultCourierProviderId", ""),
-  );
-  const courier = (
-    await client.query<Record<string, unknown>>(
-      "SELECT * FROM courier_providers WHERE id=$1 AND active=true",
-      [defaultId],
-    )
-  ).rows[0];
-  if (!courier) throw new Error("Online ordering is temporarily unavailable.");
-  let fee = Number(courier.flat_rate) || 0,
-    zoneName = "Flat rate",
-    ratePlan = "flat";
-  if (courier.pricing_mode === "zone") {
-    const rates = (
-      await client.query<Record<string, unknown>>(
-        "SELECT * FROM delivery_rates WHERE courier_provider_id=$1 AND active=true ORDER BY sort_order",
-        [defaultId],
-      )
-    ).rows;
-    const postal = String(input.postalCode || "").replace(/\D/g, ""),
-      city = normalize(input.city),
-      district = normalize(input.district);
-    const matches = rates
-      .map((rate) => {
-        const postals = rate.postal_codes as string[],
-          cities = rate.cities as string[],
-          districts = rate.districts as string[];
-        if (rate.fallback) return { rate, score: 0 };
-        if (
-          districts.length &&
-          !districts.some((item) => normalize(item) === district)
-        )
-          return { rate, score: -1 };
-        if (
-          postal &&
-          postals.some((item) =>
-            postalMatches(String(item).replace(/\s/g, ""), postal),
-          )
-        )
-          return { rate, score: 300 };
-        if (city && cities.some((item) => normalize(item) === city))
-          return { rate, score: 200 };
-        if (districts.length && !cities.length && !postals.length)
-          return { rate, score: 100 };
-        return { rate, score: -1 };
-      })
-      .filter((item) => item.score >= 0)
-      .sort(
-        (a, b) =>
-          b.score - a.score ||
-          Number(a.rate.sort_order) - Number(b.rate.sort_order),
-      );
-    const selected = matches[0]?.rate;
-    if (!selected)
-      throw new Error("Delivery is not configured for this address.");
-    fee = Number(selected.fee) || 0;
-    zoneName = String(selected.name);
-    ratePlan = String(selected.id);
-  }
-  if (!truthy(settingValue(settings, "deliveryEnabled", true))) fee = 0;
-  const threshold =
-    Number(settingValue(settings, "freeDeliveryThreshold", 0)) || 0;
-  if (threshold > 0 && subtotal >= threshold) fee = 0;
-  return {
-    courierProviderId: String(courier.id),
-    courierName: String(courier.name),
-    pricingMode: String(courier.pricing_mode),
-    ratePlan,
-    zoneName,
-    fee,
-  };
-}
 
 async function loadLines(
   client: DatabaseClient,
@@ -411,11 +283,13 @@ export async function updateOrder(input: Record<string, unknown>) {
       throw new Error("Verify or mark the bank payment paid before confirming this order.");
     if (current.payment_method === "bank" && nextPayment.toLowerCase() === "rejected" && !["pending", "cancelled"].includes(nextStatus))
       throw new Error("A rejected bank payment cannot progress through fulfilment.");
-    const fulfilmentName = String(input.fulfilmentCourierName ?? current.fulfilment_courier_name ?? "").trim();
-    if (nextStatus === "dispatched" && !fulfilmentName)
-      throw new Error("Select the actual fulfilment courier before marking this order dispatched.");
-    if(nextStatus==="dispatched"&&!input.courierSentDate&&!current.courier_sent_date)
-      throw new Error("Add the courier handover date before marking this order dispatched.");
+    let selectedCourier:Record<string,unknown>|undefined;
+    const requestedCourierId=String(input.fulfilmentCourierId??current.fulfilment_courier_id??"").trim();
+    if(nextStatus==="dispatched"){
+      if(!requestedCourierId)throw new Error("Select the actual fulfilment courier before marking this order dispatched.");
+      selectedCourier=(await client.query<Record<string,unknown>>("SELECT id,name,tracking_url_template FROM fulfilment_couriers WHERE id=$1 AND active=true",[requestedCourierId])).rows[0];
+      if(!selectedCourier)throw new Error("Select an active actual fulfilment courier before marking this order dispatched.");
+    }
     if(input.courierSentDate!==undefined&&!Number.isFinite(Date.parse(String(input.courierSentDate))))
       throw new Error("Add a valid courier handover date.");
     const cancellationReason=String(input.cancellationReason||"").trim(),cancelledBy=String(input.cancelledBy||"owner");
@@ -452,16 +326,14 @@ export async function updateOrder(input: Record<string, unknown>) {
           ? "fulfilled"
         : current.stock_state;
     const fields = [
-        "fulfilmentCourierProviderId",
-        "fulfilmentCourierName",
+        "fulfilmentCourierId",
         "trackingNumber",
         "trackingUrl",
         "courierSentDate",
       ] as const,
       map = {
         paymentStatus: "payment_status",
-        fulfilmentCourierProviderId: "fulfilment_courier_provider_id",
-        fulfilmentCourierName: "fulfilment_courier_name",
+        fulfilmentCourierId: "fulfilment_courier_id",
         trackingNumber: "tracking_number",
         trackingUrl: "tracking_url",
         courierSentDate: "courier_sent_date",
@@ -477,6 +349,12 @@ export async function updateOrder(input: Record<string, unknown>) {
         values.push(input[key] || null);
         updates.push(`${map[key]}=$${values.length}`);
       }
+    if(nextStatus==="dispatched"&&selectedCourier){
+      if(input.fulfilmentCourierId===undefined){values.push(requestedCourierId);updates.push(`fulfilment_courier_id=$${values.length}`);}
+      values.push(String(selectedCourier.name));updates.push(`fulfilment_courier_name=$${values.length}`);
+      if(input.courierSentDate===undefined&&!current.courier_sent_date)updates.push("courier_sent_date=now()");
+      if(input.trackingUrl===undefined&&!current.tracking_url&&input.trackingNumber&&selectedCourier.tracking_url_template){values.push(String(selectedCourier.tracking_url_template).replace("{tracking_number}",encodeURIComponent(String(input.trackingNumber))));updates.push(`tracking_url=$${values.length}`);}
+    }
     await client.query(
       `UPDATE orders SET ${updates.join(",")} WHERE order_id=$1`,
       values,

@@ -278,7 +278,7 @@ export type Order = {
   deliveryPricingMode?: DeliveryPricingMode;
   deliveryRatePlan?: string;
   deliveryZoneName?: string;
-  fulfilmentCourierProviderId?: string;
+  fulfilmentCourierId?: string;
   fulfilmentCourierName?: string;
   trackingNumber?: string;
   trackingUrl?: string;
@@ -367,6 +367,17 @@ export type CourierProvider = {
   active: boolean;
   minimumDeliveryDays: number;
   maximumDeliveryDays: number;
+  createdAt?: string;
+  updatedAt?: string;
+};
+export type FulfilmentCourier = {
+  id: string;
+  name: string;
+  phone: string;
+  trackingUrlTemplate: string;
+  notes: string;
+  active: boolean;
+  sortOrder: number;
   createdAt?: string;
   updatedAt?: string;
 };

@@ -97,11 +97,22 @@ test("admin status UI blocks duplicates, restores server state, and captures dis
   assert.match(source,/updateInFlight\.current\.has\(orderId\)/);
   assert.match(source,/finally[\s\S]*updateInFlight\.current\.delete\(orderId\)/);
   assert.match(source,/adminApi\.get<AdminOrderDetail>\("getOrder"/);
-  assert.match(source,/fulfilmentCourierProviderId:dispatchCourierId/);
+  assert.match(source,/fulfilmentCourierId:dispatchCourierId/);
+  assert.doesNotMatch(source,/fulfilmentCourierProviderId:dispatchCourierId/);
   assert.match(source,/courierSentDate:sriLankaDateTimeToIso\(dispatchHandover\)/);
   assert.match(source,/Tracking number \(optional\)/);
   assert.match(source,/Tracking URL \(optional\)/);
   assert.match(source,/CONFIRM HANDOVER/);
   assert.match(source,/value=\{normalizedOrderStatus\}/);
   assert.match(source,/onClick=\{\(\)=>setDispatchOrderId\(""\)\}/);
+});
+
+test("delivery cleanup creates an empty actual-courier registry and drops the legacy model",async()=>{
+  const sql=await readFile(new URL("../database/migrations/028_delivery_architecture_cleanup.sql",import.meta.url),"utf8");
+  assert.match(sql,/CREATE TABLE IF NOT EXISTS fulfilment_couriers/);
+  assert.match(sql,/ADD COLUMN IF NOT EXISTS fulfilment_courier_id/);
+  for(const table of ["courier_rates","courier_rate_import_rows","courier_rate_cards","delivery_rates","courier_providers"])assert.match(sql,new RegExp(`DROP TABLE IF EXISTS ${table}`));
+  assert.match(sql,/DELETE FROM site_settings WHERE key='defaultCourierProviderId'/);
+  assert.doesNotMatch(sql,/INSERT INTO fulfilment_couriers/i);
+  assert.doesNotMatch(sql,/SONIK/i);
 });

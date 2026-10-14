@@ -190,12 +190,13 @@ test("claim lookup and checkout enforce one-time notified reservations",async()=
   assert.doesNotMatch(conversion,/stock=stock-/);
 });
 
-test("conversion links both records and snapshots prepaid product and courier balance",async()=>{
+test("conversion links both records and snapshots prepaid product and delivery balance",async()=>{
   const source=await readFile(new URL("../server/api-implementation/_data/preorders.ts",import.meta.url),"utf8");
   const conversion=source.slice(source.indexOf("export async function convertPreorderToOrder"));
   assert.match(conversion,/source_preorder_request_id,amount_paid,amount_to_collect/);
-  assert.match(conversion,/\$25,\$18,\$19/);
-  assert.match(conversion,/payment_method,payment_status.*\$17,'paid'/s);
+  assert.match(conversion,/\$20,\$13,\$14/);
+  assert.match(conversion,/payment_method,payment_status.*\$12,'paid'/s);
+  assert.doesNotMatch(conversion,/courier_provider_id|delivery_pricing_mode|delivery_rate_plan/);
   assert.match(conversion,/UPDATE preorders SET status='converted',converted_order_id=\$2/);
   assert.doesNotMatch(conversion,/UPDATE variants SET stock=stock-/);
 });

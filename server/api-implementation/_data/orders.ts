@@ -122,9 +122,9 @@ export async function deliverySnapshot(
 
   return {
     courierProviderId: null,
-    courierName: pricing.methodName,
-    pricingMode: pricing.method,
-    ratePlan: pricing.ratePlan,
+    courierName: "",
+    pricingMode: "",
+    ratePlan: "",
     zoneName: pricing.areaGroupName,
     method: pricing.method,
     methodName: pricing.methodName,
@@ -264,7 +264,7 @@ export async function createOrder(
       hasPreorder = lines.some((line) => line.isPreorder);
 
     await client.query(
-      `INSERT INTO orders(order_id,customer_id,customer_name,phone,whatsapp,email,address1,address2,city,district,postal_code,delivery_notes,courier_provider_id,courier_name,delivery_pricing_mode,delivery_rate_plan,delivery_zone_name,payment_method,payment_status,payment_reference,payment_receipt_public_id,payment_receipt_resource_type,payment_receipt_format,subtotal,discount_code,discount_amount,discount_type,discount_value,delivery_fee,total,total_product_weight_grams,total_shipping_weight_grams,minimum_delivery_days,maximum_delivery_days,stock_state,order_status,source,has_preorder,fulfillment_method,delivery_method_name,delivery_area_group_id,delivery_area_group_name,pickup_location_id,pickup_branch_name,pickup_branch_address,pickup_instructions) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,'pending',$36,$37,$38,$39,$40,$41,$42,$43,$44,$45)`,
+      `INSERT INTO orders(order_id,customer_id,customer_name,phone,whatsapp,email,address1,address2,city,district,postal_code,delivery_notes,payment_method,payment_status,payment_reference,payment_receipt_public_id,payment_receipt_resource_type,payment_receipt_format,subtotal,discount_code,discount_amount,discount_type,discount_value,delivery_fee,total,total_product_weight_grams,total_shipping_weight_grams,minimum_delivery_days,maximum_delivery_days,stock_state,order_status,source,has_preorder,fulfillment_method,delivery_method_name,delivery_area_group_id,delivery_area_group_name,pickup_location_id,pickup_branch_name,pickup_branch_address,pickup_instructions) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,'pending',$30,$31,$32,$33,$34,$35,$36,$37,$38,$39)`,
       [
         orderId,
         input.customerId || null,
@@ -278,11 +278,6 @@ export async function createOrder(
         input.district || "",
         input.postalCode || "",
         input.deliveryNotes || "",
-        delivery.courierProviderId,
-        delivery.courierName,
-        delivery.pricingMode,
-        delivery.ratePlan,
-        delivery.zoneName,
         input.paymentMethod,
         input.paymentStatus ||
           (input.paymentMethod === "cod" ? "COD" : "receipt submitted"),
@@ -345,7 +340,7 @@ export async function createOrder(
         orderId,
         JSON.stringify({
           total,
-          deliveryZone: delivery.zoneName,
+          deliveryZone: delivery.areaGroupName,
         }),
       ],
     );

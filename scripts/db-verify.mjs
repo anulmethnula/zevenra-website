@@ -27,11 +27,7 @@ const required = [
   "order_returns",
   "order_return_items",
   "preorders",
-  "courier_providers",
-  "delivery_rates",
-  "courier_rate_cards",
-  "courier_rate_import_rows",
-  "courier_rates",
+  "fulfilment_couriers",
   "delivery_methods",
   "delivery_area_groups",
   "delivery_area_locations",
@@ -96,12 +92,10 @@ try {
       "SELECT count(*)::int AS count FROM (SELECT ri.order_item_id,sum(ri.quantity) qty,oi.quantity purchased FROM order_return_items ri JOIN order_items oi ON oi.id=ri.order_item_id JOIN order_returns r ON r.id=ri.return_id WHERE r.status<>'rejected' GROUP BY ri.order_item_id,oi.quantity HAVING sum(ri.quantity)>oi.quantity) invalid",
     orphanReturnItems:
       "SELECT count(*)::int AS count FROM order_return_items ri LEFT JOIN order_returns r ON r.id=ri.return_id LEFT JOIN order_items oi ON oi.id=ri.order_item_id WHERE r.id IS NULL OR oi.id IS NULL",
-    orphanCourierRates:
-      "SELECT count(*)::int AS count FROM courier_rates r LEFT JOIN courier_rate_cards c ON c.id=r.rate_card_id LEFT JOIN courier_providers p ON p.id=r.courier_provider_id WHERE c.id IS NULL OR p.id IS NULL",
-    mismatchedCourierRateProviders:
-      "SELECT count(*)::int AS count FROM courier_rates r JOIN courier_rate_cards c ON c.id=r.rate_card_id WHERE r.courier_provider_id<>c.courier_provider_id",
-    multipleActiveRateCards:
-      "SELECT count(*)::int AS count FROM (SELECT courier_provider_id FROM courier_rate_cards WHERE status='active' GROUP BY courier_provider_id HAVING count(*)>1) invalid",
+    orphanFulfilmentCouriers:
+      "SELECT count(*)::int AS count FROM orders o LEFT JOIN fulfilment_couriers c ON c.id=o.fulfilment_courier_id WHERE o.fulfilment_courier_id IS NOT NULL AND c.id IS NULL",
+    obsoleteDefaultCourierSetting:
+      "SELECT count(*)::int AS count FROM site_settings WHERE key='defaultCourierProviderId'",
     enabledCheckoutWithoutPaymentMethod:
       "WITH s AS (SELECT key,lower(value #>> '{}') value FROM site_settings) SELECT CASE WHEN COALESCE((SELECT value='true' FROM s WHERE key='ordersEnabled'),true) AND NOT COALESCE((SELECT value='true' FROM s WHERE key='codEnabled'),false) AND NOT COALESCE((SELECT value='true' FROM s WHERE key='bankEnabled'),(SELECT value='true' FROM s WHERE key='bankTransferEnabled'),false) THEN 1 ELSE 0 END::int AS count",
     enabledCheckoutWithoutFulfillmentMethod:

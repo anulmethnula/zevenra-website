@@ -3663,7 +3663,7 @@ function Orders() {
                                     void change(order.orderId,{orderStatus:value,cancellationReason:reason.trim(),cancelledBy:"owner"});return;
                                   }
                                   if(value==="dispatched"){
-                                     const existingId=detail.fulfilmentCourierProviderId||detail.courierProviderId||"";
+                                     const existingId=detail.fulfilmentCourierId||"";
                                      setDispatchOrderId(order.orderId);setDispatchCourierId(selectDispatchCourierId(admin.couriers,existingId));setDispatchTrackingNumber(detail.trackingNumber||"");setDispatchTrackingUrl(detail.trackingUrl||"");
                                      setDispatchHandover(sriLankaDateTimeLocal());return;
                                   }
@@ -3724,7 +3724,7 @@ function Orders() {
                                 ))}
                               </select>
                             </label>:<Info label="Payment method" value="Cash on delivery"/>}
-                            {dispatchOrderId===order.orderId?<div className="mt-4 border border-bronze/25 bg-white/45 p-4"><p className="text-xs font-semibold uppercase tracking-wider">Mark as dispatched</p><p className="mt-2 text-xs text-black/55">Confirm that this parcel has been handed over to the courier.</p><div className="mt-4 grid gap-3"><label className="text-xs">Courier<select className="field mt-2" value={dispatchCourierId} onChange={e=>setDispatchCourierId(e.target.value)}><option value="">Select courier</option>{admin.couriers.filter(courier=>courier.active).map(courier=><option key={courier.id} value={courier.id}>{courier.name}</option>)}</select></label><label className="text-xs">Handover date/time (Sri Lanka)<input className="field mt-2" type="datetime-local" value={dispatchHandover} onChange={e=>setDispatchHandover(e.target.value)}/></label><details className="border-t border-black/10 pt-3"><summary className="cursor-pointer text-xs text-black/55">Advanced tracking fields</summary><div className="mt-3 grid gap-3"><Field label="Tracking number (optional)" value={dispatchTrackingNumber} onChange={setDispatchTrackingNumber}/><Field label="Tracking URL (optional)" value={dispatchTrackingUrl} onChange={setDispatchTrackingUrl}/></div></details><div className="flex gap-2"><button type="button" className="btn btn-dark" disabled={savingId===order.orderId||!dispatchCourierId||!dispatchHandover} onClick={async()=>{const courier=admin.couriers.find(item=>item.id===dispatchCourierId);const url=dispatchTrackingUrl.trim();if(url&&!/^https:\/\//i.test(url)){setStatus("Tracking URL must start with https://");return;}const saved=await change(order.orderId,{orderStatus:"dispatched",fulfilmentCourierProviderId:dispatchCourierId,fulfilmentCourierName:courier?.name||"",trackingNumber:dispatchTrackingNumber.trim(),trackingUrl:url,courierSentDate:sriLankaDateTimeToIso(dispatchHandover)});if(saved)setDispatchOrderId("");}}>{savingId===order.orderId?"Updating…":"CONFIRM HANDOVER"}</button><button type="button" className="btn" disabled={savingId===order.orderId} onClick={()=>setDispatchOrderId("")}>Cancel</button></div></div></div>:null}
+                            {dispatchOrderId===order.orderId?<div className="mt-4 border border-bronze/25 bg-white/45 p-4"><p className="text-xs font-semibold uppercase tracking-wider">Mark as dispatched</p><p className="mt-2 text-xs text-black/55">Confirm that this parcel has been handed over to the courier.</p><div className="mt-4 grid gap-3"><label className="text-xs">Courier<select className="field mt-2" value={dispatchCourierId} onChange={e=>setDispatchCourierId(e.target.value)}><option value="">Select courier</option>{admin.couriers.filter(courier=>courier.active).map(courier=><option key={courier.id} value={courier.id}>{courier.name}</option>)}</select></label><label className="text-xs">Handover date/time (Sri Lanka)<input className="field mt-2" type="datetime-local" value={dispatchHandover} onChange={e=>setDispatchHandover(e.target.value)}/></label><details className="border-t border-black/10 pt-3"><summary className="cursor-pointer text-xs text-black/55">Advanced tracking fields</summary><div className="mt-3 grid gap-3"><Field label="Tracking number (optional)" value={dispatchTrackingNumber} onChange={setDispatchTrackingNumber}/><Field label="Tracking URL (optional)" value={dispatchTrackingUrl} onChange={setDispatchTrackingUrl}/></div></details><div className="flex gap-2"><button type="button" className="btn btn-dark" disabled={savingId===order.orderId||!dispatchCourierId||!dispatchHandover} onClick={async()=>{const url=dispatchTrackingUrl.trim();if(url&&!/^https:\/\//i.test(url)){setStatus("Tracking URL must start with https://");return;}const saved=await change(order.orderId,{orderStatus:"dispatched",fulfilmentCourierId:dispatchCourierId,trackingNumber:dispatchTrackingNumber.trim(),trackingUrl:url,courierSentDate:sriLankaDateTimeToIso(dispatchHandover)});if(saved)setDispatchOrderId("");}}>{savingId===order.orderId?"Updating…":"CONFIRM HANDOVER"}</button><button type="button" className="btn" disabled={savingId===order.orderId} onClick={()=>setDispatchOrderId("")}>Cancel</button></div></div></div>:null}
                           </Panel>
                           <Panel title="Payment">
                             <div className="space-y-3 text-sm">
@@ -3920,7 +3920,7 @@ function FulfilmentPanel({
   save: (patch: Partial<Order>) => void;
 }) {
   const [courierId, setCourierId] = useState(
-      order.fulfilmentCourierProviderId || order.courierProviderId || "",
+      order.fulfilmentCourierId || "",
     ),
     [trackingNumber, setTrackingNumber] = useState(order.trackingNumber || ""),
     [trackingUrl, setTrackingUrl] = useState(order.trackingUrl || ""),
@@ -3933,10 +3933,8 @@ function FulfilmentPanel({
       return;
     }
     setError("");
-    const courier = couriers.find((item) => item.id === courierId);
     save({
-      fulfilmentCourierProviderId: courierId,
-      fulfilmentCourierName: courier?.name || "",
+      fulfilmentCourierId: courierId,
       trackingNumber: trackingNumber.trim(),
       trackingUrl: url,
       courierSentDate: sentDate,
