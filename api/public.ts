@@ -46,6 +46,9 @@ const routes: Record<string, Handler> = {
 export default function handler(request: VercelRequest, response: VercelResponse) {
   const route = String(request.query.route || "");
   const selected = routes[route];
-  if (!selected) return response.status(404).json({ error: "Not found" });
+  if (!selected) {
+    response.setHeader("Cache-Control", "no-store");
+    return response.status(404).json({ error: "API route not found" });
+  }
   return selected(request, response);
 }
