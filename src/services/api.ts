@@ -2,7 +2,7 @@ import type {
   CheckoutData,
   CustomerOrder,
   CustomerPreorder,
-  GuestTrackedOrder,
+  GuestTrackingResult,
   Order,
   PreorderRequest,
   Product,
@@ -52,7 +52,7 @@ export const api = {
       ? Promise.resolve([])
       : request<CustomerPreorder[]>("/account/preorders"),
   trackOrder: (data: { orderId: string; phone: string }) =>
-    request<GuestTrackedOrder>("/order-track", {
+    request<GuestTrackingResult>("/order-track", {
       method: "POST",
       body: JSON.stringify(data),
     }),

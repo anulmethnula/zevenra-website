@@ -5,7 +5,9 @@ import { createOrderTrackHandler } from "../server/api-implementation/order-trac
 import { normalizeOrderIdForLookup, normalizeSriLankanPhoneForLookup } from "../server/api-implementation/_order-track-normalization.js";
 import { getRecentGuestOrders, orderIdFromSearch, rememberGuestOrder } from "../src/utils/guestOrders.js";
 import { createOrderPdf } from "../src/utils/orderPdf.js";
-import { invoicePaymentStatus } from "../src/utils/invoicePdf.js";
+import { invoicePaymentStatus, normalizeInvoiceOrder } from "../src/utils/invoicePdf.js";
+import { preorderCustomerStatusLabel } from "../shared/preorder-customer-status.js";
+import { readFile } from "node:fs/promises";
 import { safeHttpsUrl } from "../src/utils/orderTracking.js";
 
 type State = { status: number; headers: Record<string, string>; body: unknown };
@@ -41,7 +43,8 @@ test("correct normalized ID and phone return only the safe customer order", asyn
     { res, state } = response();
   await handler(request({ orderId: stored.order_id, phone: "+94 77-000-0000" }, { origin }, "198.51.100.2"), res);
   assert.equal(state.status, 200);
-  assert.deepEqual(Object.keys(state.body as object).sort(), ["address1","address2","city","courierSentDate","createdAt","customerName","deliveryFee","deliveryZoneName","discountAmount","discountCode","district","fulfilmentCourierName","items","orderId","orderStatus","paymentMethod","paymentStatus","postalCode","subtotal","total","trackingNumber","trackingUrl"].sort());
+  assert.deepEqual(Object.keys(state.body as object).sort(), ["kind","address1","address2","city","courierSentDate","createdAt","customerName","deliveryFee","deliveryZoneName","discountAmount","discountCode","district","fulfilmentCourierName","items","orderId","orderStatus","paymentMethod","paymentStatus","postalCode","subtotal","total","trackingNumber","trackingUrl"].sort());
+  assert.equal((state.body as {kind:string}).kind,"order");
   const result = state.body as { items: Array<Record<string, unknown>> };
   assert.deepEqual(Object.keys(result.items[0]).sort(), ["color","imageUrl","isPreorder","name","productSlug","quantity","size","unitPrice"].sort());
   assert.equal((state.body as { address1: string }).address1, stored.address1);
@@ -106,7 +109,7 @@ test("order and phone must match the same database record", async()=>{
 });
 
 test("wrong phone and unknown ID return the same generic not-found response", async () => {
-  const handler = createOrderTrackHandler(async () => null), expected = { error: "Order details could not be found." };
+  const handler = createOrderTrackHandler(async () => null), expected = { error: "Order or pre-order details could not be found." };
   const wrong = response();
   await handler(request({ orderId: stored.order_id, phone: "0770000001" }, { origin }, "198.51.100.3"), wrong.res);
   const unknown = response();
@@ -115,6 +118,28 @@ test("wrong phone and unknown ID return the same generic not-found response", as
   assert.equal(unknown.state.status, 404);
   assert.deepEqual(wrong.state.body, expected);
   assert.deepEqual(unknown.state.body, expected);
+});
+
+test("PRE ID and matching phone return only safe preorder tracking fields",async()=>{
+  const storedPreorder={request_id:"PRE-TEST-1",created_at:"2026-10-08T10:00:00.000Z",customer_name:"Guest Customer",phone:"0770000000",product_name:"Linen Dress",color:"Ivory",size:"M",quantity:2,requested_price:5000,status:"converted",converted_order_id:"ZEV-LINKED-1",payment_submitted_at:"2026-10-08T10:01:00.000Z",payment_verified_at:"2026-10-08T12:00:00.000Z",claim_token_hash:"secret",payment_receipt_public_id:"private",notes:"internal",batch_id:"supplier"};
+  const handler=createOrderTrackHandler(async()=>null,async(id,phone)=>id==="PRE-TEST-1"&&phone==="94770000000"?storedPreorder:null),result=response();
+  await handler(request({orderId:"#pre-test-1",phone:"0770000000"},{origin},"198.51.103.1"),result.res);
+  assert.equal(result.state.status,200);const body=result.state.body as Record<string,unknown>;
+  assert.equal(body.kind,"preorder");assert.equal(body.statusLabel,"Delivery order created");assert.equal(body.convertedOrderId,"ZEV-LINKED-1");
+  for(const field of ["claim_token_hash","payment_receipt_public_id","notes","batch_id","phone"])assert.equal(field in body,false);
+  assert.equal(JSON.stringify(body).includes("secret"),false);assert.equal(JSON.stringify(body).includes("private"),false);
+});
+
+test("PRE lookup with wrong phone fails with the same generic response",async()=>{
+  const handler=createOrderTrackHandler(async()=>null,async()=>null),result=response();await handler(request({orderId:"PRE-TEST-1",phone:"0770000001"},{origin},"198.51.103.2"),result.res);
+  assert.equal(result.state.status,404);assert.deepEqual(result.state.body,{error:"Order or pre-order details could not be found."});
+});
+
+test("malformed tracking references fail before database lookup",async()=>{let called=false;const find=async()=>{called=true;return stored;},handler=createOrderTrackHandler(find,find),result=response();await handler(request({orderId:"BAD-1",phone:"0770000000"},{origin},"198.51.103.3"),result.res);assert.equal(result.state.status,400);assert.equal(called,false);});
+
+test("customer preorder status labels are safe and complete",()=>{
+  assert.equal(preorderCustomerStatusLabel("payment_submitted"),"Payment submitted — awaiting verification");assert.equal(preorderCustomerStatusLabel("paid"),"Payment verified");
+  for(const [status,label] of [["confirmed","Pre-order confirmed"],["in_transit","On the way"],["arrived","Arrived"],["ready","Ready for delivery"]])assert.equal(preorderCustomerStatusLabel(status),label);
 });
 
 test("missing Origin is rejected", async () => {
@@ -195,3 +220,7 @@ test("invoice payment status reflects confirmed order payment state", () => {
   assert.equal(invoicePaymentStatus({ paymentMethod: "bank", paymentStatus: "verified" }), "Paid");
   assert.equal(invoicePaymentStatus({ paymentMethod: "bank", paymentStatus: "paid" }), "Paid");
 });
+
+test("one invoice helper supports tracked and account order snapshots",()=>{const tracked={kind:"order" as const,...({orderId:"ZEV-1",createdAt:"2026-01-01",customerName:"A",address1:"",address2:"",city:"",district:"",postalCode:"",orderStatus:"confirmed",paymentMethod:"bank",paymentStatus:"pending",deliveryZoneName:"",fulfilmentCourierName:"",trackingNumber:"",trackingUrl:"",courierSentDate:"",subtotal:1000,discountCode:"",discountAmount:0,deliveryFee:0,total:1000,items:[{name:"Top",color:"Black",size:"M",quantity:1,unitPrice:1000,isPreorder:false}]})};assert.equal(normalizeInvoiceOrder(tracked).items[0].unitPrice,1000);});
+
+test("invoice and preorder summary downloads are exposed on every customer surface",async()=>{const [checkout,order,track,account,preorder,invoice,summary]=await Promise.all(["CheckoutPage.tsx","OrderPage.tsx","TrackOrderPage.tsx","CustomerOrdersPage.tsx","PreorderPage.tsx"].map(name=>readFile(new URL(`../src/pages/${name}`,import.meta.url),"utf8")).concat([readFile(new URL("../src/utils/invoicePdf.ts",import.meta.url),"utf8"),readFile(new URL("../src/utils/preorderSummaryPdf.ts",import.meta.url),"utf8")]));assert.match(checkout,/downloadInvoicePdf/);assert.match(order,/DOWNLOAD INVOICE/);assert.match(track,/DOWNLOAD INVOICE/);assert.match(account,/DOWNLOAD INVOICE/);assert.match(preorder,/Download pre-order summary/i);assert.match(track,/DOWNLOAD PRE-ORDER SUMMARY/);assert.match(account,/DOWNLOAD PRE-ORDER SUMMARY/);assert.doesNotMatch(summary,/ORDER INVOICE|FINAL INVOICE/);assert.match(summary,/PRE-ORDER SUMMARY/);assert.match(invoice,/normalizeInvoiceOrder/);});

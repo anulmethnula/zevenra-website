@@ -8,7 +8,7 @@ import { useCustomerAuth } from "../features/account/CustomerAuthContext";
 import type { Order } from "../types";
 import { normalizeWhatsappDigits } from "../utils/contact";
 import { orderSuccessCopy } from "../utils/orderSuccess";
-import { downloadOrderPdf } from "../utils/orderPdf";
+import { downloadInvoicePdf } from "../utils/invoicePdf";
 
 export default function OrderPage() {
   const { orderId } = useParams(),
@@ -62,7 +62,7 @@ export default function OrderPage() {
     setPdfBusy(true);
     setActionMessage("");
     try {
-      await downloadOrderPdf(confirmedOrder);
+      await downloadInvoicePdf(confirmedOrder);
     } catch {
       setActionMessage("We couldn't prepare the PDF. Please try again.");
     } finally {
@@ -188,7 +188,7 @@ export default function OrderPage() {
             onClick={() => void pdf()}
           >
             <Download size={15} />
-            {pdfBusy ? "PREPARING PDF…" : "DOWNLOAD ORDER PDF"}
+            {pdfBusy ? "PREPARING PDF…" : "DOWNLOAD INVOICE"}
           </button>
           <Link className="btn btn-dark justify-center" to="/shop">
             <ShoppingBag size={15} /> Continue Shopping

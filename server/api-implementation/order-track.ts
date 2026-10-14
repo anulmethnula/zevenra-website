@@ -1,6 +1,8 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { z } from "zod";
 import { findGuestOrder } from "./_data/orders.js";
+import { findGuestPreorder } from "./_data/preorders.js";
+import { preorderCustomerStatusLabel } from "../../shared/preorder-customer-status.js";
 import {
   normalizeOrderIdForLookup,
   normalizeSriLankanPhoneForLookup,
@@ -15,7 +17,7 @@ import {
   validOrigin,
 } from "./_shared.js";
 
-const notFound = "Order details could not be found.";
+const notFound = "Order or pre-order details could not be found.";
 type FindOrder = (orderId: string, phone: string) => Promise<Record<string, unknown> | null>;
 
 function safeOrder(row: Record<string, unknown>) {
@@ -39,6 +41,7 @@ function safeOrder(row: Record<string, unknown>) {
     trackingUrl = "";
   }
   return {
+    kind:"order" as const,
     orderId: text(row.order_id ?? row.orderId),
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : text(row.created_at ?? row.createdAt),
     customerName: text(row.customer_name ?? row.customerName),
@@ -78,7 +81,12 @@ function safeOrder(row: Record<string, unknown>) {
   };
 }
 
-export function createOrderTrackHandler(findOrder: FindOrder = findGuestOrder) {
+function safePreorder(row:Record<string,unknown>){
+  const text=(value:unknown)=>String(value??""),number=(value:unknown)=>Number(value)||0,status=text(row.status);
+  return{kind:"preorder" as const,requestId:text(row.request_id??row.requestId),createdAt:row.created_at instanceof Date?row.created_at.toISOString():text(row.created_at??row.createdAt),customerName:text(row.customer_name??row.customerName),productName:text(row.product_name??row.productName),color:text(row.color),size:text(row.size),quantity:number(row.quantity),productTotal:number(row.requested_price??row.productTotal)*number(row.quantity),status,statusLabel:preorderCustomerStatusLabel(status),paymentState:row.payment_verified_at?"Payment verified":status==="payment_submitted"?"Payment pending verification":"Awaiting payment",convertedOrderId:status==="converted"?text(row.converted_order_id??row.convertedOrderId):""};
+}
+
+export function createOrderTrackHandler(findOrder: FindOrder = findGuestOrder,findPreorder:FindOrder=findGuestPreorder) {
   return async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method !== "POST") return methodNotAllowed(res, ["POST"]);
     const throttle = await durableRateLimit(req, "order-track", 10, 10 * 60 * 1000);
@@ -92,15 +100,15 @@ export function createOrderTrackHandler(findOrder: FindOrder = findGuestOrder) {
       const input = orderTrackSchema.parse(body(req)),
         orderId = normalizeOrderIdForLookup(input.orderId),
         phone = normalizeSriLankanPhoneForLookup(input.phone);
-      if (!orderId || !/^947\d{8}$/.test(phone))
-        return json(res, { error: "Please enter a valid Order ID and mobile number." }, 400);
-      const row = await findOrder(orderId, phone);
+      if (!/^(ZEV|PRE)-[A-Z0-9-]+$/.test(orderId) || !/^947\d{8}$/.test(phone))
+        return json(res, { error: "Please enter a valid Order or Pre-order ID and mobile number." }, 400);
+      const preorder=orderId.startsWith("PRE-"),row=await (preorder?findPreorder:findOrder)(orderId, phone);
       return row
-        ? json(res, safeOrder(row))
+        ? json(res, preorder?safePreorder(row):safeOrder(row))
         : json(res, { error: notFound }, 404);
     } catch (error) {
       if (error instanceof z.ZodError)
-        return json(res, { error: "Please enter a valid Order ID and mobile number." }, 400);
+        return json(res, { error: "Please enter a valid Order or Pre-order ID and mobile number." }, 400);
       console.error("guest order tracking failed", error);
       return json(res, { error: notFound }, 404);
     }

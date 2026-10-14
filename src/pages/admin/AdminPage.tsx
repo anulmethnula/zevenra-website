@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { createPortal } from "react-dom";
 import { Link, useLocation, useParams } from "react-router-dom";
 import {
   ChevronLeft,
@@ -203,10 +204,23 @@ function UploadField({
     </div>
   );
 }
+function DashboardMetric({label,value,to,help,strong=false}:{label:string;value:string|number;to:string;help?:string;strong?:boolean}) {
+  return <Link to={to} aria-label={`View ${label}`} className={`${strong?"border-bronze/25 bg-white/45":"border-black/10 bg-white/20"} block border p-4 transition hover:-translate-y-0.5 hover:border-bronze/50 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bronze sm:p-5`}><p className="text-[10px] font-semibold uppercase tracking-[.14em] text-black/45">{label}</p><p className={`display mt-3 break-words ${strong?"text-3xl sm:text-4xl":"text-2xl sm:text-3xl"}`}>{value}</p>{help?<p className="mt-3 text-[11px] leading-5 text-black/50">{help}</p>:null}</Link>;
+}
 function Dashboard() {
   const { admin } = useStore(),
     stats = admin.dashboard,
-    low = stats?.stockAttention || [];
+    low = stats?.stockAttention || [], deliveredOrders="/admin/orders?status=delivered", unavailable="Unavailable",
+    business=[
+      {label:"Net Product Revenue",value:money(stats?.productRevenue??stats?.revenue??0),to:deliveredOrders,help:"Delivered product sales after discounts. Delivery fees excluded."},
+      {label:"Gross Profit",value:stats?.profitDataComplete?money(stats.grossProfit||0):unavailable,to:deliveredOrders,help:stats?.profitDataComplete?"Net product revenue minus historical COGS.":"Historical item cost snapshots are unavailable; profit is not estimated."},
+      {label:"Gross Margin %",value:stats?.profitDataComplete?`${Number(stats.grossMargin||0).toFixed(1)}%`:unavailable,to:deliveredOrders,help:stats?.profitDataComplete?"Gross profit as a percentage of net product revenue.":"Historical item cost snapshots are required for an accurate margin."},
+      {label:"Product Cost / COGS",value:stats?.profitDataComplete?money(stats.cogs||0):unavailable,to:deliveredOrders,help:stats?.profitDataComplete?"Saved historical cost of delivered items.":"No current product costs are used for historical orders."},
+    ], activity=[
+      {label:"Orders Today",value:stats?.ordersToday||0,to:"/admin/orders?date=today"},{label:"Items Sold",value:stats?.itemsSold||0,to:deliveredOrders},{label:"Delivery Collected",value:money(stats?.deliveryCollected||0),to:deliveredOrders,help:"Delivery fees are shown separately and are not included in product revenue or gross profit."},{label:"Active Pre-orders",value:stats?.preorderNew||0,to:"/admin/preorders?status=active"},
+    ], operations=[
+      {label:"Pending Orders",value:stats?.pending||0,to:"/admin/orders?status=pending"},{label:"Confirmed",value:stats?.confirmed||0,to:"/admin/orders?status=confirmed"},{label:"Packed",value:stats?.packed||0,to:"/admin/orders?status=packed"},{label:"Shipped",value:stats?.shipped||0,to:"/admin/orders?status=shipped"},{label:"Delivered",value:stats?.delivered||0,to:deliveredOrders},{label:"Cancelled",value:stats?.cancelled||0,to:"/admin/orders?status=cancelled"},
+    ], storeCards=[{label:"Published Products",value:stats?.publishedProducts||0,to:"/admin/products?status=published"},{label:"Low Stock",value:stats?.lowStockProducts||0,to:"/admin/products?stock=low"}];
   return (
     <>
       <Head
@@ -218,42 +232,9 @@ function Dashboard() {
           </Link>
         }
       />
-      <div className="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {([
-          [
-            "Published products",
-            stats?.publishedProducts || 0,
-            "/admin/products?status=published",
-          ],
-          ["Low stock", stats?.lowStockProducts || 0, "/admin/products?stock=low"],
-          ["Orders today", stats?.ordersToday || 0, "/admin/orders?date=today"],
-          ["Pending orders", stats?.pending || 0, "/admin/orders?status=pending"],
-          ["Confirmed", stats?.confirmed || 0, "/admin/orders?status=confirmed"],
-          ["Packed", stats?.packed || 0, "/admin/orders?status=packed"],
-          ["Shipped", stats?.shipped || 0, "/admin/orders?status=shipped"],
-          ["Delivered", stats?.delivered || 0, "/admin/orders?status=delivered"],
-          ["Cancelled", stats?.cancelled || 0, "/admin/orders?status=cancelled"],
-          [
-            "Product revenue",
-            money(stats?.productRevenue ?? stats?.revenue ?? 0),
-            "/admin/orders?status=delivered",
-          ],
-          ["Delivery collected", money(stats?.deliveryCollected || 0), "/admin/orders?status=delivered"],
-          ["Items sold", stats?.itemsSold || 0, "/admin/orders?status=delivered"],
-          ["Active pre-orders", stats?.preorderNew || 0, "/admin/preorders?status=active"],
-        ] as Array<[string,string|number,string]>).map(([label, value, to]) => (
-          <Link key={label} to={to} aria-label={`View ${label}`} className="admin-metric-card block border p-4 transition hover:-translate-y-0.5 hover:border-bronze/50 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bronze sm:p-5">
-            <p className="text-xs text-black/50">{label}</p>
-            <p className="display mt-3 break-words text-2xl sm:mt-4 sm:text-3xl">
-              {value}
-            </p>
-          </Link>
-        ))}
-      </div>
-      <p className="mt-4 text-xs leading-5 text-black/45">
-        Revenue shows delivered product value only. Delivery fees are shown
-        separately, so shipping charges are not mixed into product sales.
-      </p>
+      <section className="mt-8"><p className="eyebrow text-bronze">Business overview</p><div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{business.map(card=><DashboardMetric key={card.label} {...card} strong/>)}</div><div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{activity.map(card=><DashboardMetric key={card.label} {...card}/>)}</div></section>
+      <section className="mt-8"><p className="eyebrow text-bronze">Order operations</p><div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">{operations.map(card=><DashboardMetric key={card.label} {...card}/>)}</div></section>
+      <section className="mt-8"><p className="eyebrow text-bronze">Store</p><div className="mt-4 grid max-w-2xl gap-3 sm:grid-cols-2">{storeCards.map(card=><DashboardMetric key={card.label} {...card}/>)}</div></section>
       <div className="mt-6 grid gap-5 xl:grid-cols-2">
         <Panel title="Top selling products">
           {stats?.topProducts?.length ? (
@@ -2840,11 +2821,14 @@ function Preorders() {
           </button>
         </div>
       </div>
-      <AnimatePresence>
-        {rejecting&&<><motion.button type="button" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="admin-drawer-backdrop" aria-label="Close payment rejection dialog" onClick={()=>setRejecting(null)}/><motion.div initial={{opacity:0,y:16}} animate={{opacity:1,y:0}} exit={{opacity:0,y:16}} role="dialog" aria-modal="true" aria-labelledby="reject-payment-title" className="fixed left-1/2 top-1/2 z-[80] w-[min(92vw,32rem)] -translate-x-1/2 -translate-y-1/2 border border-black/10 bg-[#f7f4ee] p-6 shadow-2xl"><h2 id="reject-payment-title" className="display text-2xl">Request a new receipt</h2><p className="mt-2 text-sm text-black/55">Choose the reason shown to {rejecting.customerName}. The current receipt remains available as audit evidence.</p><label className="label mt-5">Reason<select className="field mt-2" value={rejectionReason} onChange={event=>setRejectionReason(event.target.value)} required><option value="">Choose a reason</option>{paymentRejectionReasons.map(reason=><option key={reason}>{reason}</option>)}</select></label>{rejectionReason==="Other"&&<label className="label mt-4">Short reason<textarea className="field mt-2 min-h-24" maxLength={240} value={customRejectionReason} onChange={event=>setCustomRejectionReason(event.target.value)} required/></label>}<div className="mt-6 flex justify-end gap-2"><button type="button" className="btn" disabled={busy===rejecting.requestId} onClick={()=>setRejecting(null)}>Cancel</button><button type="button" className="btn btn-dark" disabled={busy===rejecting.requestId||!rejectionReason||(rejectionReason==="Other"&&!customRejectionReason.trim())} onClick={()=>void rejectPayment()}>{busy===rejecting.requestId?"Requesting…":"Request new receipt"}</button></div></motion.div></>}
-      </AnimatePresence>
+      <RejectPaymentModal item={rejecting} reason={rejectionReason} customReason={customRejectionReason} busy={Boolean(rejecting&&busy===rejecting.requestId)} onReason={setRejectionReason} onCustomReason={setCustomRejectionReason} onClose={()=>setRejecting(null)} onConfirm={()=>void rejectPayment()}/>
     </>
   );
+}
+function RejectPaymentModal({item,reason,customReason,busy,onReason,onCustomReason,onClose,onConfirm}:{item:PreorderRequest|null;reason:string;customReason:string;busy:boolean;onReason:(value:string)=>void;onCustomReason:(value:string)=>void;onClose:()=>void;onConfirm:()=>void}){
+  useEffect(()=>{if(!item)return;const close=(event:KeyboardEvent)=>{if(event.key==="Escape"&&!busy)onClose();};document.addEventListener("keydown",close);return()=>document.removeEventListener("keydown",close);},[busy,item,onClose]);
+  if(!item)return null;
+  return createPortal(<AnimatePresence><motion.div className="fixed inset-0 z-[1000] grid place-items-center overflow-y-auto bg-black/75 p-4 sm:p-6" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget&&!busy)onClose();}}><motion.section initial={{opacity:0,y:18,scale:.98}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:18,scale:.98}} role="dialog" aria-modal="true" aria-labelledby="reject-payment-title" className="flex max-h-[calc(100dvh-2rem)] w-full max-w-[32rem] flex-col overflow-hidden border border-black/10 bg-[#f7f4ee] shadow-2xl sm:max-h-[calc(100dvh-3rem)]"><div className="overflow-y-auto p-5 sm:p-6"><h2 id="reject-payment-title" className="display text-2xl">Request a new receipt</h2><p className="mt-2 text-sm text-black/55">Choose the reason shown to {item.customerName}. The current receipt remains available as audit evidence.</p><label className="label mt-5">Reason<select autoFocus className="field mt-2" value={reason} onChange={event=>onReason(event.target.value)} required><option value="">Choose a reason</option>{paymentRejectionReasons.map(value=><option key={value}>{value}</option>)}</select></label>{reason==="Other"?<label className="label mt-4">Short reason<textarea className="field mt-2 min-h-24" maxLength={240} value={customReason} onChange={event=>onCustomReason(event.target.value)} required/></label>:null}</div><div className="flex shrink-0 justify-end gap-2 border-t border-black/10 bg-[#f7f4ee] p-4 sm:px-6"><button type="button" className="btn" disabled={busy} onClick={onClose}>Cancel</button><button type="button" className="btn btn-dark" disabled={busy||!reason||(reason==="Other"&&!customReason.trim())} onClick={onConfirm}>{busy?"Requesting…":"Request new receipt"}</button></div></motion.section></motion.div></AnimatePresence>,document.body);
 }
 function downloadOrdersCsv(rows: Order[]) {
   const csvCell = (value: unknown) =>

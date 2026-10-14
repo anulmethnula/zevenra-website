@@ -1,16 +1,22 @@
-import type { Order } from "../types";
+import type { CustomerOrder, GuestTrackedOrder, Order } from "../types";
+
+export type InvoiceOrder={orderId:string;createdAt:string;customerName:string;phone?:string;email?:string;address1?:string;address2?:string;city?:string;district?:string;postalCode?:string;deliveryMethodName?:string;fulfillmentMethod?:string;pickupBranchName?:string;pickupBranchAddress?:string;fulfilmentCourierName?:string;courierName?:string;paymentMethod:string;paymentStatus?:string;subtotal:number;discountAmount?:number;deliveryFee:number;total:number;items:Array<{name:string;color?:string;size?:string;quantity:number;unitPrice:number}>};
+export type InvoiceOrderSource=Order|GuestTrackedOrder|CustomerOrder|InvoiceOrder;
 
 const lkr = (value: number) =>
   `LKR ${Number(value || 0).toLocaleString("en-LK", { maximumFractionDigits: 0 })}`;
 
 const clean = (value: unknown) => String(value ?? "").trim();
 
-export function invoicePaymentStatus(order: Pick<Order, "paymentMethod" | "paymentStatus">) {
+export function normalizeInvoiceOrder(order:InvoiceOrderSource):InvoiceOrder{return{orderId:order.orderId,createdAt:order.createdAt,customerName:order.customerName||"",phone:"phone" in order?order.phone:"",email:"email" in order?order.email:"",address1:order.address1,address2:order.address2,city:order.city,district:order.district,postalCode:order.postalCode,deliveryMethodName:"deliveryMethodName" in order?order.deliveryMethodName:"",fulfillmentMethod:"fulfillmentMethod" in order?order.fulfillmentMethod:"",pickupBranchName:"pickupBranchName" in order?order.pickupBranchName:"",pickupBranchAddress:"pickupBranchAddress" in order?order.pickupBranchAddress:"",fulfilmentCourierName:order.fulfilmentCourierName,courierName:"courierName" in order?order.courierName:"",paymentMethod:order.paymentMethod,paymentStatus:order.paymentStatus,subtotal:order.subtotal,discountAmount:order.discountAmount,deliveryFee:order.deliveryFee,total:order.total,items:order.items.map(item=>({name:item.name,color:item.color,size:item.size,quantity:item.quantity,unitPrice:item.unitPrice}))};}
+
+export function invoicePaymentStatus(order: Pick<InvoiceOrder, "paymentMethod" | "paymentStatus">) {
   if (order.paymentMethod === "cod") return "Pay on delivery";
   return ["paid", "verified"].includes(clean(order.paymentStatus).toLowerCase()) ? "Paid" : "Pending verification";
 }
 
-export async function createInvoicePdf(order: Order) {
+export async function createInvoicePdf(input: InvoiceOrderSource) {
+  const order=normalizeInvoiceOrder(input);
   const [{ jsPDF }, { default: autoTable }] = await Promise.all([
       import("jspdf"),
       import("jspdf-autotable"),
@@ -176,7 +182,7 @@ export async function createInvoicePdf(order: Order) {
   return doc;
 }
 
-export async function downloadInvoicePdf(order: Order) {
-  const doc = await createInvoicePdf(order);
+export async function downloadInvoicePdf(input: InvoiceOrderSource) {
+  const order=normalizeInvoiceOrder(input),doc = await createInvoicePdf(order);
   doc.save(`ZEVENRA-Invoice-${order.orderId}.pdf`);
 }

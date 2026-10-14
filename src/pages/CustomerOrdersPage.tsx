@@ -3,6 +3,7 @@ import { Link, Navigate } from "react-router-dom";
 import {
   ArrowLeft,
   ChevronDown,
+  Download,
   MapPin,
   MessageCircle,
   PackageOpen,
@@ -14,6 +15,8 @@ import { useCustomerAuth } from "../features/account/CustomerAuthContext";
 import { api } from "../services/api";
 import type { CustomerOrder, CustomerPreorder, PreorderStatus } from "../types";
 import { AccountLoading } from "./AccountPage";
+import { downloadInvoicePdf } from "../utils/invoicePdf";
+import { downloadPreorderSummaryPdf } from "../utils/preorderSummaryPdf";
 
 const preorderLabels: Record<PreorderStatus, string> = {
   new: "Request received",
@@ -349,6 +352,7 @@ function OrdersView({
                   <dd>{order.paymentStatus || "—"}</dd>
                 </div>
               </dl>
+              <DocumentButton label="DOWNLOAD INVOICE" run={()=>downloadInvoicePdf(order)}/>
             </div>
           )}
         </article>
@@ -429,11 +433,13 @@ function PreordersView({ requests }: { requests: CustomerPreorder[] }) {
               {item.batchId && <span>Legacy batch: {item.batchId}</span>}
             </section>
           </div>
+          <DocumentButton label="DOWNLOAD PRE-ORDER SUMMARY" run={()=>downloadPreorderSummaryPdf(item)}/>
         </article>
       ))}
     </div>
   );
 }
+function DocumentButton({label,run}:{label:string;run:()=>Promise<void>}){const [busy,setBusy]=useState(false),[error,setError]=useState("");return <div className="mt-4"><button type="button" className="btn" disabled={busy} onClick={()=>{setBusy(true);setError("");void run().catch(()=>setError("We couldn't prepare this document. Please try again.")).finally(()=>setBusy(false));}}><Download size={14}/>{busy?"PREPARING PDF…":label}</button>{error?<p role="status" className="mt-2 text-xs text-red-800">{error}</p>:null}</div>;}
 function OrdersSkeleton() {
   return (
     <div className="orders-list" aria-label="Loading order history">

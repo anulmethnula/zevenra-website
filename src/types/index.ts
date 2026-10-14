@@ -194,6 +194,7 @@ export type CartItem = {
 };
 export type PaymentMethod = "cod" | "bank";
 export type GuestTrackedOrder = {
+  kind: "order";
   orderId: string;
   createdAt: string;
   customerName: string;
@@ -228,6 +229,8 @@ export type GuestTrackedOrder = {
     imageUrl?: string;
   }>;
 };
+export type GuestTrackedPreorder={kind:"preorder";requestId:string;createdAt:string;customerName:string;productName:string;color:string;size:string;quantity:number;productTotal:number;status:string;statusLabel:string;paymentState:string;convertedOrderId?:string};
+export type GuestTrackingResult=GuestTrackedOrder|GuestTrackedPreorder;
 export type CheckoutData = {
   fulfillmentMethod: "flat" | "area_group" | "pickup";
   pickupLocationId?: string;
@@ -464,6 +467,10 @@ export type DashboardData = {
   cancelled: number;
   revenue: number;
   productRevenue: number;
+  cogs: number | null;
+  grossProfit: number | null;
+  grossMargin: number | null;
+  profitDataComplete: boolean;
   deliveryCollected: number;
   itemsSold: number;
   preorderNew?: number;

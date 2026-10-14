@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type FormEvent } from "react";
-import { ArrowLeft, CheckCircle2, Minus, Plus, X } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Download, Minus, Plus, X } from "lucide-react";
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { z } from "zod";
 import { sriLankaDistricts } from "../../shared/sri-lanka-districts";
@@ -9,6 +9,8 @@ import { useCustomerAuth } from "../features/account/CustomerAuthContext";
 import { useCheckoutConfig, useProduct } from "../hooks/usePublicData";
 import { api } from "../services/api";
 import { uploadPaymentReceipt } from "../services/paymentReceiptUpload";
+import { downloadPreorderSummaryPdf } from "../utils/preorderSummaryPdf";
+import type { PreorderRequest } from "../types";
 
 const receiptTypes = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]),
   maxReceiptBytes = 10_000_000,
@@ -29,7 +31,7 @@ export default function PreorderPage() {
     variant = product?.variants.find((item) => item.id === search.get("variant") && item.active),
     [qty, setQty] = useState(() => { const value = Number(search.get("quantity")); return Number.isInteger(value) ? Math.min(5, Math.max(1, value)) : 1; }),
     [receipt, setReceipt] = useState<File | null>(null), [uploadedReceiptUrl, setUploadedReceiptUrl] = useState(""), [termsAccepted, setTermsAccepted] = useState(false), [busy, setBusy] = useState(false),
-    [fieldErrors, setFieldErrors] = useState<FieldErrors>({}), [submitError, setSubmitError] = useState(""), [done, setDone] = useState(""), receiptInput = useRef<HTMLInputElement>(null), receiptButton = useRef<HTMLButtonElement>(null);
+    [fieldErrors, setFieldErrors] = useState<FieldErrors>({}), [submitError, setSubmitError] = useState(""), [done, setDone] = useState<PreorderRequest|null>(null), receiptInput = useRef<HTMLInputElement>(null), receiptButton = useRef<HTMLButtonElement>(null);
   const defaultName = useMemo(() => [user?.firstName, user?.lastName].filter(Boolean).join(" "), [user]);
 
   if (request.loading) return <main className="container min-h-[70vh] py-36"><div className="home-skeleton"><div /><div /></div></main>;
@@ -66,7 +68,7 @@ export default function PreorderPage() {
     }
     try {
       const created = await api.createPreorder({ ...parsed.data, phone: parsed.data.whatsapp, productId: preorderProduct.id, variantId: preorderVariant.id, quantity: qty, paymentReceiptUrl });
-      setDone(created.requestId);
+      setDone(created);
     } catch (reason) { setSubmitError(reason instanceof Error ? reason.message : "We could not submit your pre-order. Please try again."); }
     finally { setBusy(false); }
   }
@@ -98,7 +100,7 @@ export default function PreorderPage() {
         <button disabled={busy} className="btn btn-dark w-full justify-center disabled:opacity-50">{busy ? "Submitting..." : "Submit Payment for Verification"}</button>
       </form>
     </div>
-    {done && <div className="fixed inset-0 z-[120] grid place-items-center bg-black/65 p-4 backdrop-blur-sm" role="presentation"><section role="dialog" aria-modal="true" aria-labelledby="preorder-success-title" className="relative w-full max-w-lg border border-white/10 bg-[#f5f0e8] p-6 text-ink shadow-2xl sm:p-9"><button type="button" aria-label="Close" className="absolute right-3 top-3 grid h-11 w-11 place-items-center" onClick={() => navigate("/shop")}><X size={18} /></button><CheckCircle2 className="text-bronze" size={34} /><h2 id="preorder-success-title" className="display mt-5 text-4xl">Payment receipt submitted</h2><p className="mt-4 text-sm leading-7 text-ink/65">Thank you. Your pre-order request has been received and your payment receipt is awaiting verification.</p><dl className="mt-6 grid gap-3 border-y border-line py-5 text-xs"><SuccessRow label="Pre-order ID" value={done} /><SuccessRow label="Product name" value={product.name} /><SuccessRow label="Product payment amount" value={money(productTotal)} /><SuccessRow label="Estimated arrival" value="3–4 weeks" /><SuccessRow label="Courier fee" value="Paid separately on delivery" /></dl><div className="mt-6 grid gap-2 sm:grid-cols-2"><button autoFocus type="button" className="btn btn-dark justify-center" onClick={() => navigate("/shop")}>Done</button>{user && <Link className="btn justify-center" to="/account/orders">View my requests</Link>}</div></section></div>}
+    {done && <div className="fixed inset-0 z-[120] grid place-items-center bg-black/65 p-4 backdrop-blur-sm" role="presentation"><section role="dialog" aria-modal="true" aria-labelledby="preorder-success-title" className="relative w-full max-w-lg border border-white/10 bg-[#f5f0e8] p-6 text-ink shadow-2xl sm:p-9"><button type="button" aria-label="Close" className="absolute right-3 top-3 grid h-11 w-11 place-items-center" onClick={() => navigate("/shop")}><X size={18} /></button><CheckCircle2 className="text-bronze" size={34} /><h2 id="preorder-success-title" className="display mt-5 text-4xl">Payment receipt submitted</h2><p className="mt-4 text-sm leading-7 text-ink/65">Thank you. Your pre-order request has been received and your payment receipt is awaiting verification.</p><dl className="mt-6 grid gap-3 border-y border-line py-5 text-xs"><SuccessRow label="Pre-order ID" value={done.requestId} /><SuccessRow label="Product name" value={product.name} /><SuccessRow label="Product payment amount" value={money(productTotal)} /><SuccessRow label="Estimated arrival" value="3–4 weeks" /><SuccessRow label="Courier fee" value="Paid separately on delivery" /></dl><div className="mt-6 grid gap-2 sm:grid-cols-2"><button autoFocus type="button" className="btn btn-dark justify-center" onClick={() => navigate("/shop")}>Done</button><button type="button" className="btn justify-center" onClick={()=>void downloadPreorderSummaryPdf(done)}><Download size={14}/> Download pre-order summary</button>{user && <Link className="btn justify-center" to="/account/orders">View my requests</Link>}</div></section></div>}
   </main>;
 }
 

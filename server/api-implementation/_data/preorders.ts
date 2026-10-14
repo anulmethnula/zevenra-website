@@ -87,6 +87,19 @@ export async function getPreorderClaim(token:string){
   return{requestId:String(row.request_id),status:String(row.status),customerName:String(row.customer_name),phone:String(row.phone),whatsapp:String(row.whatsapp),email:String(row.email||""),address1:String(row.address1||""),address2:String(row.address2||""),city:String(row.city||""),district:String(row.district||""),postalCode:String(row.postal_code||""),productId:String(row.product_id),variantId:String(row.variant_id),productName:String(row.product_name),color:String(row.color),size:String(row.size),quantity:Number(row.quantity),confirmedPrice:Number(row.confirmed_price||row.requested_price),reservationExpiresAt:String(row.reservation_expires_at||""),imageUrl:String(media.find(item=>item.type==="image")?.url||""),paymentIssueReason:String(row.payment_issue_reason||"")};
 }
 
+export async function findGuestPreorder(requestId:string,phone:string){
+  const requestKey=String(requestId||"").trim().replace(/^#/,"").trim().toUpperCase(),phoneKey=normalizeSriLankanPhoneForLookup(phone);
+  return (await query<Record<string,unknown>>(
+    `SELECT request_id,created_at,customer_name,product_name,color,size,quantity,requested_price,status,converted_order_id,payment_submitted_at,payment_verified_at
+       FROM preorders WHERE request_id=$1 AND CASE
+         WHEN regexp_replace(COALESCE(NULLIF(phone,''),whatsapp),'\\D','','g') LIKE '0094%' THEN substring(regexp_replace(COALESCE(NULLIF(phone,''),whatsapp),'\\D','','g') from 3)
+         WHEN regexp_replace(COALESCE(NULLIF(phone,''),whatsapp),'\\D','','g') ~ '^7[0-9]{8}$' THEN '94'||regexp_replace(COALESCE(NULLIF(phone,''),whatsapp),'\\D','','g')
+         WHEN regexp_replace(COALESCE(NULLIF(phone,''),whatsapp),'\\D','','g') LIKE '0%' THEN '94'||substring(regexp_replace(COALESCE(NULLIF(phone,''),whatsapp),'\\D','','g') from 2)
+         ELSE regexp_replace(COALESCE(NULLIF(phone,''),whatsapp),'\\D','','g') END=$2 LIMIT 1`,
+    [requestKey,phoneKey],
+  )).rows[0]||null;
+}
+
 export async function quotePreorderClaim(input:Record<string,unknown>){
   return withTransaction(async(client)=>{
     const preorder=(await client.query<Record<string,unknown>>("SELECT * FROM preorders WHERE claim_token_hash=$1 AND status='notified' AND released_at IS NULL AND converted_order_id IS NULL AND reservation_expires_at>now()",[hashPreorderClaimToken(String(input.token||""))])).rows[0];
