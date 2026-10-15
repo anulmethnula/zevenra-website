@@ -28,7 +28,7 @@ function request(body: unknown, headers: Record<string, string> = { origin }, ip
 }
 
 const stored = {
-  order_id: "ZEV-TEST-1", created_at: "2026-10-08T10:00:00.000Z", customer_name: "Guest Customer",
+  order_id: "ZEV-TEST-1", order_number: 200, created_at: "2026-10-08T10:00:00.000Z", customer_name: "Guest Customer",
   address1: "45 Devala Road", address2: "Katubedda", city: "Moratuwa", district: "Polonnaruwa", postal_code: "01505", order_status: "confirmed", payment_method: "cod",
   payment_status: "COD", delivery_zone_name: "Colombo", subtotal: 4000, discount_code: "WELCOME10", discount_amount: 400, delivery_fee: 450, total: 4050,
   fulfilment_courier_name: "Test Courier", tracking_number: "TRACK-123", tracking_url: "https://courier.example/track/TRACK-123", courier_sent_date: "2026-10-09T10:00:00.000Z",
@@ -43,7 +43,7 @@ test("correct normalized ID and phone return only the safe customer order", asyn
     { res, state } = response();
   await handler(request({ orderId: stored.order_id, phone: "+94 77-000-0000" }, { origin }, "198.51.100.2"), res);
   assert.equal(state.status, 200);
-  assert.deepEqual(Object.keys(state.body as object).sort(), ["kind","address1","address2","city","courierSentDate","createdAt","customerName","deliveryFee","fulfillmentMethod","deliveryMethodName","deliveryAreaGroupName","pickupBranchName","pickupBranchAddress","pickupInstructions","discountAmount","discountCode","district","fulfilmentCourierName","items","orderId","orderStatus","paymentMethod","paymentStatus","postalCode","subtotal","total","trackingNumber","trackingUrl"].sort());
+  assert.deepEqual(Object.keys(state.body as object).sort(), ["kind","address1","address2","city","courierSentDate","createdAt","customerName","deliveryFee","fulfillmentMethod","deliveryMethodName","deliveryAreaGroupName","pickupBranchName","pickupBranchAddress","pickupInstructions","discountAmount","discountCode","district","fulfilmentCourierName","items","orderId","orderNumber","orderStatus","paymentMethod","paymentStatus","postalCode","subtotal","total","trackingNumber","trackingUrl"].sort());
   assert.equal((state.body as {kind:string}).kind,"order");
   const result = state.body as { items: Array<Record<string, unknown>> };
   assert.deepEqual(Object.keys(result.items[0]).sort(), ["color","imageUrl","isPreorder","name","productSlug","quantity","size","unitPrice"].sort());
@@ -90,6 +90,14 @@ test("lookup normalization accepts copied IDs and Sri Lankan phone formats", asy
     assert.equal(result.state.status, 200);
   }
   assert.deepEqual(seen, Array(formats.length).fill(["ZEV-TEST-1", "94740529061"]));
+});
+
+test("public numeric order number can be used for guest tracking", async () => {
+  const seen: string[] = [], handler = createOrderTrackHandler(async (orderId, phone) => { seen.push(orderId); return orderId === stored.order_id && phone === "94740529061" ? stored : null; }, undefined, async (orderNumber) => orderNumber === 200 ? stored.order_id : null), result = response();
+  await handler(request({ orderId: "#200", phone: "0740529061" }, { origin }, "198.51.102.99"), result.res);
+  assert.equal(result.state.status, 200);
+  assert.deepEqual(seen, [stored.order_id]);
+  assert.equal((result.state.body as { orderNumber: number }).orderNumber, 200);
 });
 
 test("a new device with empty storage tracks through the backend only", async () => {

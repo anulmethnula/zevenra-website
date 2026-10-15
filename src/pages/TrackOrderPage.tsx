@@ -24,7 +24,7 @@ export default function TrackOrderPage() {
     const data = new FormData(event.currentTarget);
     try {
       const result = await api.trackOrder({ orderId: orderId.trim(), phone: String(data.get("phone") || "").trim() });
-      setOrder(result); const reference=result.kind==="order"?result.orderId:result.requestId;setOrderId(reference);
+      setOrder(result); const reference=result.kind==="order"?String(result.orderNumber || result.orderId):result.requestId;setOrderId(reference);
       setRecent(rememberGuestOrder({ orderId: reference, createdAt: result.createdAt }));
     } catch { setError(failure); } finally { setBusy(false); }
   }
@@ -53,7 +53,7 @@ function OrderResult({ order }: { order: GuestTrackedOrder }) {
   async function pdf() { setPdfBusy(true); setMessage(""); try { await downloadInvoicePdf(order); } catch { setMessage("We couldn't prepare the invoice. Please try again."); } finally { setPdfBusy(false); } }
   async function copyTracking() { try { await navigator.clipboard.writeText(order.trackingNumber); setMessage("Tracking number copied."); } catch { setMessage("Could not copy the tracking number."); } }
   return <section aria-live="polite" className="mt-8 border border-line bg-white/35 p-4 sm:p-7">
-    <div className="flex flex-wrap items-start justify-between gap-4 border-b border-line pb-5"><div className="min-w-0"><p className="eyebrow break-all text-bronze">Order #{order.orderId}</p><h2 className="mt-2 text-2xl font-semibold">{cancelled ? "Order cancelled" : order.orderStatus || "Pending"}</h2><p className="mt-1 text-xs text-ink/50">Placed {new Date(order.createdAt).toLocaleString("en-LK")}</p></div><div className="flex items-center gap-2 border border-bronze/30 px-3 py-2 text-xs"><PackageSearch size={16} /><span>Payment: <b>{order.paymentStatus}</b></span></div></div>
+    <div className="flex flex-wrap items-start justify-between gap-4 border-b border-line pb-5"><div className="min-w-0"><p className="eyebrow break-all text-bronze">Order #{order.orderNumber || order.orderId}</p><h2 className="mt-2 text-2xl font-semibold">{cancelled ? "Order cancelled" : order.orderStatus || "Pending"}</h2><p className="mt-1 text-xs text-ink/50">Placed {new Date(order.createdAt).toLocaleString("en-LK")}</p></div><div className="flex items-center gap-2 border border-bronze/30 px-3 py-2 text-xs"><PackageSearch size={16} /><span>Payment: <b>{order.paymentStatus}</b></span></div></div>
     {cancelled ? <div className="mt-5 border border-red-900/20 bg-red-950/[.05] p-4 text-sm text-red-900"><b>Order cancelled</b><p className="mt-1 text-xs leading-5">This order will not continue through fulfilment.</p></div> : <ol className="mt-5 grid grid-cols-2 gap-2 min-[390px]:grid-cols-3 lg:grid-cols-6">{orderProgress.map(([status, label], index) => <li key={status} className={`border px-1 py-3 text-center text-[9px] sm:px-2 sm:text-[10px] ${index <= currentIndex ? "border-bronze bg-bronze/[.08] text-bronze" : "border-line text-ink/35"}`}><span className="mx-auto mb-2 block h-1.5 w-1.5 rounded-full bg-current" />{label}</li>)}</ol>}
     <div className="mt-7 grid gap-7 border-t border-line pt-6 sm:grid-cols-2">
       <div className="space-y-6"><Detail label="Customer" value={order.customerName} /><div><p className="eyebrow text-ink/40">Delivery address</p><div className="mt-2 break-words text-sm leading-6">{address.length ? address.map((line) => <p key={line}>{line}</p>) : <p>—</p>}</div></div></div>

@@ -1,7 +1,7 @@
 import type { CustomerOrder, GuestTrackedOrder, Order } from "../types";
 import { siteConfig } from "../config/site";
 
-export type InvoiceOrder={orderId:string;createdAt:string;customerName:string;phone?:string;email?:string;address1?:string;address2?:string;city?:string;district?:string;postalCode?:string;deliveryMethodName?:string;fulfillmentMethod?:string;pickupBranchName?:string;pickupBranchAddress?:string;fulfilmentCourierName?:string;courierName?:string;paymentMethod:string;paymentStatus?:string;subtotal:number;discountAmount?:number;deliveryFee:number;total:number;items:Array<{name:string;color?:string;size?:string;quantity:number;unitPrice:number}>};
+export type InvoiceOrder={orderId:string;orderNumber?:number;createdAt:string;customerName:string;phone?:string;email?:string;address1?:string;address2?:string;city?:string;district?:string;postalCode?:string;deliveryMethodName?:string;fulfillmentMethod?:string;pickupBranchName?:string;pickupBranchAddress?:string;fulfilmentCourierName?:string;courierName?:string;paymentMethod:string;paymentStatus?:string;subtotal:number;discountAmount?:number;deliveryFee:number;total:number;items:Array<{name:string;color?:string;size?:string;quantity:number;unitPrice:number}>};
 export type InvoiceOrderSource=Order|GuestTrackedOrder|CustomerOrder|InvoiceOrder;
 
 const lkr = (value: number) =>
@@ -9,7 +9,7 @@ const lkr = (value: number) =>
 
 const clean = (value: unknown) => String(value ?? "").trim();
 
-export function normalizeInvoiceOrder(order:InvoiceOrderSource):InvoiceOrder{return{orderId:order.orderId,createdAt:order.createdAt,customerName:order.customerName||"",phone:"phone" in order?order.phone:"",email:"email" in order?order.email:"",address1:order.address1,address2:order.address2,city:order.city,district:order.district,postalCode:order.postalCode,deliveryMethodName:"deliveryMethodName" in order?order.deliveryMethodName:"",fulfillmentMethod:"fulfillmentMethod" in order?order.fulfillmentMethod:"",pickupBranchName:"pickupBranchName" in order?order.pickupBranchName:"",pickupBranchAddress:"pickupBranchAddress" in order?order.pickupBranchAddress:"",fulfilmentCourierName:order.fulfilmentCourierName,courierName:"courierName" in order?order.courierName:"",paymentMethod:order.paymentMethod,paymentStatus:order.paymentStatus,subtotal:order.subtotal,discountAmount:order.discountAmount,deliveryFee:order.deliveryFee,total:order.total,items:order.items.map(item=>({name:item.name,color:item.color,size:item.size,quantity:item.quantity,unitPrice:item.unitPrice}))};}
+export function normalizeInvoiceOrder(order:InvoiceOrderSource):InvoiceOrder{return{orderId:order.orderId,orderNumber:"orderNumber" in order?order.orderNumber:undefined,createdAt:order.createdAt,customerName:order.customerName||"",phone:"phone" in order?order.phone:"",email:"email" in order?order.email:"",address1:order.address1,address2:order.address2,city:order.city,district:order.district,postalCode:order.postalCode,deliveryMethodName:"deliveryMethodName" in order?order.deliveryMethodName:"",fulfillmentMethod:"fulfillmentMethod" in order?order.fulfillmentMethod:"",pickupBranchName:"pickupBranchName" in order?order.pickupBranchName:"",pickupBranchAddress:"pickupBranchAddress" in order?order.pickupBranchAddress:"",fulfilmentCourierName:order.fulfilmentCourierName,courierName:"courierName" in order?order.courierName:"",paymentMethod:order.paymentMethod,paymentStatus:order.paymentStatus,subtotal:order.subtotal,discountAmount:order.discountAmount,deliveryFee:order.deliveryFee,total:order.total,items:order.items.map(item=>({name:item.name,color:item.color,size:item.size,quantity:item.quantity,unitPrice:item.unitPrice}))};}
 
 export function invoicePaymentStatus(order: Pick<InvoiceOrder, "paymentMethod" | "paymentStatus">) {
   if (order.paymentMethod === "cod") return "Pay on delivery";
@@ -37,7 +37,7 @@ export async function createInvoicePdf(input: InvoiceOrderSource,storeContact=si
   doc.text("ORDER INVOICE", left, 29);
 
   const summary = [
-    ["ORDER ID", clean(order.orderId)],
+    ["ORDER ID", clean(order.orderNumber || order.orderId)],
     ["ORDER DATE", new Date(order.createdAt).toLocaleString("en-LK")],
   ];
   let summaryY = 20;
@@ -187,5 +187,5 @@ export async function createInvoicePdf(input: InvoiceOrderSource,storeContact=si
 
 export async function downloadInvoicePdf(input: InvoiceOrderSource,storeContact=siteConfig.whatsapp) {
   const order=normalizeInvoiceOrder(input),doc = await createInvoicePdf(order,storeContact);
-  doc.save(`ZEVENRA-Invoice-${order.orderId}.pdf`);
+  doc.save(`ZEVENRA-Invoice-${order.orderNumber || order.orderId}.pdf`);
 }

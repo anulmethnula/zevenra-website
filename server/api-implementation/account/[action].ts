@@ -236,6 +236,7 @@ const ROUTES: Record<string, RouteHandler> = {
         identity.email,
       )) as Array<{
         orderId?: unknown;
+        orderNumber?: unknown;
         createdAt?: unknown;
         customerName?: unknown;
         phone?: unknown;
@@ -277,6 +278,7 @@ const ROUTES: Record<string, RouteHandler> = {
       }>;
       const safeOrders = (Array.isArray(rows) ? rows : []).map((order) => ({
         orderId: String(order.orderId || ""),
+        orderNumber: Number(order.orderNumber) || 0,
         createdAt: String(order.createdAt || ""),
         customerName: String(order.customerName || ""),
         phone: String(order.phone || ""),

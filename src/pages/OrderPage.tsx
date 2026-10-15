@@ -38,6 +38,7 @@ export default function OrderPage() {
       </div>
     );
   const confirmedOrder = order,
+    displayOrderId = String(order.orderNumber || order.orderId),
     whatsapp = normalizeWhatsappDigits(data.settings.whatsapp),
     lines = order.items
       .map(
@@ -46,11 +47,11 @@ export default function OrderPage() {
       )
       .join("\n"),
     deliveryLabel = `${order.deliveryMethodName || "Delivery"}${order.deliveryAreaGroupName ? ` (${order.deliveryAreaGroupName})` : order.pickupBranchName ? ` (${order.pickupBranchName})` : ""} — ${money(order.deliveryFee)}`,
-    message = `Hello ZEVENRA, I have submitted order ${order.orderId}.\n\n${lines}\nSubtotal: ${money(order.subtotal)}\nDelivery: ${deliveryLabel}\nTotal: ${money(order.total)}\nName: ${order.customerName}\nCity: ${order.city}\nPayment: ${order.paymentMethod === "cod" ? "Cash on delivery" : "Bank transfer"}`,
+    message = `Hello ZEVENRA, I have submitted order ${displayOrderId}.\n\n${lines}\nSubtotal: ${money(order.subtotal)}\nDelivery: ${deliveryLabel}\nTotal: ${money(order.total)}\nName: ${order.customerName}\nCity: ${order.city}\nPayment: ${order.paymentMethod === "cod" ? "Cash on delivery" : "Bank transfer"}`,
     success = orderSuccessCopy(order.paymentMethod, money(order.total));
   async function copyOrderId() {
     try {
-      await navigator.clipboard.writeText(confirmedOrder.orderId);
+      await navigator.clipboard.writeText(displayOrderId);
       setActionMessage("Order ID copied.");
     } catch {
       setActionMessage("Could not copy the Order ID.");
@@ -69,7 +70,7 @@ export default function OrderPage() {
   }
   return (
     <main className="container py-8 sm:py-12">
-      <Seo title={`Order ${order.orderId}`} noindex />
+      <Seo title={`Order ${displayOrderId}`} noindex />
       <div className="mx-auto min-w-0 max-w-3xl">
         <section className="min-w-0 border border-emerald-950/15 bg-emerald-950/[.045] p-6 text-center sm:p-9">
           <span className="mx-auto grid h-16 w-16 place-items-center rounded-full border border-emerald-900/30 text-emerald-900">
@@ -83,7 +84,7 @@ export default function OrderPage() {
           </h1>
           <p className="eyebrow mt-6 text-ink/45">Order ID</p>
           <strong className="mt-1 block break-all text-lg tracking-[.05em] sm:tracking-[.08em]">
-            #{order.orderId}
+            #{displayOrderId}
           </strong>
           <div className="mx-auto mt-6 max-w-xl border-t border-emerald-950/10 pt-5">
             <h2 className="text-sm font-semibold">{success.title}</h2>
@@ -193,7 +194,7 @@ export default function OrderPage() {
           </Link>
           <Link
             className="btn justify-center"
-            to={`/track-order?orderId=${encodeURIComponent(order.orderId)}`}
+            to={`/track-order?orderId=${encodeURIComponent(displayOrderId)}`}
           >
             Track Order
           </Link>

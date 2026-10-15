@@ -22,6 +22,7 @@ export function mapVariant(row: Record<string, unknown>) {
 export function mapProduct(row: Record<string, unknown>) {
   return {
     id: text(row.id),
+    productNumber: number(row.product_number),
     slug: text(row.slug),
     name: text(row.name),
     shortDescription: text(row.short_description),
@@ -138,6 +139,7 @@ export function mapCustomer(row: Record<string, unknown>) {
 export function mapOrder(row: Record<string, unknown>) {
   return {
     orderId: text(row.order_id),
+    orderNumber: number(row.order_number),
     createdAt: date(row.created_at),
     customerId: text(row.customer_id),
     customerName: text(row.customer_name),

@@ -204,7 +204,7 @@ function OrdersView({
           >
             <span>
               <small>Order</small>
-              <b>#{order.orderId}</b>
+              <b>#{order.orderNumber || order.orderId}</b>
             </span>
             <span>
               <small>Date</small>
