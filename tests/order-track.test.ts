@@ -245,3 +245,13 @@ test("checkout uses public order numbers and pickup-safe payment copy", async ()
   assert.doesNotMatch(checkout, /<strong[^>]*>#\{order\.orderId\}<\/strong>/);
   assert.match(tracking, /placeholder="200 or PRE-\.\.\."/);
 });
+
+
+test("guest tracking query returns public order and fulfillment fields", async () => {
+  const source = await readFile(new URL("../server/api-implementation/_data/orders-legacy.ts", import.meta.url), "utf8");
+  const tracking = await readFile(new URL("../src/pages/TrackOrderPage.tsx", import.meta.url), "utf8");
+  assert.match(source, /SELECT o\.order_id,o\.order_number,o\.created_at/);
+  assert.match(source, /o\.fulfillment_method,o\.delivery_method_name,o\.delivery_area_group_name,o\.pickup_branch_name/);
+  assert.match(tracking, /removeRecentGuestOrder\(result\.orderId\)/);
+  assert.match(tracking, /Pay at pickup/);
+});

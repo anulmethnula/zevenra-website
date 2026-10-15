@@ -217,8 +217,8 @@ export async function findGuestOrder(orderId: string, phone: string) {
     phoneKey = normalizeSriLankanPhoneForLookup(phone);
   const row = (
     await query<Record<string, unknown>>(
-      `SELECT o.order_id,o.created_at,o.customer_name,o.address1,o.address2,o.city,o.district,o.postal_code,o.order_status,o.discount_code,o.discount_amount,
-        o.payment_method,o.payment_status,o.delivery_zone_name,o.subtotal,o.delivery_fee,o.total,
+      `SELECT o.order_id,o.order_number,o.created_at,o.customer_name,o.address1,o.address2,o.city,o.district,o.postal_code,o.order_status,o.discount_code,o.discount_amount,
+        o.payment_method,o.payment_status,o.fulfillment_method,o.delivery_method_name,o.delivery_area_group_name,o.pickup_branch_name,o.pickup_branch_address,o.pickup_instructions,o.delivery_zone_name,o.subtotal,o.delivery_fee,o.total,
         o.fulfilment_courier_name,o.tracking_number,o.tracking_url,o.courier_sent_date,
         COALESCE((SELECT jsonb_agg(jsonb_build_object(
           'name',oi.product_name,'color',oi.color,'size',oi.size,'quantity',oi.quantity,
