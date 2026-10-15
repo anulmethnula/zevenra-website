@@ -145,26 +145,26 @@ jobs:
           if marker in css_text:
               raise SystemExit('drawer CSS marker already exists')
           css_text += r'''
-
-/* 2026-10-15 admin preorder drawer stability */
-.preorder-admin-drawer{width:min(620px,96vw)!important}
-.preorder-admin-drawer .admin-drawer__body{display:flex!important;flex-direction:column!important;align-content:initial!important;gap:14px!important;overflow-y:auto!important}
-.preorder-admin-drawer .admin-drawer__body>*{flex:0 0 auto!important;min-width:0!important}
-.preorder-drawer-overview{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;min-height:132px!important;height:auto!important;overflow:visible!important;padding:0!important}
-.preorder-drawer-overview>div{display:flex!important;min-height:66px!important;flex-direction:column!important;justify-content:center!important;padding:15px 17px!important;overflow:visible!important}
-.preorder-drawer-overview>div:nth-child(even){border-left:1px solid var(--admin-border)!important}
-.preorder-drawer-overview>div:nth-child(n+3){border-top:1px solid var(--admin-border)!important}
-.preorder-admin-drawer .preorder-admin-grid{display:flex!important;height:auto!important;flex-direction:column!important;overflow:visible!important}
-.preorder-admin-drawer .preorder-admin-grid>section{flex:0 0 auto!important;min-height:max-content!important;overflow:visible!important}
-.preorder-admin-drawer .preorder-product-box{display:grid!important;grid-template-columns:68px minmax(0,1fr)!important}
-.preorder-admin-drawer .preorder-next-box{display:flex!important;flex-direction:column!important}
-.preorder-ready-final{border:1px solid var(--admin-border);border-radius:13px;background:var(--admin-surface);padding:18px}
-.preorder-ready-final__head small{display:block;margin-bottom:7px;color:#8a7f73;font-size:8px;font-weight:750;letter-spacing:.15em;text-transform:uppercase}
-.preorder-ready-final__head h3{font-size:15px;font-weight:700}
-.preorder-ready-final__head p{margin-top:6px;color:#756c63;font-size:11px;line-height:1.6}
-.preorder-ready-final__action{display:grid;gap:12px;margin-top:18px;padding-top:18px;border-top:1px solid var(--admin-border)}
-@media(max-width:640px){.preorder-admin-drawer{width:96vw!important}.preorder-drawer-overview{min-height:0!important}.preorder-drawer-overview>div{min-height:62px!important;padding:13px!important}}
-'''
+          
+          /* 2026-10-15 admin preorder drawer stability */
+          .preorder-admin-drawer{width:min(620px,96vw)!important}
+          .preorder-admin-drawer .admin-drawer__body{display:flex!important;flex-direction:column!important;align-content:initial!important;gap:14px!important;overflow-y:auto!important}
+          .preorder-admin-drawer .admin-drawer__body>*{flex:0 0 auto!important;min-width:0!important}
+          .preorder-drawer-overview{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;min-height:132px!important;height:auto!important;overflow:visible!important;padding:0!important}
+          .preorder-drawer-overview>div{display:flex!important;min-height:66px!important;flex-direction:column!important;justify-content:center!important;padding:15px 17px!important;overflow:visible!important}
+          .preorder-drawer-overview>div:nth-child(even){border-left:1px solid var(--admin-border)!important}
+          .preorder-drawer-overview>div:nth-child(n+3){border-top:1px solid var(--admin-border)!important}
+          .preorder-admin-drawer .preorder-admin-grid{display:flex!important;height:auto!important;flex-direction:column!important;overflow:visible!important}
+          .preorder-admin-drawer .preorder-admin-grid>section{flex:0 0 auto!important;min-height:max-content!important;overflow:visible!important}
+          .preorder-admin-drawer .preorder-product-box{display:grid!important;grid-template-columns:68px minmax(0,1fr)!important}
+          .preorder-admin-drawer .preorder-next-box{display:flex!important;flex-direction:column!important}
+          .preorder-ready-final{border:1px solid var(--admin-border);border-radius:13px;background:var(--admin-surface);padding:18px}
+          .preorder-ready-final__head small{display:block;margin-bottom:7px;color:#8a7f73;font-size:8px;font-weight:750;letter-spacing:.15em;text-transform:uppercase}
+          .preorder-ready-final__head h3{font-size:15px;font-weight:700}
+          .preorder-ready-final__head p{margin-top:6px;color:#756c63;font-size:11px;line-height:1.6}
+          .preorder-ready-final__action{display:grid;gap:12px;margin-top:18px;padding-top:18px;border-top:1px solid var(--admin-border)}
+          @media(max-width:640px){.preorder-admin-drawer{width:96vw!important}.preorder-drawer-overview{min-height:0!important}.preorder-drawer-overview>div{min-height:62px!important;padding:13px!important}}
+          '''
           css.write_text(css_text)
           PY
 
