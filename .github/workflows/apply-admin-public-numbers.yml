@@ -1,0 +1,80 @@
+name: Apply admin public numbers
+
+on:
+  push:
+    branches: [dev-rebuild]
+    paths:
+      - .github/workflows/apply-admin-public-numbers.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dev-rebuild
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Apply tested admin number UI
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def rep(path,old,new,count=1):
+              p=Path(path); s=p.read_text()
+              if old not in s: raise SystemExit(f'Missing expected pattern in {path}: {old[:100]!r}')
+              p.write_text(s.replace(old,new,count))
+
+          rep('server/api-implementation/_data/catalog.ts',
+              'conditions.push(`(lower(p.name) LIKE $${values.length} OR lower(p.slug) LIKE $${values.length} OR EXISTS',
+              'conditions.push(`(p.product_number::text LIKE $${values.length} OR lower(p.name) LIKE $${values.length} OR lower(p.slug) LIKE $${values.length} OR EXISTS')
+          rep('server/api-implementation/_data/catalog.ts',
+              '`SELECT p.id,p.name,p.slug,p.price,p.status,p.preorder_enabled,p.updated_at,p.category_id,',
+              '`SELECT p.id,p.product_number,p.name,p.slug,p.price,p.status,p.preorder_enabled,p.updated_at,p.category_id,')
+          rep('server/api-implementation/_data/catalog.ts',
+              'return { items: rows.map(row => ({ id:String(row.id),name:String(row.name),slug:String(row.slug),',
+              'return { items: rows.map(row => ({ id:String(row.id),productNumber:Number(row.product_number)||0,name:String(row.name),slug:String(row.slug),')
+
+          rep('src/pages/admin/AdminPage.tsx','type ProductListRow = { id:string;name:string;','type ProductListRow = { id:string;productNumber:number;name:string;')
+          rep('src/pages/admin/AdminPage.tsx','placeholder="Search products, SKU, category…"','placeholder="Search product #, name, SKU, category…"')
+          rep('src/pages/admin/AdminPage.tsx','{item.variantCount} variant{item.variantCount===1?"":"s"} · {item.slug}','#{item.productNumber} · {item.variantCount} variant{item.variantCount===1?"":"s"} · {item.slug}')
+
+          p=Path('src/pages/admin/AdminPage.tsx'); s=p.read_text()
+          changes=[
+            ('{order.orderId} · {order.customerName}','#{order.orderNumber || order.orderId} · {order.customerName}'),
+            ('      order.orderId,\n      order.createdAt,','      order.orderNumber || order.orderId,\n      order.createdAt,'),
+            ('        order.orderId,\n        order.sourcePreorderRequestId,','        String(order.orderNumber || ""),\n        order.orderId,\n        order.sourcePreorderRequestId,'),
+            ('          order.orderId +\n          " created. Stock was reserved immediately."','          (order.orderNumber || order.orderId) +\n          " created. Stock was reserved immediately."'),
+            ('placeholder="Order ID, pre-order ID, customer, phone or WhatsApp…"','placeholder="Order #, pre-order ID, customer, phone or WhatsApp…"'),
+            ('<p className="truncate text-sm font-medium">{order.orderId}</p>','<p className="truncate text-sm font-medium">#{order.orderNumber || order.orderId}</p>'),
+            ('<h2 className="mt-2 break-all text-xl font-medium">{order.orderId}</h2>','<h2 className="mt-2 break-all text-xl font-medium">#{order.orderNumber || order.orderId}</h2>'),
+            ('void navigator.clipboard.writeText(order.orderId); setStatus("Order ID copied.");','void navigator.clipboard.writeText(String(order.orderNumber || order.orderId)); setStatus("Order number copied.");'),
+            ('<Copy size={12}/> Copy order ID','<Copy size={12}/> Copy order number'),
+          ]
+          for old,new in changes:
+              if old not in s: raise SystemExit(f'Missing admin UI pattern: {old[:100]!r}')
+              s=s.replace(old,new,1)
+          p.write_text(s)
+          PY
+      - name: Verify
+        run: |
+          npm run qa
+          npm audit --omit=dev --audit-level=high
+          git diff --check
+      - name: Commit clean UI
+        shell: bash
+        run: |
+          git rm .github/workflows/apply-admin-public-numbers.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add server/api-implementation/_data/catalog.ts src/pages/admin/AdminPage.tsx
+          git commit -m "Show public product and order numbers in admin"
+          git push origin HEAD:dev-rebuild
