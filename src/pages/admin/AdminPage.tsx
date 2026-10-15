@@ -1690,7 +1690,7 @@ function Preorders() {
     if (
       !confirm(
         "Convert " +
-          item.requestId +
+          preorderDisplayId(item) +
         " to a delivery order? The courier will collect only the delivery fee.",
       )
     )
@@ -1715,10 +1715,10 @@ function Preorders() {
       });
       await store.loadAdmin();
       setMessage(
-        item.requestId +
-          " converted to " +
-          order.orderId +
-          ". Customer can now see the normal order in My Orders if they were signed in.",
+        preorderDisplayId(item) +
+          " converted to order #" +
+          (order.orderNumber || order.orderId) +
+          ". It now appears under Orders → Pre-order deliveries.",
       );
     } catch (reason) {
       setMessage(
@@ -1741,14 +1741,14 @@ function Preorders() {
         title="Pre-orders"
       />
       <div className="admin-help-card mt-5">
-        <b>Paid pre-order flow:</b> Payment submitted → Verify payment → Confirmed → In transit → Arrived → Ready → Delivery order. <span>Estimated arrival: 3–4 weeks.</span>
+        <b>Paid pre-order flow:</b> Payment submitted → Verify payment → Confirmed → In transit → Arrived → Ready → Create delivery order → Orders. <span>Estimated arrival: 3–4 weeks.</span>
       </div>
       <div className="mt-6 grid grid-cols-2 gap-3 xl:grid-cols-4">
         {[
           ["Awaiting payment", awaitingPaymentCount, "Waiting for receipt submission"],
           ["Payment submitted", paymentSubmittedCount, "Receipts ready to verify"],
           ["In transit", inTransitCount, "Pre-orders currently on the way"],
-          ["Ready for delivery", readyCount, "Create linked delivery orders"],
+          ["Ready for delivery", readyCount, "Complete delivery details and create order"],
         ].map(([label, value, help]) => (
           <div key={String(label)} className="admin-stat-card">
             <p>{label}</p>
@@ -1853,7 +1853,7 @@ function Preorders() {
                       <p className="truncate text-xs text-black/50">{item.customerName} · {money(item.requestedPrice*item.quantity)} · Payment {paymentState}</p>
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-2"><a href={wa} target="_blank" rel="noreferrer" className="btn" aria-label={`WhatsApp ${item.customerName}`}><MessageCircle size={14} /> WhatsApp</a>{nextStatus&&item.status!=="payment_submitted"&&<button type="button" disabled={busy===item.requestId} onClick={()=>void change(item,nextStatus)} className="btn btn-dark">{nextText[item.status]}</button>}<button type="button" className="btn" onClick={()=>setOpen(item.requestId)}>View</button></div>
+                  <div className="flex flex-wrap gap-2"><a href={wa} target="_blank" rel="noreferrer" className="btn" aria-label={`WhatsApp ${item.customerName}`}><MessageCircle size={14} /> WhatsApp</a>{nextStatus&&item.status!=="payment_submitted"&&<button type="button" disabled={busy===item.requestId} onClick={()=>void change(item,nextStatus)} className="btn btn-dark">{nextText[item.status]}</button>}<button type="button" className={"btn "+(item.status==="ready"?"btn-dark":"")} onClick={()=>setOpen(item.requestId)}>{item.status==="ready"?"Create delivery order":"View"}</button></div>
                 </div>
                 <AnimatePresence>
                 {open===item.requestId&&<>
@@ -1923,7 +1923,7 @@ function Preorders() {
                     </p></>}
                   </section>
                   <section className="preorder-next-box">
-                    <small>Payment</small>
+                    <small>{item.status==="ready"?"Next step":"Payment"}</small>
                     <h3>{guidance[item.status]}</h3>
                     <div className="mb-3 grid gap-2 text-xs text-black/60"><span>Amount: <b>{money(item.requestedPrice*item.quantity)}</b></span><span>Status: <b>{paymentState}</b></span>{item.status==="awaiting_payment"&&rejectionReason&&<><span>Reason: <b>{rejectionReason}</b></span><span>Rejected: <b>{item.paymentRejectedAt?new Date(item.paymentRejectedAt).toLocaleString("en-LK"):"—"}</b></span></>}</div>
                     {item.status === "awaiting_payment" && rejectionReason && <div className="mb-2 grid gap-2"><a href={wa} target="_blank" rel="noreferrer" className={"btn w-full justify-center "+(!claimLink?"pointer-events-none opacity-40":"")}><MessageCircle size={14} /> Send WhatsApp Message</a><button type="button" className="btn w-full justify-center" disabled={!rejectionMessage} onClick={()=>void copyPaymentMessage(rejectionMessage)}>Copy Message</button></div>}
@@ -1974,7 +1974,7 @@ function Preorders() {
                     </li>
                   ))}
                 </ol></div></section>
-                {item.status==="ready"&&<details className="mt-4 rounded-xl border border-black/10 bg-white/35 p-4">
+                {item.status==="ready"&&<details open className="mt-4 rounded-xl border border-black/10 bg-white/35 p-4">
                   <summary className="cursor-pointer text-xs font-semibold">
                     Delivery details for final order
                   </summary>
@@ -2163,7 +2163,7 @@ function Orders() {
     [query, setQuery] = useState(()=>initialParams.get("search")||""),
     [orderFilter, setOrderFilter] = useState(()=>initialParams.get("status")||"all"),
     [paymentFilter, setPaymentFilter] = useState("all"),
-    [sourceFilter, setSourceFilter] = useState("all"),
+    [sourceFilter, setSourceFilter] = useState(()=>initialParams.get("source")||"all"),
     [dateFilter, setDateFilter] = useState(()=>initialParams.get("date")||"all"),
     [page, setPage] = useState(1),
     [open, setOpen] = useState(routeOrderId||""),
@@ -2388,7 +2388,10 @@ function Orders() {
         ),
     ).length,
     dispatched = orders.filter((order) => order.orderStatus === "dispatched").length,
-    returns = orders.filter((order) => Number(order.returnCount) > 0).length;
+    returns = orders.filter((order) => Number(order.returnCount) > 0).length,
+    preorderOrders = orders.filter((order) => Boolean(order.sourcePreorderRequestId)).length,
+    normalOrders = orders.length - preorderOrders,
+    readyPreorders = admin.preorders.filter((preorder) => preorder.status === "ready").length;
   return (
     <>
       <Head
@@ -2655,9 +2658,14 @@ function Orders() {
           </button>
         ))}
       </div>
-      <div className="mt-3 flex flex-wrap gap-2" aria-label="Order source filter">
-        {[["All","all"],["Normal Orders","normal"],["Pre-orders","preorder"]].map(([label,value])=><button type="button" key={value} onClick={()=>setSourceFilter(value)} className={`btn ${sourceFilter===value?"btn-dark":""}`}>{label}</button>)}
+      <div className="admin-source-tabs mt-3" aria-label="Order source filter">
+        {[
+          {label:"All orders",value:"all",count:orders.length},
+          {label:"Normal orders",value:"normal",count:normalOrders},
+          {label:"Pre-order deliveries",value:"preorder",count:preorderOrders},
+        ].map(({label,value,count})=><button type="button" key={value} onClick={()=>setSourceFilter(value)} className={`admin-source-tab ${sourceFilter===value?"is-active":""}`}><span>{label}</span><b>{count}</b></button>)}
       </div>
+      {sourceFilter==="preorder"&&<div className="admin-help-card admin-help-card--compact mt-3"><b>Pre-order delivery orders only.</b> A Ready pre-order stays in <Link to="/admin/preorders?status=ready">Pre-orders</Link> until you create its delivery order. {readyPreorders?<span>{readyPreorders} ready now.</span>:null}</div>}
       <div className="admin-toolbar mt-5 md:grid-cols-[minmax(220px,1fr)_180px_180px_160px_auto]">
         <div className="admin-search">
           <Search size={17} />
@@ -3052,9 +3060,13 @@ function Orders() {
         ) : (
           <Empty
             text={
-              admin.orders.length
-                ? "No orders match these filters."
-                : "No orders yet."
+              sourceFilter === "preorder"
+                ? readyPreorders
+                  ? `${readyPreorders} pre-order${readyPreorders === 1 ? " is" : "s are"} Ready. Create the delivery order from Pre-orders and it will appear here.`
+                  : "No pre-order delivery orders yet. Converted pre-orders will appear here."
+                : admin.orders.length
+                  ? "No orders match these filters."
+                  : "No orders yet."
             }
           />
         )}

@@ -938,3 +938,27 @@ textarea.field{padding-block:1rem}
 /* Mobile-only footer utilities keep the desktop footer unchanged. */
 .footer-mobile-only{display:none!important}
 @media(max-width:699px){.footer-mobile-only{display:flex!important}}
+
+
+/* Admin preorder/order workflow polish */
+.admin-source-tabs{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.admin-source-tab{display:inline-flex;min-height:44px;align-items:center;justify-content:center;gap:10px;border:1px solid var(--admin-border);border-radius:10px;background:var(--admin-surface);padding:0 15px;color:#5f574f;font-size:11px;font-weight:700;transition:border-color .18s,background .18s,color .18s,transform .18s}
+.admin-source-tab:hover{border-color:rgba(95,87,79,.35);background:var(--admin-surface-soft)}
+.admin-source-tab:active{transform:translateY(1px)}
+.admin-source-tab b{display:grid;min-width:23px;height:23px;place-items:center;border-radius:999px;background:rgba(138,127,115,.1);font-size:9px}
+.admin-source-tab.is-active{border-color:#2a2521;background:#2a2521;color:#fff}
+.admin-source-tab.is-active b{background:rgba(255,255,255,.14);color:#fff}
+.admin-help-card--compact{min-height:0;padding:11px 14px;font-size:11px;line-height:1.55}
+.admin-help-card--compact a{font-weight:750;text-decoration:underline;text-underline-offset:3px}
+.preorder-admin-card__top>div:first-child{min-width:0;flex:1}
+.preorder-admin-card__top>div:last-child{min-width:300px;justify-content:flex-end}
+.preorder-admin-card__top>div:last-child .btn{min-height:42px;padding:.65rem .95rem;letter-spacing:.1em}
+.preorder-drawer-overview{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:0!important;padding:0!important}
+.preorder-drawer-overview>div{min-width:0;padding:15px 17px!important;border:0!important}
+.preorder-drawer-overview>div:nth-child(even){border-left:1px solid var(--admin-border)!important}
+.preorder-drawer-overview>div:nth-child(n+3){border-top:1px solid var(--admin-border)!important}
+.preorder-drawer-overview>div:not(:first-child){display:grid;align-content:start;gap:5px}
+.preorder-drawer-overview b{overflow-wrap:anywhere}
+.preorder-admin-drawer details[open]>summary{margin-bottom:2px;color:#4f453d}
+@media(max-width:900px){.preorder-admin-card__top>div:last-child{min-width:0}}
+@media(max-width:640px){.admin-source-tabs{display:grid;grid-template-columns:1fr}.admin-source-tab{width:100%;justify-content:space-between}.preorder-drawer-overview>div{padding:14px!important}}
