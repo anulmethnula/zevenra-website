@@ -1,0 +1,68 @@
+name: Final preorder admin fix v4
+
+on:
+  push:
+    branches: [dev-rebuild]
+    paths:
+      - .github/workflows/fix-admin-preorder-flow-v4.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fixes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dev-rebuild
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Reuse verified patch and remove obsolete helper
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import textwrap
+          workflow = Path('.github/workflows/fix-admin-preorder-flow-v3.yml').read_text()
+          start_marker = "          python3 <<'PY'\n"
+          end_marker = "\n          PY\n"
+          if workflow.count(start_marker) != 1:
+              raise SystemExit('Could not find v3 patch body.')
+          body = workflow.split(start_marker, 1)[1].split(end_marker, 1)[0]
+          Path('/tmp/preorder_patch.py').write_text(textwrap.dedent(body))
+          PY
+          python3 /tmp/preorder_patch.py
+          python3 <<'PY'
+          from pathlib import Path
+          path = Path('src/pages/admin/AdminPage.tsx')
+          text = path.read_text()
+          start = text.find('  async function saveDetails(item: PreorderRequest) {')
+          end = text.find('  async function notifyCustomer(item:PreorderRequest){', start)
+          if start < 0 or end < 0:
+              raise SystemExit('Could not locate obsolete saveDetails helper.')
+          path.write_text(text[:start] + text[end:])
+          PY
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run QA
+        run: npm run qa
+
+      - name: Production dependency audit
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Commit source fixes
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/pages/admin/AdminPage.tsx src/types/index.ts src/styles/index.css server/api-implementation/_data/mappers.ts server/api-implementation/_data/preorders.ts server/api-implementation/_data/admin.ts
+          git commit -m "fix: clean preorder delivery flow and public finance IDs"
+          git push origin HEAD:dev-rebuild
