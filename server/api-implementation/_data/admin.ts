@@ -117,7 +117,7 @@ export async function finance(periodInput = "30") {
        GROUP BY oi.product_id,oi.product_name ORDER BY revenue DESC,quantity DESC LIMIT 10`,
     ),
     query<Record<string, unknown>>(
-      `SELECT o.order_id,o.created_at,o.customer_name,o.subtotal,COALESCE(o.discount_amount,0) AS discount_amount,
+      `SELECT o.order_id,o.order_number,o.created_at,o.customer_name,o.subtotal,COALESCE(o.discount_amount,0) AS discount_amount,
         o.subtotal-COALESCE(o.discount_amount,0) AS product_revenue,o.delivery_fee,o.order_status
        FROM orders o WHERE ${delivered} ORDER BY o.created_at DESC LIMIT 10`,
     ),
@@ -129,7 +129,7 @@ export async function finance(periodInput = "30") {
     deliveredOrders:Number(row.delivered_orders)||0,
     itemsSold:Number(row.items_sold)||0,
     topProducts:topProducts.rows.map(item=>({productId:String(item.product_id||""),name:String(item.name||""),imageUrl:String(item.image_url||""),quantity:Number(item.quantity)||0,revenue:Number(item.revenue)||0})),
-    recentSales:recentSales.rows.map(item=>({orderId:String(item.order_id),createdAt:new Date(String(item.created_at)).toISOString(),customerName:String(item.customer_name||""),productRevenue:Number(item.product_revenue)||0,delivery:Number(item.delivery_fee)||0,total:(Number(item.product_revenue)||0)+(Number(item.delivery_fee)||0)})),
+    recentSales:recentSales.rows.map(item=>({orderId:String(item.order_id),orderNumber:Number(item.order_number)||undefined,createdAt:new Date(String(item.created_at)).toISOString(),customerName:String(item.customer_name||""),productRevenue:Number(item.product_revenue)||0,delivery:Number(item.delivery_fee)||0,total:(Number(item.product_revenue)||0)+(Number(item.delivery_fee)||0)})),
   };
 }
 

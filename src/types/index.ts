@@ -425,6 +425,7 @@ export type PreorderRequest = {
   reservationExpiresAt?: string;
   releasedAt?: string;
   convertedOrderId?: string;
+  convertedOrderNumber?: number;
   convertedOrderStatus?: OrderStatus;
   convertedOrderDeliveryFee?: number;
   paymentReceiptUrl?: string;
@@ -475,5 +476,5 @@ export type FinanceData = {
   deliveredOrders: number;
   itemsSold: number;
   topProducts: Array<{productId:string;name:string;imageUrl:string;quantity:number;revenue:number}>;
-  recentSales: Array<{orderId:string;createdAt:string;customerName:string;productRevenue:number;delivery:number;total:number}>;
+  recentSales: Array<{orderId:string;orderNumber?:number;createdAt:string;customerName:string;productRevenue:number;delivery:number;total:number}>;
 };

@@ -251,6 +251,7 @@ export function mapPreorder(row: Record<string, unknown>) {
     reservationExpiresAt: text(row.reservation_expires_at),
     releasedAt: text(row.released_at),
     convertedOrderId: text(row.converted_order_id),
+    convertedOrderNumber: row.converted_order_number == null ? undefined : number(row.converted_order_number),
     convertedOrderStatus: row.converted_order_status == null
       ? ""
       : normalizeOrderStatus(row.converted_order_status),

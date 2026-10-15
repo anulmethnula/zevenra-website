@@ -234,7 +234,7 @@ function Finance() {
         </Panel>
       </section>
       <section className="mt-8"><Panel title="Top selling products">{data?.topProducts.length?<div className="grid gap-3 sm:grid-cols-2">{data.topProducts.map(product=><Link key={`${product.productId}-${product.name}`} to={`/admin/products/${product.productId}`} className="flex items-center gap-4 border border-black/10 bg-white/25 p-3 transition hover:border-bronze/40 hover:bg-white/45"><span className="grid h-24 w-20 shrink-0 place-items-center overflow-hidden bg-black/[.04]">{product.imageUrl?<img src={product.imageUrl} alt="" loading="lazy" className="h-full w-full object-cover"/>:<span className="text-[9px] uppercase tracking-wider text-black/30">No image</span>}</span><span className="min-w-0 flex-1"><b className="block truncate text-sm">{product.name}</b><span className="mt-2 block text-xs text-black/45">{product.quantity} sold</span><span className="mt-2 block text-base font-medium">{money(product.revenue)}</span></span></Link>)}</div>:<Empty text="No delivered product sales in this period."/>}</Panel></section>
-      <section className="mt-8"><Panel title="Recent delivered orders">{data?.recentSales.length?<div className="grid gap-3 sm:grid-cols-2">{data.recentSales.map(sale=><Link key={sale.orderId} to={`/admin/orders/${sale.orderId}`} className="border border-black/10 bg-white/25 p-4 transition hover:border-bronze/40 hover:bg-white/45"><div className="flex items-start justify-between gap-3"><span><b className="block text-sm">{sale.orderId}</b><span className="mt-1 block text-xs text-black/45">{sale.customerName}</span></span><span className="text-[10px] text-black/40">{new Date(sale.createdAt).toLocaleDateString("en-LK",{timeZone:"Asia/Colombo",month:"short",day:"numeric"})}</span></div><div className="mt-4 space-y-2 border-t border-black/10 pt-3 text-xs"><div className="flex justify-between"><span>Product</span><b>{money(sale.productRevenue)}</b></div><div className="flex justify-between text-bronze"><span>Delivery</span><b>{money(sale.delivery)}</b></div><div className="flex justify-between pt-1 text-sm"><span>Total</span><b>{money(sale.total)}</b></div></div></Link>)}</div>:<Empty text="No delivered orders in this period."/>}</Panel></section>
+      <section className="mt-8"><Panel title="Recent delivered orders">{data?.recentSales.length?<div className="grid gap-3 sm:grid-cols-2">{data.recentSales.map(sale=><Link key={sale.orderId} to={`/admin/orders/${sale.orderId}`} className="border border-black/10 bg-white/25 p-4 transition hover:border-bronze/40 hover:bg-white/45"><div className="flex items-start justify-between gap-3"><span><b className="block text-sm">#{sale.orderNumber || sale.orderId}</b><span className="mt-1 block text-xs text-black/45">{sale.customerName}</span></span><span className="text-[10px] text-black/40">{new Date(sale.createdAt).toLocaleDateString("en-LK",{timeZone:"Asia/Colombo",month:"short",day:"numeric"})}</span></div><div className="mt-4 space-y-2 border-t border-black/10 pt-3 text-xs"><div className="flex justify-between"><span>Product</span><b>{money(sale.productRevenue)}</b></div><div className="flex justify-between text-bronze"><span>Delivery</span><b>{money(sale.delivery)}</b></div><div className="flex justify-between pt-1 text-sm"><span>Total</span><b>{money(sale.total)}</b></div></div></Link>)}</div>:<Empty text="No delivered orders in this period."/>}</Panel></section>
     </div>}
   </>;
 }
@@ -1603,33 +1603,6 @@ function Preorders() {
       setBusy("");
     }
   }
-  async function saveDetails(item: PreorderRequest) {
-    setBusy(item.requestId);
-    setMessage("");
-    try {
-      const draft = draftFor(item);
-      if (draft.postalCode && !/^\d{5}$/.test(draft.postalCode))
-        throw new Error("Postal code must be 5 digits.");
-      await store.updatePreorder({
-        requestId: item.requestId,
-        notes: draft.notes.trim(),
-        address1: draft.address1.trim(),
-        address2: draft.address2.trim(),
-        city: draft.city.trim(),
-        district: draft.district,
-        postalCode: draft.postalCode.trim(),
-      });
-      setMessage(item.requestId + " details saved.");
-    } catch (reason) {
-      setMessage(
-        reason instanceof Error
-          ? reason.message
-          : "Could not save pre-order details.",
-      );
-    } finally {
-      setBusy("");
-    }
-  }
   async function notifyCustomer(item:PreorderRequest){
     setBusy(item.requestId);setMessage("");
     try{
@@ -1714,11 +1687,10 @@ function Preorders() {
         pickupLocationId:selected.method==="pickup"?selected.pickupLocationId:undefined,
       });
       await store.loadAdmin();
-      setMessage(
-        preorderDisplayId(item) +
-          " converted to order #" +
-          (order.orderNumber || order.orderId) +
-          ". It now appears under Orders → Pre-order deliveries.",
+      setOpen("");
+      const publicOrderNumber = String(order.orderNumber || order.orderId);
+      window.location.assign(
+        "/admin/orders?source=preorder&search=" + encodeURIComponent(publicOrderNumber),
       );
     } catch (reason) {
       setMessage(
@@ -1741,7 +1713,7 @@ function Preorders() {
         title="Pre-orders"
       />
       <div className="admin-help-card mt-5">
-        <b>Paid pre-order flow:</b> Payment submitted → Verify payment → Confirmed → In transit → Arrived → Ready → Create delivery order → Orders. <span>Estimated arrival: 3–4 weeks.</span>
+        <b>Paid pre-order flow:</b> Payment submitted → Verify payment → Confirmed → In transit → Arrived → Ready → Create delivery order → Orders → Dispatch → Delivered. <span>Estimated arrival: 3–4 weeks.</span>
       </div>
       <div className="mt-6 grid grid-cols-2 gap-3 xl:grid-cols-4">
         {[
@@ -1943,13 +1915,6 @@ function Preorders() {
                           : nextText[item.status]}
                       </button>
                     )}
-                    {item.status === "ready" && (
-                      <div className="grid gap-2">
-                        <label className="label">Fulfillment<select className="field mt-1" value={conversion[item.requestId]?.method||((fulfillment?.methods||[]).filter(method=>method.active).length===1?(fulfillment?.methods||[]).find(method=>method.active)?.type:"")||""} onChange={event=>setConversion(current=>({...current,[item.requestId]:{method:event.target.value as "flat"|"area_group"|"pickup",pickupLocationId:""}}))}><option value="">Choose method</option>{(fulfillment?.methods||[]).filter(method=>method.active).map(method=><option key={method.type} value={method.type}>{method.displayName}</option>)}</select></label>
-                          {(conversion[item.requestId]?.method||((fulfillment?.methods||[]).filter(method=>method.active).length===1?(fulfillment?.methods||[]).find(method=>method.active)?.type:""))==="pickup"?<label className="label">Pickup branch<select className="field mt-1" value={conversion[item.requestId]?.pickupLocationId||""} onChange={event=>setConversion(current=>({...current,[item.requestId]:{method:"pickup",pickupLocationId:event.target.value}}))}><option value="">Choose branch</option>{(fulfillment?.pickupLocations||[]).filter(branch=>branch.active).map(branch=><option key={branch.id} value={branch.id}>{branch.name} — {branch.address}</option>)}</select></label>:null}
-                          <button disabled={busy===item.requestId} onClick={()=>void convert(item)} className="btn btn-dark">Create Delivery Order</button>
-                      </div>
-                    )}
                     {item.status==="notified"&&<div className="grid gap-2">
                       <p className="text-xs text-black/55">Reserved until {item.reservationExpiresAt?new Date(item.reservationExpiresAt).toLocaleString("en-LK"):"—"}</p>
                       <a href={wa} target="_blank" rel="noreferrer" className={"btn btn-dark justify-center "+(!claimLink?"pointer-events-none opacity-40":"")}>WhatsApp customer</a>
@@ -1962,7 +1927,7 @@ function Preorders() {
                 </div>
                 <section className="preorder-drawer-section preorder-delivery-summary">
                   <div><small>Delivery</small><h3>{item.convertedOrderDeliveryFee==null?"Courier fee calculated with delivery order":money(item.convertedOrderDeliveryFee)}</h3><p>Customer pays courier on delivery.</p></div>
-                  {item.status==="converted"&&item.convertedOrderId&&<Link className="btn" to={`/admin/orders/${encodeURIComponent(item.convertedOrderId)}`}>{item.convertedOrderId} · {item.convertedOrderStatus ? convertedOrderStatusLabel(item.convertedOrderStatus) : "Order"}</Link>}
+                  {item.status==="converted"&&item.convertedOrderId&&<Link className="btn" to={`/admin/orders/${encodeURIComponent(item.convertedOrderId)}`}>#{item.convertedOrderNumber || item.convertedOrderId} · {item.convertedOrderStatus ? convertedOrderStatusLabel(item.convertedOrderStatus) : "Order"}</Link>}
                 </section>
                 <section className="preorder-drawer-section"><div><small>Timeline</small><ol className="preorder-timeline">
                   {["Payment","Confirmed","In transit","Ready","Delivery"].map((label,index) => (
@@ -1974,14 +1939,13 @@ function Preorders() {
                     </li>
                   ))}
                 </ol></div></section>
-                {item.status==="ready"&&<details open className="mt-4 rounded-xl border border-black/10 bg-white/35 p-4">
-                  <summary className="cursor-pointer text-xs font-semibold">
-                    Delivery details for final order
-                  </summary>
-                  <p className="mt-2 text-[11px] leading-5 text-black/45">
-                    Confirm these delivery details before creating the delivery order.
-                  </p>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {item.status==="ready"&&<section className="preorder-ready-final">
+                  <div className="preorder-ready-final__head">
+                    <small>Final step</small>
+                    <h3>Create delivery order</h3>
+                    <p>Confirm the delivery details and choose how this order will be fulfilled.</p>
+                  </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
                     <label className="text-xs sm:col-span-2">
                       Address line 1
                       <input
@@ -2046,8 +2010,19 @@ function Preorders() {
                       />
                     </label>
                   </div>
-                  <button disabled={busy===item.requestId} onClick={()=>void saveDetails(item)} className="btn mt-4">Save delivery details</button>
-                </details>}
+                  <div className="preorder-ready-final__action">
+                    <label className="label">
+                      Delivery method
+                      <select className="field mt-2" value={conversion[item.requestId]?.method||((fulfillment?.methods||[]).filter(method=>method.active).length===1?(fulfillment?.methods||[]).find(method=>method.active)?.type:"")||""} onChange={event=>setConversion(current=>({...current,[item.requestId]:{method:event.target.value as "flat"|"area_group"|"pickup",pickupLocationId:""}}))}>
+                        <option value="">Choose method</option>
+                        {(fulfillment?.methods||[]).filter(method=>method.active).map(method=><option key={method.type} value={method.type}>{method.displayName}</option>)}
+                      </select>
+                    </label>
+                    {(conversion[item.requestId]?.method||((fulfillment?.methods||[]).filter(method=>method.active).length===1?(fulfillment?.methods||[]).find(method=>method.active)?.type:""))==="pickup"?<label className="label">Pickup branch<select className="field mt-2" value={conversion[item.requestId]?.pickupLocationId||""} onChange={event=>setConversion(current=>({...current,[item.requestId]:{method:"pickup",pickupLocationId:event.target.value}}))}><option value="">Choose branch</option>{(fulfillment?.pickupLocations||[]).filter(branch=>branch.active).map(branch=><option key={branch.id} value={branch.id}>{branch.name} — {branch.address}</option>)}</select></label>:null}
+                    <p className="text-[11px] leading-5 text-black/45">Creating the delivery order saves these details automatically and opens the new order in Orders → Pre-order deliveries.</p>
+                    <button disabled={busy===item.requestId} onClick={()=>void convert(item)} className="btn btn-dark w-full justify-center">{busy===item.requestId?"Creating delivery order…":"Create Delivery Order"}</button>
+                  </div>
+                </section>}
                 </div>
                 </motion.aside>
                 </>}
