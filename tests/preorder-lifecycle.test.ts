@@ -150,7 +150,7 @@ test("admin preorder list is bounded and selects only mapped fields", async () =
   );
   assert.doesNotMatch(listQuery, /SELECT\s+\*/i);
   assert.match(listQuery, /LIMIT 100/);
-  assert.match(listQuery, /p\.request_id,p\.created_at,p\.updated_at/);
+  assert.match(listQuery, /p\.request_id,p\.preorder_number,p\.created_at,p\.updated_at/);
 });
 
 test("preorder requests use configured variants without deducting stock",async()=>{

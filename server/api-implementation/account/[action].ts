@@ -202,6 +202,7 @@ const ROUTES: Record<string, RouteHandler> = {
       )) as Array<Record<string, unknown>>;
       const safeRows = (Array.isArray(rows) ? rows : []).map((item) => ({
         requestId: String(item.requestId || ""),
+        preorderNumber: Number(item.preorderNumber) || 0,
         createdAt: String(item.createdAt || ""),
         customerName: String(item.customerName || ""),
         whatsapp: String(item.whatsapp || ""),

@@ -1444,6 +1444,7 @@ type PreorderAdminDraft = {
   postalCode: string;
 };
 type PreorderFulfillmentConfig={methods:Array<{type:"flat"|"area_group"|"pickup";displayName:string;active:boolean}>;pickupLocations:Array<{id:string;name:string;address:string;active:boolean}>};
+const preorderDisplayId=(item:Pick<PreorderRequest,"requestId"|"preorderNumber">)=>item.preorderNumber?`PRE-${item.preorderNumber}`:item.requestId;
 function Preorders() {
   const store = useStore(),
     location = useLocation(),
@@ -1537,6 +1538,7 @@ function Preorders() {
           !needle ||
           [
             item.requestId,
+            String(item.preorderNumber || ""),
             item.customerName,
             item.phone,
             item.whatsapp,
@@ -1805,7 +1807,7 @@ function Preorders() {
               paymentState=item.paymentVerifiedAt?"Verified":item.status==="awaiting_payment"&&item.paymentRejectionReason?"New receipt requested":item.paymentSubmittedAt?"Submitted":item.status==="awaiting_payment"?"Awaiting payment":"Legacy / not recorded",
               claimLink=claimLinks[item.requestId]||"",
               rejectionReason=item.paymentRejectionReason||"",
-              rejectionMessage=rejectionReason&&claimLink?paymentRetryMessage({customerName:item.customerName,requestId:item.requestId,reason:rejectionReason,retryUrl:claimLink,productName:item.productName,productTotal:item.requestedPrice*item.quantity}):"",
+              rejectionMessage=rejectionReason&&claimLink?paymentRetryMessage({customerName:item.customerName,requestId:preorderDisplayId(item),reason:rejectionReason,retryUrl:claimLink,productName:item.productName,productTotal:item.requestedPrice*item.quantity}):"",
               nextStatus = next[item.status],
               progressIndex = item.status === "converted" ? 4 : item.status === "ready" ? 3 : ["in_transit","arrived"].includes(item.status) ? 2 : ["confirmed","ordered","batched"].includes(item.status) ? 1 : 0,
               waMessage = item.status==="awaiting_payment"&&rejectionMessage
@@ -1815,7 +1817,7 @@ function Preorders() {
                 : "Hi " +
                 item.customerName +
                 ", this is ZEVENRA about your pre-order " +
-                item.requestId +
+                preorderDisplayId(item) +
                 " for " +
                 item.productName +
                 " — " +
@@ -1838,7 +1840,7 @@ function Preorders() {
                     {product ? <Link to={`/admin/products/${product.id}`} className="grid h-16 w-12 shrink-0 place-items-center overflow-hidden bg-black/[.05]" aria-label={`View ${item.productName}`}>{image ? <img src={image.url} alt="" loading="lazy" className="h-16 w-12 object-contain" /> : <span className="px-1 text-center text-[8px] uppercase tracking-wide text-black/30">No image</span>}</Link> : <div className="grid h-16 w-12 shrink-0 place-items-center bg-black/[.05]"><span className="px-1 text-center text-[8px] uppercase tracking-wide text-black/30">No image</span></div>}
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <b className="break-all">{item.requestId}</b>
+                        <b className="break-all">{preorderDisplayId(item)}</b>
                         <span
                           className={
                             "preorder-status preorder-status--" + item.status
@@ -1856,11 +1858,11 @@ function Preorders() {
                 <AnimatePresence>
                 {open===item.requestId&&<>
                 <motion.button type="button" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} aria-label="Close pre-order details" onClick={()=>setOpen("")} className="admin-drawer-backdrop" />
-                <motion.aside initial={{x:"100%"}} animate={{x:0}} exit={{x:"100%"}} transition={{duration:.26,ease:[.4,0,.2,1]}} className="admin-drawer preorder-admin-drawer" role="dialog" aria-modal="true" aria-label={`Pre-order ${item.requestId}`}>
-                <div className="admin-drawer__header"><div><p className="eyebrow text-black/45">Pre-order details</p><h2>{item.requestId}</h2></div><button type="button" className="btn" onClick={()=>setOpen("")}>Close</button></div>
+                <motion.aside initial={{x:"100%"}} animate={{x:0}} exit={{x:"100%"}} transition={{duration:.26,ease:[.4,0,.2,1]}} className="admin-drawer preorder-admin-drawer" role="dialog" aria-modal="true" aria-label={`Pre-order ${preorderDisplayId(item)}`}>
+                <div className="admin-drawer__header"><div><p className="eyebrow text-black/45">Pre-order details</p><h2>{preorderDisplayId(item)}</h2></div><button type="button" className="btn" onClick={()=>setOpen("")}>Close</button></div>
                 <div className="admin-drawer__body">
                 <section className="preorder-drawer-section preorder-drawer-overview">
-                  <div><small>Overview</small><h3>{item.requestId}</h3></div>
+                  <div><small>Overview</small><h3>{preorderDisplayId(item)}</h3></div>
                   <div><span>Status</span><b>{labels[item.status]}</b></div>
                   <div><span>Created</span><b>{new Date(item.createdAt).toLocaleString("en-LK", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</b></div>
                   <div><span>Estimated arrival</span><b>3–4 weeks</b></div>

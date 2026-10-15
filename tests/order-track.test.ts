@@ -138,6 +138,14 @@ test("PRE ID and matching phone return only safe preorder tracking fields",async
   assert.equal(JSON.stringify(body).includes("secret"),false);assert.equal(JSON.stringify(body).includes("private"),false);
 });
 
+test("public numeric preorder number can be used for guest tracking",async()=>{
+  const storedPreorder={request_id:"PRE-TEST-1",preorder_number:200,created_at:"2026-10-08T10:00:00.000Z",customer_name:"Guest Customer",product_name:"Linen Dress",color:"Ivory",size:"M",quantity:1,requested_price:5000,status:"confirmed",payment_submitted_at:"2026-10-08T10:01:00.000Z",payment_verified_at:"2026-10-08T12:00:00.000Z"};
+  const seen:string[]=[];
+  const handler=createOrderTrackHandler(async()=>null,async(id,phone)=>{seen.push(id);return id==="PRE-TEST-1"&&phone==="94770000000"?storedPreorder:null;},undefined,async number=>number===200?"PRE-TEST-1":null),result=response();
+  await handler(request({orderId:"PRE-200",phone:"0770000000"},{origin},"198.51.103.9"),result.res);
+  assert.equal(result.state.status,200);assert.deepEqual(seen,["PRE-TEST-1"]);assert.equal((result.state.body as {preorderNumber:number}).preorderNumber,200);
+});
+
 test("PRE lookup with wrong phone fails with the same generic response",async()=>{
   const handler=createOrderTrackHandler(async()=>null,async()=>null),result=response();await handler(request({orderId:"PRE-TEST-1",phone:"0770000001"},{origin},"198.51.103.2"),result.res);
   assert.equal(result.state.status,404);assert.deepEqual(result.state.body,{error:"Order or pre-order details could not be found."});
@@ -243,7 +251,7 @@ test("checkout uses public order numbers and pickup-safe payment copy", async ()
   assert.match(checkout, /Pay at Pickup/);
   assert.match(checkout, /when you collect your order/);
   assert.doesNotMatch(checkout, /<strong[^>]*>#\{order\.orderId\}<\/strong>/);
-  assert.match(tracking, /placeholder="200 or PRE-\.\.\."/);
+  assert.match(tracking, /placeholder="200 or PRE-200"/);
 });
 
 

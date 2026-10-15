@@ -22,6 +22,7 @@ import {
 const notFound = "Order or pre-order details could not be found.";
 type FindOrder = (orderId: string, phone: string) => Promise<Record<string, unknown> | null>;
 type ResolveOrderNumber = (orderNumber: number) => Promise<string | null>;
+type ResolvePreorderNumber = (preorderNumber: number) => Promise<string | null>;
 
 function safeOrder(row: Record<string, unknown>) {
   const text = (value: unknown) => String(value ?? ""),
@@ -92,7 +93,7 @@ function safeOrder(row: Record<string, unknown>) {
 
 function safePreorder(row:Record<string,unknown>){
   const text=(value:unknown)=>String(value??""),number=(value:unknown)=>Number(value)||0,status=text(row.status);
-  return{kind:"preorder" as const,requestId:text(row.request_id??row.requestId),createdAt:row.created_at instanceof Date?row.created_at.toISOString():text(row.created_at??row.createdAt),customerName:text(row.customer_name??row.customerName),productName:text(row.product_name??row.productName),color:text(row.color),size:text(row.size),quantity:number(row.quantity),productTotal:number(row.requested_price??row.productTotal)*number(row.quantity),status,statusLabel:preorderCustomerStatusLabel(status),paymentState:row.payment_verified_at?"Payment verified":status==="payment_submitted"?"Payment pending verification":"Awaiting payment",convertedOrderId:status==="converted"?text(row.converted_order_id??row.convertedOrderId):""};
+  return{kind:"preorder" as const,requestId:text(row.request_id??row.requestId),preorderNumber:number(row.preorder_number??row.preorderNumber),createdAt:row.created_at instanceof Date?row.created_at.toISOString():text(row.created_at??row.createdAt),customerName:text(row.customer_name??row.customerName),productName:text(row.product_name??row.productName),color:text(row.color),size:text(row.size),quantity:number(row.quantity),productTotal:number(row.requested_price??row.productTotal)*number(row.quantity),status,statusLabel:preorderCustomerStatusLabel(status),paymentState:row.payment_verified_at?"Payment verified":status==="payment_submitted"?"Payment pending verification":"Awaiting payment",convertedOrderId:status==="converted"?text(row.converted_order_id??row.convertedOrderId):""};
 }
 
 export function createOrderTrackHandler(
@@ -101,6 +102,10 @@ export function createOrderTrackHandler(
   resolveOrderNumber: ResolveOrderNumber = async (orderNumber) => {
     const resolved=(await query<{order_id:string}>("SELECT order_id FROM orders WHERE order_number=$1 LIMIT 1",[orderNumber])).rows[0];
     return resolved?.order_id || null;
+  },
+  resolvePreorderNumber: ResolvePreorderNumber = async (preorderNumber) => {
+    const resolved=(await query<{request_id:string}>("SELECT request_id FROM preorders WHERE preorder_number=$1 LIMIT 1",[preorderNumber])).rows[0];
+    return resolved?.request_id || null;
   },
 ) {
   return async function handler(req: VercelRequest, res: VercelResponse) {
@@ -120,7 +125,11 @@ export function createOrderTrackHandler(
         return json(res, { error: "Please enter a valid Order or Pre-order ID and mobile number." }, 400);
       const preorder=orderId.startsWith("PRE-");
       let lookupId=orderId;
-      if (!preorder && /^\d+$/.test(orderId)) {
+      if (preorder && /^PRE-\d+$/.test(orderId)) {
+        const resolved=await resolvePreorderNumber(Number(orderId.slice(4)));
+        if (!resolved) return json(res,{error:notFound},404);
+        lookupId=resolved;
+      } else if (!preorder && /^\d+$/.test(orderId)) {
         const resolved=await resolveOrderNumber(Number(orderId));
         if (!resolved) return json(res,{error:notFound},404);
         lookupId=resolved;

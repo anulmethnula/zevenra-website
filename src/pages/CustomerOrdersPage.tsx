@@ -382,7 +382,7 @@ function PreordersView({ requests }: { requests: CustomerPreorder[] }) {
           <div className="customer-preorder-card__head">
             <div>
               <small>Pre-order request</small>
-              <h2>{item.requestId}</h2>
+              <h2>{item.preorderNumber ? `PRE-${item.preorderNumber}` : item.requestId}</h2>
               <p>
                 {new Date(item.createdAt).toLocaleString("en-LK", {
                   year: "numeric",

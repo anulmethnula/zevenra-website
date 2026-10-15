@@ -78,7 +78,7 @@ export async function listCustomerOrders(customerId: string, email?: string) {
 export async function listCustomerPreorders(customerId: string, email?: string) {
   void email;
   const result = await query<Record<string, unknown>>(
-    `SELECT request_id,created_at,updated_at,customer_id,customer_name,phone,whatsapp,email,
+    `SELECT request_id,preorder_number,created_at,updated_at,customer_id,customer_name,phone,whatsapp,email,
             address1,address2,city,district,postal_code,product_id,variant_id,product_name,
             sku,color,size,quantity,requested_price,confirmed_price,status,batch_id,notes,converted_order_id,payment_submitted_at,payment_verified_at
        FROM preorders WHERE customer_id=$1 ORDER BY created_at DESC LIMIT 100`,

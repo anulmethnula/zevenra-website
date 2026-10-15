@@ -222,6 +222,7 @@ export function mapOrderItem(row: Record<string, unknown>) {
 export function mapPreorder(row: Record<string, unknown>) {
   return {
     requestId: text(row.request_id),
+    preorderNumber: number(row.preorder_number),
     createdAt: date(row.created_at),
     updatedAt: date(row.updated_at),
     customerId: text(row.customer_id) || undefined,

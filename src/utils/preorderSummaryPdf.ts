@@ -5,7 +5,7 @@ import { siteConfig } from "../config/site";
 type PreorderSummarySource=CustomerPreorder|PreorderRequest|GuestTrackedPreorder;
 export async function downloadPreorderSummaryPdf(input:PreorderSummarySource,storeContact=siteConfig.whatsapp){
   const {jsPDF}=await import("jspdf"),doc=new jsPDF({orientation:"portrait",unit:"mm",format:"a4"}),guest="kind" in input,
-    id=guest?input.requestId:input.requestId,total=guest?input.productTotal:input.requestedPrice*input.quantity,
+    id=input.preorderNumber?`PRE-${input.preorderNumber}`:input.requestId,total=guest?input.productTotal:input.requestedPrice*input.quantity,
     payment=guest?input.paymentState:input.paymentVerifiedAt?"Payment verified":input.paymentSubmittedAt?"Payment pending verification":"Awaiting payment",
     linked=guest?input.convertedOrderId:input.convertedOrderId;
   doc.setFont("helvetica","bold");doc.setFontSize(22);doc.text("ZEVENRA",17,22);doc.setFontSize(12);doc.text("PRE-ORDER SUMMARY",17,31);doc.setDrawColor(205);doc.line(17,39,193,39);

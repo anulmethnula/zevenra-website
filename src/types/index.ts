@@ -233,7 +233,7 @@ export type GuestTrackedOrder = {
     imageUrl?: string;
   }>;
 };
-export type GuestTrackedPreorder={kind:"preorder";requestId:string;createdAt:string;customerName:string;productName:string;color:string;size:string;quantity:number;productTotal:number;status:string;statusLabel:string;paymentState:string;convertedOrderId?:string};
+export type GuestTrackedPreorder={kind:"preorder";requestId:string;preorderNumber?:number;createdAt:string;customerName:string;productName:string;color:string;size:string;quantity:number;productTotal:number;status:string;statusLabel:string;paymentState:string;convertedOrderId?:string};
 export type GuestTrackingResult=GuestTrackedOrder|GuestTrackedPreorder;
 export type CheckoutData = {
   fulfillmentMethod: "flat" | "area_group" | "pickup";
@@ -398,6 +398,7 @@ export type PreorderStatus =
   | "expired";
 export type PreorderRequest = {
   requestId: string;
+  preorderNumber?: number;
   createdAt: string;
   customerId?: string;
   customerName: string;
@@ -440,7 +441,7 @@ export type CustomerPreorder = Omit<
   "customerId" | "phone" | "email" | "notes"
 >;
 export type PreorderClaim={
-  requestId:string;status?:string;customerName:string;phone:string;whatsapp:string;email:string;
+  requestId:string;preorderNumber?:number;status?:string;customerName:string;phone:string;whatsapp:string;email:string;
   address1:string;address2:string;city:string;district:string;postalCode:string;
   productId:string;variantId:string;productName:string;color:string;size:string;
   quantity:number;confirmedPrice:number;reservationExpiresAt:string;imageUrl:string;paymentIssueReason?:string;

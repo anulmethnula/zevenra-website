@@ -75,7 +75,7 @@ export async function releasePreorderToStock(requestId:string,transact:(work:(cl
 export async function getPreorderClaim(token:string){
   if(!token)return null;
   const row=(await query<Record<string,unknown>>(
-    `SELECT pr.request_id,pr.customer_name,pr.phone,pr.whatsapp,pr.email,pr.address1,pr.address2,pr.city,pr.district,pr.postal_code,
+    `SELECT pr.request_id,pr.preorder_number,pr.customer_name,pr.phone,pr.whatsapp,pr.email,pr.address1,pr.address2,pr.city,pr.district,pr.postal_code,
             pr.product_id,pr.variant_id,pr.product_name,pr.color,pr.size,pr.quantity,pr.requested_price,pr.confirmed_price,pr.status,pr.reservation_expires_at,p.media,
             (SELECT al.details->>'reason' FROM audit_logs al WHERE al.entity_type='preorder' AND al.entity_id=pr.request_id AND al.action='payment_rejected' ORDER BY al.created_at DESC LIMIT 1) AS payment_issue_reason
        FROM preorders pr LEFT JOIN products p ON p.id=pr.product_id
@@ -85,13 +85,13 @@ export async function getPreorderClaim(token:string){
   )).rows[0];
   if(!row)return null;
   const media=Array.isArray(row.media)?row.media as Array<Record<string,unknown>>:[];
-  return{requestId:String(row.request_id),status:String(row.status),customerName:String(row.customer_name),phone:String(row.phone),whatsapp:String(row.whatsapp),email:String(row.email||""),address1:String(row.address1||""),address2:String(row.address2||""),city:String(row.city||""),district:String(row.district||""),postalCode:String(row.postal_code||""),productId:String(row.product_id),variantId:String(row.variant_id),productName:String(row.product_name),color:String(row.color),size:String(row.size),quantity:Number(row.quantity),confirmedPrice:Number(row.confirmed_price||row.requested_price),reservationExpiresAt:String(row.reservation_expires_at||""),imageUrl:String(media.find(item=>item.type==="image")?.url||""),paymentIssueReason:String(row.payment_issue_reason||"")};
+  return{requestId:String(row.request_id),preorderNumber:Number(row.preorder_number)||undefined,status:String(row.status),customerName:String(row.customer_name),phone:String(row.phone),whatsapp:String(row.whatsapp),email:String(row.email||""),address1:String(row.address1||""),address2:String(row.address2||""),city:String(row.city||""),district:String(row.district||""),postalCode:String(row.postal_code||""),productId:String(row.product_id),variantId:String(row.variant_id),productName:String(row.product_name),color:String(row.color),size:String(row.size),quantity:Number(row.quantity),confirmedPrice:Number(row.confirmed_price||row.requested_price),reservationExpiresAt:String(row.reservation_expires_at||""),imageUrl:String(media.find(item=>item.type==="image")?.url||""),paymentIssueReason:String(row.payment_issue_reason||"")};
 }
 
 export async function findGuestPreorder(requestId:string,phone:string){
   const requestKey=String(requestId||"").trim().replace(/^#/,"").trim().toUpperCase(),phoneKey=normalizeSriLankanPhoneForLookup(phone);
   return (await query<Record<string,unknown>>(
-    `SELECT request_id,created_at,customer_name,product_name,color,size,quantity,requested_price,status,converted_order_id,payment_submitted_at,payment_verified_at
+    `SELECT request_id,preorder_number,created_at,customer_name,product_name,color,size,quantity,requested_price,status,converted_order_id,payment_submitted_at,payment_verified_at
        FROM preorders WHERE request_id=$1 AND CASE
          WHEN regexp_replace(COALESCE(NULLIF(phone,''),whatsapp),'\\D','','g') LIKE '0094%' THEN substring(regexp_replace(COALESCE(NULLIF(phone,''),whatsapp),'\\D','','g') from 3)
          WHEN regexp_replace(COALESCE(NULLIF(phone,''),whatsapp),'\\D','','g') ~ '^7[0-9]{8}$' THEN '94'||regexp_replace(COALESCE(NULLIF(phone,''),whatsapp),'\\D','','g')
@@ -220,7 +220,7 @@ export async function listPreorders(status?: string) {
     where = status ? " WHERE p.status=$1" : "";
   return (
     await query<Record<string, unknown>>(
-      `SELECT p.request_id,p.created_at,p.updated_at,p.customer_id,p.customer_name,p.phone,p.whatsapp,p.email,
+      `SELECT p.request_id,p.preorder_number,p.created_at,p.updated_at,p.customer_id,p.customer_name,p.phone,p.whatsapp,p.email,
               p.address1,p.address2,p.city,p.district,p.postal_code,p.product_id,p.variant_id,p.product_name,
               p.sku,p.color,p.size,p.quantity,p.requested_price,p.confirmed_price,p.status,p.batch_id,p.notes,
               p.notified_at,p.reservation_expires_at,p.released_at,p.converted_order_id,p.payment_receipt_public_id,p.payment_submitted_at,p.payment_verified_at,o.order_status AS converted_order_status,o.delivery_fee AS converted_order_delivery_fee,
