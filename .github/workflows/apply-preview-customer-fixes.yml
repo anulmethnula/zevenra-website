@@ -1,0 +1,107 @@
+name: Apply preview customer fixes
+
+on:
+  push:
+    branches: [dev-rebuild]
+    paths:
+      - .github/workflows/apply-preview-customer-fixes.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dev-rebuild
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Apply tested fixes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def rep(path, old, new, count=1):
+              p=Path(path); s=p.read_text()
+              if old not in s:
+                  raise SystemExit(f"Missing expected pattern in {path}: {old[:120]!r}")
+              p.write_text(s.replace(old,new,count))
+
+          rep('server/api-implementation/_shared.ts',
+              'export type CloudinaryEnv = AuthEnv & {\n  CLOUDINARY_CLOUD_NAME: string;\n  CLOUDINARY_API_KEY: string;\n  CLOUDINARY_API_SECRET: string;\n};',
+              'export type CloudinaryEnv = Pick<AuthEnv, "ALLOWED_ORIGIN"> & {\n  CLOUDINARY_CLOUD_NAME: string;\n  CLOUDINARY_API_KEY: string;\n  CLOUDINARY_API_SECRET: string;\n};')
+          rep('server/api-implementation/_shared.ts',
+              'export function cloudinaryEnv(): CloudinaryEnv {\n  return {\n    ...authEnv(),',
+              'export function cloudinaryEnv(): CloudinaryEnv {\n  return {\n    ...originEnv(),')
+
+          rep('server/api-implementation/admin/cloudinary-sign.ts','  cloudinaryEnv,\n  json,','  authEnv,\n  cloudinaryEnv,\n  json,')
+          rep('server/api-implementation/admin/cloudinary-sign.ts','    const config = cloudinaryEnv();\n    if (!await validAdminSession(req, config.SESSION_SECRET))','    const config = cloudinaryEnv(), auth = authEnv();\n    if (!await validAdminSession(req, auth.SESSION_SECRET))')
+          rep('server/api-implementation/payment-receipt-access.ts','  body,\n  cloudinaryEnv,','  authEnv,\n  body,\n  cloudinaryEnv,')
+          rep('server/api-implementation/payment-receipt-access.ts','    const config = cloudinaryEnv();\n    if (!await validAdminSession(req, config.SESSION_SECRET))','    const config = cloudinaryEnv(), auth = authEnv();\n    if (!await validAdminSession(req, auth.SESSION_SECRET))')
+
+          p=Path('src/pages/CheckoutPage.tsx'); s=p.read_text()
+          changes=[
+            ('      rememberGuestOrder({\n        orderId: order.orderId,\n        createdAt: order.createdAt,\n      });','      rememberGuestOrder({\n        orderId: String(order.orderNumber || order.orderId),\n        createdAt: order.createdAt,\n      });'),
+            ('{value === "cod" ? "Cash on Delivery" : "Bank Transfer"}','{value === "cod" ? (fulfillmentMethod === "pickup" ? "Pay at Pickup" : "Cash on Delivery") : "Bank Transfer"}'),
+            ('{value === "cod" ? "Pay when your order arrives." : "Transfer before confirmation."}','{value === "cod" ? (fulfillmentMethod === "pickup" ? "Pay when you collect your order." : "Pay when your order arrives.") : "Transfer before confirmation."}'),
+            ('<PaymentAmount label="Pay on delivery" amounts={amounts} status={paymentStatus} />','<PaymentAmount label={fulfillmentMethod === "pickup" ? "Pay at pickup" : "Pay on delivery"} amounts={amounts} status={paymentStatus} />'),
+            ('<strong className="mt-1 block text-lg font-semibold">#{order.orderId}</strong>','<strong className="mt-1 block text-lg font-semibold">#{order.orderNumber || order.orderId}</strong>'),
+            ('<p className="text-sm font-semibold">{order.paymentMethod === "cod" ? "Cash on Delivery" : "Payment verification pending"}</p>\n          <p className="mt-2 text-xs leading-5 text-ink/60">{order.paymentMethod === "cod" ? `Pay ${money(order.total)} when your order arrives.` : "Your receipt was submitted successfully."}</p>', '<p className="text-sm font-semibold">{order.paymentMethod === "cod" ? (order.fulfillmentMethod === "pickup" ? "Pay at Pickup" : "Cash on Delivery") : "Payment verification pending"}</p>\n          <p className="mt-2 text-xs leading-5 text-ink/60">{order.paymentMethod === "cod" ? (order.fulfillmentMethod === "pickup" ? `Pay ${money(order.total)} when you collect your order.` : `Pay ${money(order.total)} when your order arrives.`) : "Your receipt was submitted successfully."}</p>'),
+          ]
+          for old,new in changes:
+              if old not in s: raise SystemExit(f'Missing Checkout pattern: {old[:100]!r}')
+              s=s.replace(old,new,1)
+          p.write_text(s)
+
+          rep('src/pages/TrackOrderPage.tsx','placeholder="ZEV-... or PRE-..."','placeholder="200 or PRE-..."')
+          rep('src/pages/TrackOrderPage.tsx','<Detail label="Payment method" value={order.paymentMethod === "cod" ? "Cash on delivery" : "Bank transfer"} />','<Detail label="Payment method" value={order.paymentMethod === "cod" ? (order.fulfillmentMethod === "pickup" ? "Pay at pickup" : "Cash on delivery") : "Bank transfer"} />')
+          rep('src/pages/CustomerOrdersPage.tsx','{order.paymentMethod === "cod"\n                  ? "Cash on delivery"\n                  : "Bank transfer"}','{order.paymentMethod === "cod"\n                  ? (order.fulfillmentMethod === "pickup" ? "Pay at pickup" : "Cash on delivery")\n                  : "Bank transfer"}')
+          rep('src/pages/OrderPage.tsx','Payment: ${order.paymentMethod === "cod" ? "Cash on delivery" : "Bank transfer"}`','Payment: ${order.paymentMethod === "cod" ? (order.fulfillmentMethod === "pickup" ? "Pay at pickup" : "Cash on delivery") : "Bank transfer"}`')
+          rep('src/pages/OrderPage.tsx','success = orderSuccessCopy(order.paymentMethod, money(order.total));','success = orderSuccessCopy(order.paymentMethod, money(order.total), order.fulfillmentMethod);')
+
+          rep('src/utils/orderSuccess.ts',
+              'export function orderSuccessCopy(paymentMethod:PaymentMethod,formattedTotal:string){\n  return paymentMethod==="bank"\n    ?{title:"Payment verification pending",detail:"Your receipt was submitted successfully. We will verify the payment before confirming fulfilment."}\n    :{title:"Order confirmed for Cash on Delivery",detail:`Pay ${formattedTotal} when your order arrives.`};\n}',
+              'export function orderSuccessCopy(paymentMethod:PaymentMethod,formattedTotal:string,fulfillmentMethod?:string){\n  if(paymentMethod==="bank")return{title:"Payment verification pending",detail:"Your receipt was submitted successfully. We will verify the payment before confirming fulfilment."};\n  return fulfillmentMethod==="pickup"\n    ?{title:"Order confirmed for pickup",detail:`Pay ${formattedTotal} when you collect your order.`}\n    :{title:"Order confirmed for Cash on Delivery",detail:`Pay ${formattedTotal} when your order arrives.`};\n}')
+          rep('src/utils/invoicePdf.ts','export function invoicePaymentStatus(order: Pick<InvoiceOrder, "paymentMethod" | "paymentStatus">) {\n  if (order.paymentMethod === "cod") return "Pay on delivery";','export function invoicePaymentStatus(order: Pick<InvoiceOrder, "paymentMethod" | "paymentStatus" | "fulfillmentMethod">) {\n  if (order.paymentMethod === "cod") return order.fulfillmentMethod === "pickup" ? "Pay at pickup" : "Pay on delivery";')
+
+          p=Path('tests/payment-receipt-upload.test.ts'); s=p.read_text()
+          if 'public receipt configuration does not require the admin session secret' not in s:
+              s += '''\n\ntest("public receipt configuration does not require the admin session secret", async () => {\n  const source = await readFile(new URL("../server/api-implementation/_shared.ts", import.meta.url), "utf8");\n  const start = source.indexOf("export function cloudinaryEnv");\n  const end = source.indexOf("export function originEnv", start);\n  const cloudinaryBlock = source.slice(start, end);\n  assert.match(cloudinaryBlock, /\\.\\.\\.originEnv\\(\\)/);\n  assert.doesNotMatch(cloudinaryBlock, /authEnv\\(\\)/);\n});\n'''
+          p.write_text(s)
+
+          p=Path('tests/order-track.test.ts'); s=p.read_text()
+          if 'checkout uses public order numbers and pickup-safe payment copy' not in s:
+              s += '''\n\ntest("checkout uses public order numbers and pickup-safe payment copy", async () => {\n  const checkout = await readFile(new URL("../src/pages/CheckoutPage.tsx", import.meta.url), "utf8");\n  const tracking = await readFile(new URL("../src/pages/TrackOrderPage.tsx", import.meta.url), "utf8");\n  assert.match(checkout, /orderId: String\\(order\\.orderNumber \\|\\| order\\.orderId\\)/);\n  assert.match(checkout, /#\\{order\\.orderNumber \\|\\| order\\.orderId\\}/);\n  assert.match(checkout, /Pay at Pickup/);\n  assert.match(checkout, /when you collect your order/);\n  assert.doesNotMatch(checkout, /<strong[^>]*>#\\{order\\.orderId\\}<\\/strong>/);\n  assert.match(tracking, /placeholder="200 or PRE-\\.\\.\\."/);\n});\n'''
+          needle='test("invoice payment status reflects confirmed order payment state", () => {\n  assert.equal(invoicePaymentStatus({ paymentMethod: "cod", paymentStatus: "pending" }), "Pay on delivery");'
+          replacement='test("invoice payment status reflects confirmed order payment state", () => {\n  assert.equal(invoicePaymentStatus({ paymentMethod: "cod", paymentStatus: "pending" }), "Pay on delivery");\n  assert.equal(invoicePaymentStatus({ paymentMethod: "cod", paymentStatus: "pending", fulfillmentMethod: "pickup" }), "Pay at pickup");'
+          if needle not in s: raise SystemExit('Missing invoice payment test')
+          s=s.replace(needle,replacement,1); p.write_text(s)
+
+          p=Path('tests/checkout-amounts.test.ts'); s=p.read_text()
+          old='test("success copy distinguishes COD and bank verification",()=>{assert.equal(orderSuccessCopy("cod","LKR 2,000").detail,"Pay LKR 2,000 when your order arrives.");assert.equal(orderSuccessCopy("bank","LKR 2,000").title,"Payment verification pending");});'
+          new='test("success copy distinguishes delivery COD, pickup payment, and bank verification",()=>{assert.equal(orderSuccessCopy("cod","LKR 2,000").detail,"Pay LKR 2,000 when your order arrives.");assert.equal(orderSuccessCopy("cod","LKR 2,000","pickup").detail,"Pay LKR 2,000 when you collect your order.");assert.equal(orderSuccessCopy("bank","LKR 2,000").title,"Payment verification pending");});'
+          if old not in s: raise SystemExit('Missing success-copy test')
+          p.write_text(s.replace(old,new,1))
+          PY
+      - name: Verify
+        run: |
+          npm run qa
+          npm audit --omit=dev --audit-level=high
+          git diff --check
+      - name: Commit clean fixes
+        shell: bash
+        run: |
+          git rm .github/workflows/apply-preview-customer-fixes.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add server/api-implementation/_shared.ts server/api-implementation/admin/cloudinary-sign.ts server/api-implementation/payment-receipt-access.ts src/pages/CheckoutPage.tsx src/pages/CustomerOrdersPage.tsx src/pages/OrderPage.tsx src/pages/TrackOrderPage.tsx src/utils/invoicePdf.ts src/utils/orderSuccess.ts tests/checkout-amounts.test.ts tests/order-track.test.ts tests/payment-receipt-upload.test.ts
+          git commit -m "Fix preview receipts, pickup copy, and public order numbers"
+          git push origin HEAD:dev-rebuild
