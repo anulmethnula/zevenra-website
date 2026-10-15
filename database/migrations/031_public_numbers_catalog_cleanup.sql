@@ -5,47 +5,12 @@ BEGIN;
 CREATE SEQUENCE IF NOT EXISTS product_number_seq START WITH 200;
 CREATE SEQUENCE IF NOT EXISTS order_number_seq START WITH 200;
 
-ALTER TABLE products ADD COLUMN IF NOT EXISTS product_number bigint;
-ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_number bigint;
-
--- Backfill old records deterministically from 200 upward.
-WITH ranked AS (
-  SELECT id, 199 + row_number() OVER (ORDER BY created_at, id) AS number
-  FROM products
-  WHERE product_number IS NULL
-)
-UPDATE products p
-SET product_number = ranked.number
-FROM ranked
-WHERE p.id = ranked.id;
-
-WITH ranked AS (
-  SELECT order_id, 199 + row_number() OVER (ORDER BY created_at, order_id) AS number
-  FROM orders
-  WHERE order_number IS NULL
-)
-UPDATE orders o
-SET order_number = ranked.number
-FROM ranked
-WHERE o.order_id = ranked.order_id;
-
-SELECT setval(
-  'product_number_seq',
-  GREATEST(199, COALESCE((SELECT max(product_number) FROM products), 199)),
-  true
-);
-SELECT setval(
-  'order_number_seq',
-  GREATEST(199, COALESCE((SELECT max(order_number) FROM orders), 199)),
-  true
-);
-
+-- Adding the default with the column backfills existing rows from the sequence
+-- and keeps every future row automatic. Technical IDs remain unchanged.
 ALTER TABLE products
-  ALTER COLUMN product_number SET DEFAULT nextval('product_number_seq'),
-  ALTER COLUMN product_number SET NOT NULL;
+  ADD COLUMN IF NOT EXISTS product_number bigint NOT NULL DEFAULT nextval('product_number_seq');
 ALTER TABLE orders
-  ALTER COLUMN order_number SET DEFAULT nextval('order_number_seq'),
-  ALTER COLUMN order_number SET NOT NULL;
+  ADD COLUMN IF NOT EXISTS order_number bigint NOT NULL DEFAULT nextval('order_number_seq');
 
 ALTER SEQUENCE product_number_seq OWNED BY products.product_number;
 ALTER SEQUENCE order_number_seq OWNED BY orders.order_number;
