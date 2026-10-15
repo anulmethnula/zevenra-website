@@ -1,0 +1,244 @@
+name: Apply preorder public IDs
+
+on:
+  push:
+    branches: [dev-rebuild]
+    paths:
+      - .github/workflows/apply-preorder-public-ids.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout dev-rebuild
+        uses: actions/checkout@v4
+        with:
+          ref: dev-rebuild
+          fetch-depth: 0
+
+      - name: Apply preorder public-number changes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace(path, old, new, count=1):
+              p = Path(path)
+              text = p.read_text()
+              actual = text.count(old)
+              if actual < count:
+                  raise SystemExit(f"{path}: expected at least {count} occurrence(s), found {actual}: {old[:120]!r}")
+              text = text.replace(old, new, count)
+              p.write_text(text)
+
+          migration = '''BEGIN;
+
+          -- Keep the long request_id as the stable technical key, while exposing a
+          -- short permanent customer/staff reference such as PRE-200.
+          CREATE SEQUENCE IF NOT EXISTS preorder_number_seq START WITH 200;
+
+          ALTER TABLE preorders
+            ADD COLUMN IF NOT EXISTS preorder_number bigint;
+
+          -- Existing records receive deterministic public numbers in creation order.
+          WITH numbered AS (
+            SELECT request_id,
+                   199 + ROW_NUMBER() OVER (ORDER BY created_at, request_id) AS public_number
+            FROM preorders
+            WHERE preorder_number IS NULL
+          )
+          UPDATE preorders p
+          SET preorder_number = numbered.public_number
+          FROM numbered
+          WHERE p.request_id = numbered.request_id;
+
+          DO $$
+          DECLARE current_max bigint;
+          BEGIN
+            SELECT MAX(preorder_number) INTO current_max FROM preorders;
+            IF current_max IS NOT NULL THEN
+              PERFORM setval('preorder_number_seq', GREATEST(current_max, 199), true);
+            END IF;
+          END
+          $$;
+
+          ALTER TABLE preorders
+            ALTER COLUMN preorder_number SET DEFAULT nextval('preorder_number_seq'),
+            ALTER COLUMN preorder_number SET NOT NULL;
+
+          ALTER SEQUENCE preorder_number_seq OWNED BY preorders.preorder_number;
+
+          CREATE UNIQUE INDEX IF NOT EXISTS preorders_preorder_number_unique_idx
+            ON preorders(preorder_number);
+
+          ALTER TABLE preorders DROP CONSTRAINT IF EXISTS preorders_preorder_number_check;
+          ALTER TABLE preorders ADD CONSTRAINT preorders_preorder_number_check
+            CHECK (preorder_number >= 200);
+
+          INSERT INTO schema_migrations(version)
+          VALUES ('032_preorder_public_numbers')
+          ON CONFLICT(version) DO NOTHING;
+
+          COMMIT;
+          '''
+          Path('database/migrations/032_preorder_public_numbers.sql').write_text(migration)
+
+          replace('server/api-implementation/_data/mappers.ts',
+                  '    requestId: text(row.request_id),\n    createdAt: date(row.created_at),',
+                  '    requestId: text(row.request_id),\n    preorderNumber: number(row.preorder_number),\n    createdAt: date(row.created_at),')
+
+          replace('server/api-implementation/_data/preorders.ts',
+                  '`SELECT pr.request_id,pr.customer_name,pr.phone,pr.whatsapp,pr.email,pr.address1,pr.address2,pr.city,pr.district,pr.postal_code,',
+                  '`SELECT pr.request_id,pr.preorder_number,pr.customer_name,pr.phone,pr.whatsapp,pr.email,pr.address1,pr.address2,pr.city,pr.district,pr.postal_code,')
+          replace('server/api-implementation/_data/preorders.ts',
+                  'return{requestId:String(row.request_id),status:String(row.status),customerName:',
+                  'return{requestId:String(row.request_id),preorderNumber:Number(row.preorder_number)||undefined,status:String(row.status),customerName:')
+          replace('server/api-implementation/_data/preorders.ts',
+                  '`SELECT request_id,created_at,customer_name,product_name,color,size,quantity,requested_price,status,converted_order_id,payment_submitted_at,payment_verified_at',
+                  '`SELECT request_id,preorder_number,created_at,customer_name,product_name,color,size,quantity,requested_price,status,converted_order_id,payment_submitted_at,payment_verified_at')
+          replace('server/api-implementation/_data/preorders.ts',
+                  '`SELECT p.request_id,p.created_at,p.updated_at,p.customer_id,p.customer_name,p.phone,p.whatsapp,p.email,',
+                  '`SELECT p.request_id,p.preorder_number,p.created_at,p.updated_at,p.customer_id,p.customer_name,p.phone,p.whatsapp,p.email,')
+
+          replace('server/api-implementation/_data/customers.ts',
+                  '`SELECT request_id,created_at,updated_at,customer_id,customer_name,phone,whatsapp,email,',
+                  '`SELECT request_id,preorder_number,created_at,updated_at,customer_id,customer_name,phone,whatsapp,email,')
+
+          replace('server/api-implementation/account/[action].ts',
+                  '        requestId: String(item.requestId || ""),\n        createdAt:',
+                  '        requestId: String(item.requestId || ""),\n        preorderNumber: Number(item.preorderNumber) || 0,\n        createdAt:')
+
+          replace('src/types/index.ts',
+                  'export type GuestTrackedPreorder={kind:"preorder";requestId:string;createdAt:string;',
+                  'export type GuestTrackedPreorder={kind:"preorder";requestId:string;preorderNumber?:number;createdAt:string;')
+          replace('src/types/index.ts',
+                  'export type PreorderRequest = {\n  requestId: string;\n  createdAt:',
+                  'export type PreorderRequest = {\n  requestId: string;\n  preorderNumber?: number;\n  createdAt:')
+          replace('src/types/index.ts',
+                  'export type PreorderClaim={\n  requestId:string;status?:string;',
+                  'export type PreorderClaim={\n  requestId:string;preorderNumber?:number;status?:string;')
+
+          replace('server/api-implementation/order-track.ts',
+                  'type ResolveOrderNumber = (orderNumber: number) => Promise<string | null>;\n',
+                  'type ResolveOrderNumber = (orderNumber: number) => Promise<string | null>;\ntype ResolvePreorderNumber = (preorderNumber: number) => Promise<string | null>;\n')
+          replace('server/api-implementation/order-track.ts',
+                  'return{kind:"preorder" as const,requestId:text(row.request_id??row.requestId),createdAt:',
+                  'return{kind:"preorder" as const,requestId:text(row.request_id??row.requestId),preorderNumber:number(row.preorder_number??row.preorderNumber),createdAt:')
+          replace('server/api-implementation/order-track.ts',
+                  '    return resolved?.order_id || null;\n  },\n) {',
+                  '    return resolved?.order_id || null;\n  },\n  resolvePreorderNumber: ResolvePreorderNumber = async (preorderNumber) => {\n    const resolved=(await query<{request_id:string}>("SELECT request_id FROM preorders WHERE preorder_number=$1 LIMIT 1",[preorderNumber])).rows[0];\n    return resolved?.request_id || null;\n  },\n) {')
+          replace('server/api-implementation/order-track.ts',
+                  '      if (!preorder && /^\\d+$/.test(orderId)) {\n        const resolved=await resolveOrderNumber(Number(orderId));\n        if (!resolved) return json(res,{error:notFound},404);\n        lookupId=resolved;\n      }',
+                  '      if (preorder && /^PRE-\\d+$/.test(orderId)) {\n        const resolved=await resolvePreorderNumber(Number(orderId.slice(4)));\n        if (!resolved) return json(res,{error:notFound},404);\n        lookupId=resolved;\n      } else if (!preorder && /^\\d+$/.test(orderId)) {\n        const resolved=await resolveOrderNumber(Number(orderId));\n        if (!resolved) return json(res,{error:notFound},404);\n        lookupId=resolved;\n      }')
+
+          replace('src/pages/TrackOrderPage.tsx',
+                  'const reference=result.kind==="order"?String(result.orderNumber || result.orderId):result.requestId;',
+                  'const reference=result.kind==="order"?String(result.orderNumber || result.orderId):(result.preorderNumber?`PRE-${result.preorderNumber}`:result.requestId);')
+          replace('src/pages/TrackOrderPage.tsx',
+                  'if(result.kind==="order"&&result.orderNumber&&result.orderId!==reference)removeRecentGuestOrder(result.orderId);',
+                  'if(result.kind==="order"&&result.orderNumber&&result.orderId!==reference)removeRecentGuestOrder(result.orderId);\n      if(result.kind==="preorder"&&result.preorderNumber&&result.requestId!==reference)removeRecentGuestOrder(result.requestId);')
+          replace('src/pages/TrackOrderPage.tsx', 'placeholder="200 or PRE-..."', 'placeholder="200 or PRE-200"')
+          replace('src/pages/TrackOrderPage.tsx',
+                  'Pre-order #{preorder.requestId}',
+                  'Pre-order #{preorder.preorderNumber?`PRE-${preorder.preorderNumber}`:preorder.requestId}')
+
+          replace('src/pages/PreorderPage.tsx',
+                  '<SuccessRow label="Pre-order ID" value={done.requestId} />',
+                  '<SuccessRow label="Pre-order ID" value={done.preorderNumber ? `PRE-${done.preorderNumber}` : done.requestId} />')
+
+          replace('src/utils/preorderSummaryPdf.ts',
+                  'id=guest?input.requestId:input.requestId,total=',
+                  'id=input.preorderNumber?`PRE-${input.preorderNumber}`:input.requestId,total=')
+
+          replace('src/pages/CustomerOrdersPage.tsx',
+                  '<h2>{item.requestId}</h2>',
+                  '<h2>{item.preorderNumber ? `PRE-${item.preorderNumber}` : item.requestId}</h2>')
+
+          replace('src/pages/PreorderCompletePage.tsx',
+                  '<p><b>Pre-order:</b> {claim.requestId}</p>',
+                  '<p><b>Pre-order:</b> {claim.preorderNumber ? `PRE-${claim.preorderNumber}` : claim.requestId}</p>')
+          replace('src/pages/PreorderCompletePage.tsx',
+                  'Your order is <b>{order.orderId}</b>.',
+                  'Your order is <b>#{order.orderNumber || order.orderId}</b>.')
+
+          # Admin keeps technical requestId for mutations, but displays/searches the short public reference.
+          replace('src/pages/admin/AdminPage.tsx',
+                  'type PreorderFulfillmentConfig={methods:Array<{type:"flat"|"area_group"|"pickup";displayName:string;active:boolean}>;pickupLocations:Array<{id:string;name:string;address:string;active:boolean}>};\nfunction Preorders() {',
+                  'type PreorderFulfillmentConfig={methods:Array<{type:"flat"|"area_group"|"pickup";displayName:string;active:boolean}>;pickupLocations:Array<{id:string;name:string;address:string;active:boolean}>};\nconst preorderDisplayId=(item:Pick<PreorderRequest,"requestId"|"preorderNumber">)=>item.preorderNumber?`PRE-${item.preorderNumber}`:item.requestId;\nfunction Preorders() {')
+          replace('src/pages/admin/AdminPage.tsx',
+                  '            item.requestId,\n            item.customerName,',
+                  '            item.requestId,\n            String(item.preorderNumber || ""),\n            item.customerName,')
+          replace('src/pages/admin/AdminPage.tsx',
+                  '<b className="break-all">{item.requestId}</b>',
+                  '<b className="break-all">{preorderDisplayId(item)}</b>')
+          replace('src/pages/admin/AdminPage.tsx',
+                  'aria-label={`Pre-order ${item.requestId}`}',
+                  'aria-label={`Pre-order ${preorderDisplayId(item)}`}')
+          replace('src/pages/admin/AdminPage.tsx',
+                  '<div className="admin-drawer__header"><div><p className="eyebrow text-black/45">Pre-order details</p><h2>{item.requestId}</h2>',
+                  '<div className="admin-drawer__header"><div><p className="eyebrow text-black/45">Pre-order details</p><h2>{preorderDisplayId(item)}</h2>')
+          replace('src/pages/admin/AdminPage.tsx',
+                  '<div><small>Overview</small><h3>{item.requestId}</h3></div>',
+                  '<div><small>Overview</small><h3>{preorderDisplayId(item)}</h3></div>')
+          replace('src/pages/admin/AdminPage.tsx',
+                  'paymentRetryMessage({customerName:item.customerName,requestId:item.requestId,reason:',
+                  'paymentRetryMessage({customerName:item.customerName,requestId:preorderDisplayId(item),reason:')
+          replace('src/pages/admin/AdminPage.tsx',
+                  '"Hi " +\n                item.customerName +\n                ", this is ZEVENRA about your pre-order " +\n                item.requestId +',
+                  '"Hi " +\n                item.customerName +\n                ", this is ZEVENRA about your pre-order " +\n                preorderDisplayId(item) +')
+
+          # Account API passes the number through to customer UI.
+          # Mapper query sources already include it above.
+
+          # Extend guest tracking coverage for PRE-200 while preserving legacy PRE-* lookup.
+          test_path=Path('tests/order-track.test.ts')
+          test_text=test_path.read_text()
+          marker='test("PRE lookup with wrong phone fails with the same generic response",async()=>{'
+          if 'public numeric preorder number can be used for guest tracking' not in test_text:
+              insert='''test("public numeric preorder number can be used for guest tracking",async()=>{\n  const storedPreorder={request_id:"PRE-TEST-1",preorder_number:200,created_at:"2026-10-08T10:00:00.000Z",customer_name:"Guest Customer",product_name:"Linen Dress",color:"Ivory",size:"M",quantity:1,requested_price:5000,status:"confirmed",payment_submitted_at:"2026-10-08T10:01:00.000Z",payment_verified_at:"2026-10-08T12:00:00.000Z"};\n  const seen:string[]=[];\n  const handler=createOrderTrackHandler(async()=>null,async(id,phone)=>{seen.push(id);return id==="PRE-TEST-1"&&phone==="94770000000"?storedPreorder:null;},undefined,async number=>number===200?"PRE-TEST-1":null),result=response();\n  await handler(request({orderId:"PRE-200",phone:"0770000000"},{origin},"198.51.103.9"),result.res);\n  assert.equal(result.state.status,200);assert.deepEqual(seen,["PRE-TEST-1"]);assert.equal((result.state.body as {preorderNumber:number}).preorderNumber,200);\n});\n\n'''
+              if marker not in test_text:
+                  raise SystemExit('tests/order-track.test.ts: insertion marker missing')
+              test_path.write_text(test_text.replace(marker,insert+marker,1))
+          PY
+
+      - name: Set up Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run QA
+        run: npm run qa
+
+      - name: Production dependency audit
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Commit tested fix
+        shell: bash
+        run: |
+          git config user.name "ZEVENRA Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add database/migrations/032_preorder_public_numbers.sql \
+            server/api-implementation/_data/mappers.ts \
+            server/api-implementation/_data/preorders.ts \
+            server/api-implementation/_data/customers.ts \
+            server/api-implementation/account/'[action].ts' \
+            server/api-implementation/order-track.ts \
+            src/types/index.ts \
+            src/pages/TrackOrderPage.tsx \
+            src/pages/PreorderPage.tsx \
+            src/pages/PreorderCompletePage.tsx \
+            src/pages/CustomerOrdersPage.tsx \
+            src/pages/admin/AdminPage.tsx \
+            src/utils/preorderSummaryPdf.ts \
+            tests/order-track.test.ts
+          git diff --cached --check
+          git commit -m "fix: add durable public preorder numbers"
+          git push origin HEAD:dev-rebuild
