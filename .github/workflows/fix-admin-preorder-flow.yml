@@ -1,0 +1,188 @@
+name: Fix admin preorder flow
+
+on:
+  push:
+    branches: [dev-rebuild]
+    paths:
+      - .github/workflows/fix-admin-preorder-flow.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fixes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dev-rebuild
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Apply focused admin fixes
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace_once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{label}: expected 1 match, found {count}")
+              return text.replace(old, new, 1)
+
+          admin_page = Path('src/pages/admin/AdminPage.tsx')
+          text = admin_page.read_text()
+
+          text = replace_once(
+              text,
+              '<b>Paid pre-order flow:</b> Payment submitted → Verify payment → Confirmed → In transit → Arrived → Ready → Create delivery order → Orders. <span>Estimated arrival: 3–4 weeks.</span>',
+              '<b>Paid pre-order flow:</b> Payment submitted → Verify payment → Confirmed → In transit → Arrived → Ready → Create delivery order → Orders → Dispatch → Delivered. <span>Estimated arrival: 3–4 weeks.</span>',
+              'preorder flow banner',
+          )
+
+          text = replace_once(
+              text,
+              '''      await store.loadAdmin();\n      setMessage(\n        preorderDisplayId(item) +\n          " converted to order #" +\n          (order.orderNumber || order.orderId) +\n          ". It now appears under Orders → Pre-order deliveries.",\n      );''',
+              '''      await store.loadAdmin();\n      setOpen("");\n      const publicOrderNumber = String(order.orderNumber || order.orderId);\n      window.location.assign(\n        "/admin/orders?source=preorder&search=" + encodeURIComponent(publicOrderNumber),\n      );''',
+              'post-conversion redirect',
+          )
+
+          ready_block = '''                    {item.status === "ready" && (\n                      <div className="grid gap-2">\n                        <label className="label">Fulfillment<select className="field mt-1" value={conversion[item.requestId]?.method||((fulfillment?.methods||[]).filter(method=>method.active).length===1?(fulfillment?.methods||[]).find(method=>method.active)?.type:"")||""} onChange={event=>setConversion(current=>({...current,[item.requestId]:{method:event.target.value as "flat"|"area_group"|"pickup",pickupLocationId:""}}))}><option value="">Choose method</option>{(fulfillment?.methods||[]).filter(method=>method.active).map(method=><option key={method.type} value={method.type}>{method.displayName}</option>)}</select></label>\n                          {(conversion[item.requestId]?.method||((fulfillment?.methods||[]).filter(method=>method.active).length===1?(fulfillment?.methods||[]).find(method=>method.active)?.type:""))==="pickup"?<label className="label">Pickup branch<select className="field mt-1" value={conversion[item.requestId]?.pickupLocationId||""} onChange={event=>setConversion(current=>({...current,[item.requestId]:{method:"pickup",pickupLocationId:event.target.value}}))}><option value="">Choose branch</option>{(fulfillment?.pickupLocations||[]).filter(branch=>branch.active).map(branch=><option key={branch.id} value={branch.id}>{branch.name} — {branch.address}</option>)}</select></label>:null}\n                          <button disabled={busy===item.requestId} onClick={()=>void convert(item)} className="btn btn-dark">Create Delivery Order</button>\n                      </div>\n                    )}\n'''
+          if text.count(ready_block) != 1:
+              raise SystemExit(f"ready action block: expected 1 match, found {text.count(ready_block)}")
+          text = text.replace(ready_block, '', 1)
+
+          text = replace_once(
+              text,
+              '''                {item.status==="ready"&&<details open className="mt-4 rounded-xl border border-black/10 bg-white/35 p-4">\n                  <summary className="cursor-pointer text-xs font-semibold">\n                    Delivery details for final order\n                  </summary>\n                  <p className="mt-2 text-[11px] leading-5 text-black/45">\n                    Confirm these delivery details before creating the delivery order.\n                  </p>\n                  <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">''',
+              '''                {item.status==="ready"&&<section className="preorder-ready-final">\n                  <div className="preorder-ready-final__head">\n                    <small>Final step</small>\n                    <h3>Create delivery order</h3>\n                    <p>Confirm the delivery details and choose how this order will be fulfilled.</p>\n                  </div>\n                  <div className="mt-4 grid gap-3 sm:grid-cols-2">''',
+              'ready details opening',
+          )
+
+          text = replace_once(
+              text,
+              '''                  <button disabled={busy===item.requestId} onClick={()=>void saveDetails(item)} className="btn mt-4">Save delivery details</button>\n                </details>}''',
+              '''                  <div className="preorder-ready-final__action">\n                    <label className="label">\n                      Delivery method\n                      <select className="field mt-2" value={conversion[item.requestId]?.method||((fulfillment?.methods||[]).filter(method=>method.active).length===1?(fulfillment?.methods||[]).find(method=>method.active)?.type:"")||""} onChange={event=>setConversion(current=>({...current,[item.requestId]:{method:event.target.value as "flat"|"area_group"|"pickup",pickupLocationId:""}}))}>\n                        <option value="">Choose method</option>\n                        {(fulfillment?.methods||[]).filter(method=>method.active).map(method=><option key={method.type} value={method.type}>{method.displayName}</option>)}\n                      </select>\n                    </label>\n                    {(conversion[item.requestId]?.method||((fulfillment?.methods||[]).filter(method=>method.active).length===1?(fulfillment?.methods||[]).find(method=>method.active)?.type:""))==="pickup"?<label className="label">Pickup branch<select className="field mt-2" value={conversion[item.requestId]?.pickupLocationId||""} onChange={event=>setConversion(current=>({...current,[item.requestId]:{method:"pickup",pickupLocationId:event.target.value}}))}><option value="">Choose branch</option>{(fulfillment?.pickupLocations||[]).filter(branch=>branch.active).map(branch=><option key={branch.id} value={branch.id}>{branch.name} — {branch.address}</option>)}</select></label>:null}\n                    <p className="text-[11px] leading-5 text-black/45">Creating the delivery order saves these details automatically and opens the new order in Orders → Pre-order deliveries.</p>\n                    <button disabled={busy===item.requestId} onClick={()=>void convert(item)} className="btn btn-dark w-full justify-center">{busy===item.requestId?"Creating delivery order…":"Create Delivery Order"}</button>\n                  </div>\n                </section>}''',
+              'ready details action',
+          )
+
+          old_link = '>{item.convertedOrderId} · {item.convertedOrderStatus ? convertedOrderStatusLabel(item.convertedOrderStatus) : "Order"}</Link>'
+          new_link = '>#{item.convertedOrderNumber || item.convertedOrderId} · {item.convertedOrderStatus ? convertedOrderStatusLabel(item.convertedOrderStatus) : "Order"}</Link>'
+          link_count = text.count(old_link)
+          if link_count != 2:
+              raise SystemExit(f"converted order labels: expected 2 matches, found {link_count}")
+          text = text.replace(old_link, new_link)
+
+          text = replace_once(
+              text,
+              '<span><b className="block text-sm">{sale.orderId}</b><span className="mt-1 block text-xs text-black/45">{sale.customerName}</span></span>',
+              '<span><b className="block text-sm">#{sale.orderNumber || sale.orderId}</b><span className="mt-1 block text-xs text-black/45">{sale.customerName}</span></span>',
+              'finance public order number',
+          )
+
+          admin_page.write_text(text)
+
+          types = Path('src/types/index.ts')
+          text = types.read_text()
+          text = replace_once(
+              text,
+              '  convertedOrderId?: string;\n  convertedOrderStatus?: OrderStatus;',
+              '  convertedOrderId?: string;\n  convertedOrderNumber?: number;\n  convertedOrderStatus?: OrderStatus;',
+              'preorder converted order number type',
+          )
+          text = replace_once(
+              text,
+              '  recentSales: Array<{orderId:string;createdAt:string;customerName:string;productRevenue:number;delivery:number;total:number}>;',
+              '  recentSales: Array<{orderId:string;orderNumber?:number;createdAt:string;customerName:string;productRevenue:number;delivery:number;total:number}>;',
+              'finance order number type',
+          )
+          types.write_text(text)
+
+          mappers = Path('server/api-implementation/_data/mappers.ts')
+          text = mappers.read_text()
+          text = replace_once(
+              text,
+              '    convertedOrderId: text(row.converted_order_id),\n    convertedOrderStatus:',
+              '    convertedOrderId: text(row.converted_order_id),\n    convertedOrderNumber: row.converted_order_number == null ? undefined : number(row.converted_order_number),\n    convertedOrderStatus:',
+              'map converted order number',
+          )
+          mappers.write_text(text)
+
+          preorders = Path('server/api-implementation/_data/preorders.ts')
+          text = preorders.read_text()
+          text = replace_once(
+              text,
+              'p.notified_at,p.reservation_expires_at,p.released_at,p.converted_order_id,p.payment_receipt_public_id,p.payment_submitted_at,p.payment_verified_at,o.order_status AS converted_order_status,o.delivery_fee AS converted_order_delivery_fee,',
+              'p.notified_at,p.reservation_expires_at,p.released_at,p.converted_order_id,p.payment_receipt_public_id,p.payment_submitted_at,p.payment_verified_at,o.order_number AS converted_order_number,o.order_status AS converted_order_status,o.delivery_fee AS converted_order_delivery_fee,',
+              'preorder converted order number query',
+          )
+          preorders.write_text(text)
+
+          admin_data = Path('server/api-implementation/_data/admin.ts')
+          text = admin_data.read_text()
+          text = replace_once(
+              text,
+              '`SELECT o.order_id,o.created_at,o.customer_name,o.subtotal,COALESCE(o.discount_amount,0) AS discount_amount,',
+              '`SELECT o.order_id,o.order_number,o.created_at,o.customer_name,o.subtotal,COALESCE(o.discount_amount,0) AS discount_amount,',
+              'finance select order number',
+          )
+          text = replace_once(
+              text,
+              'recentSales:recentSales.rows.map(item=>({orderId:String(item.order_id),createdAt:new Date(String(item.created_at)).toISOString(),customerName:String(item.customer_name||""),productRevenue:Number(item.product_revenue)||0,delivery:Number(item.delivery_fee)||0,total:(Number(item.product_revenue)||0)+(Number(item.delivery_fee)||0)})),',
+              'recentSales:recentSales.rows.map(item=>({orderId:String(item.order_id),orderNumber:Number(item.order_number)||undefined,createdAt:new Date(String(item.created_at)).toISOString(),customerName:String(item.customer_name||""),productRevenue:Number(item.product_revenue)||0,delivery:Number(item.delivery_fee)||0,total:(Number(item.product_revenue)||0)+(Number(item.delivery_fee)||0)})),',
+              'finance map order number',
+          )
+          admin_data.write_text(text)
+
+          css = Path('src/styles/index.css')
+          css_text = css.read_text()
+          marker = '/* 2026-10-15 admin preorder drawer stability */'
+          if marker in css_text:
+              raise SystemExit('drawer CSS marker already exists')
+          css_text += r'''
+
+/* 2026-10-15 admin preorder drawer stability */
+.preorder-admin-drawer{width:min(620px,96vw)!important}
+.preorder-admin-drawer .admin-drawer__body{display:flex!important;flex-direction:column!important;align-content:initial!important;gap:14px!important;overflow-y:auto!important}
+.preorder-admin-drawer .admin-drawer__body>*{flex:0 0 auto!important;min-width:0!important}
+.preorder-drawer-overview{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;min-height:132px!important;height:auto!important;overflow:visible!important;padding:0!important}
+.preorder-drawer-overview>div{display:flex!important;min-height:66px!important;flex-direction:column!important;justify-content:center!important;padding:15px 17px!important;overflow:visible!important}
+.preorder-drawer-overview>div:nth-child(even){border-left:1px solid var(--admin-border)!important}
+.preorder-drawer-overview>div:nth-child(n+3){border-top:1px solid var(--admin-border)!important}
+.preorder-admin-drawer .preorder-admin-grid{display:flex!important;height:auto!important;flex-direction:column!important;overflow:visible!important}
+.preorder-admin-drawer .preorder-admin-grid>section{flex:0 0 auto!important;min-height:max-content!important;overflow:visible!important}
+.preorder-admin-drawer .preorder-product-box{display:grid!important;grid-template-columns:68px minmax(0,1fr)!important}
+.preorder-admin-drawer .preorder-next-box{display:flex!important;flex-direction:column!important}
+.preorder-ready-final{border:1px solid var(--admin-border);border-radius:13px;background:var(--admin-surface);padding:18px}
+.preorder-ready-final__head small{display:block;margin-bottom:7px;color:#8a7f73;font-size:8px;font-weight:750;letter-spacing:.15em;text-transform:uppercase}
+.preorder-ready-final__head h3{font-size:15px;font-weight:700}
+.preorder-ready-final__head p{margin-top:6px;color:#756c63;font-size:11px;line-height:1.6}
+.preorder-ready-final__action{display:grid;gap:12px;margin-top:18px;padding-top:18px;border-top:1px solid var(--admin-border)}
+@media(max-width:640px){.preorder-admin-drawer{width:96vw!important}.preorder-drawer-overview{min-height:0!important}.preorder-drawer-overview>div{min-height:62px!important;padding:13px!important}}
+'''
+          css.write_text(css_text)
+          PY
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run QA
+        run: npm run qa
+
+      - name: Production dependency audit
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Commit fixes and clean temporary workflow
+        shell: bash
+        run: |
+          rm -f .github/workflows/fix-admin-preorder-flow.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: clean preorder delivery flow and public finance IDs"
+          git push origin HEAD:dev-rebuild
