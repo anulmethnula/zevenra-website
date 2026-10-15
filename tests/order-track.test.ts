@@ -224,6 +224,7 @@ test("PDF helper handles single, long, and multi-page orders", async () => {
 
 test("invoice payment status reflects confirmed order payment state", () => {
   assert.equal(invoicePaymentStatus({ paymentMethod: "cod", paymentStatus: "pending" }), "Pay on delivery");
+  assert.equal(invoicePaymentStatus({ paymentMethod: "cod", paymentStatus: "pending", fulfillmentMethod: "pickup" }), "Pay at pickup");
   assert.equal(invoicePaymentStatus({ paymentMethod: "bank", paymentStatus: "pending_verification" }), "Pending verification");
   assert.equal(invoicePaymentStatus({ paymentMethod: "bank", paymentStatus: "verified" }), "Paid");
   assert.equal(invoicePaymentStatus({ paymentMethod: "bank", paymentStatus: "paid" }), "Paid");
@@ -232,3 +233,15 @@ test("invoice payment status reflects confirmed order payment state", () => {
 test("one invoice helper supports tracked and account order snapshots",()=>{const tracked={kind:"order" as const,...({orderId:"ZEV-1",createdAt:"2026-01-01",customerName:"A",address1:"",address2:"",city:"",district:"",postalCode:"",orderStatus:"confirmed",paymentMethod:"bank",paymentStatus:"pending",deliveryZoneName:"",fulfilmentCourierName:"",trackingNumber:"",trackingUrl:"",courierSentDate:"",subtotal:1000,discountCode:"",discountAmount:0,deliveryFee:0,total:1000,items:[{name:"Top",color:"Black",size:"M",quantity:1,unitPrice:1000,isPreorder:false}]})};assert.equal(normalizeInvoiceOrder(tracked).items[0].unitPrice,1000);});
 
 test("invoice and preorder summary downloads are exposed on every customer surface",async()=>{const [checkout,order,track,account,preorder,invoice,summary]=await Promise.all(["CheckoutPage.tsx","OrderPage.tsx","TrackOrderPage.tsx","CustomerOrdersPage.tsx","PreorderPage.tsx"].map(name=>readFile(new URL(`../src/pages/${name}`,import.meta.url),"utf8")).concat([readFile(new URL("../src/utils/invoicePdf.ts",import.meta.url),"utf8"),readFile(new URL("../src/utils/preorderSummaryPdf.ts",import.meta.url),"utf8")]));assert.match(checkout,/downloadInvoicePdf/);assert.match(order,/DOWNLOAD INVOICE/);assert.match(track,/DOWNLOAD INVOICE/);assert.match(account,/DOWNLOAD INVOICE/);assert.match(preorder,/Download pre-order summary/i);assert.match(track,/DOWNLOAD PRE-ORDER SUMMARY/);assert.match(account,/DOWNLOAD PRE-ORDER SUMMARY/);assert.doesNotMatch(summary,/ORDER INVOICE|FINAL INVOICE/);assert.match(summary,/PRE-ORDER SUMMARY/);assert.match(invoice,/normalizeInvoiceOrder/);});
+
+
+test("checkout uses public order numbers and pickup-safe payment copy", async () => {
+  const checkout = await readFile(new URL("../src/pages/CheckoutPage.tsx", import.meta.url), "utf8");
+  const tracking = await readFile(new URL("../src/pages/TrackOrderPage.tsx", import.meta.url), "utf8");
+  assert.match(checkout, /orderId: String\(order\.orderNumber \|\| order\.orderId\)/);
+  assert.match(checkout, /#\{order\.orderNumber \|\| order\.orderId\}/);
+  assert.match(checkout, /Pay at Pickup/);
+  assert.match(checkout, /when you collect your order/);
+  assert.doesNotMatch(checkout, /<strong[^>]*>#\{order\.orderId\}<\/strong>/);
+  assert.match(tracking, /placeholder="200 or PRE-\.\.\."/);
+});

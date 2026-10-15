@@ -46,3 +46,13 @@ test("server metadata verification rejects oversized, mismatched, and unavailabl
 test("server metadata verification accepts the exact authenticated receipt",async()=>{const config={CLOUDINARY_CLOUD_NAME:"cloud",CLOUDINARY_API_KEY:"key",CLOUDINARY_API_SECRET:"secret"},request=(async()=>new Response(JSON.stringify(uploaded),{status:200})) as typeof fetch;assert.deepEqual(await verifyReceiptAsset(uploaded.secure_url,config,request),{publicId:"zevenra/payment-receipts/receipt",resourceType:"image",format:"jpg"});});
 test("authorized admin access remains an expiring authenticated signed download",()=>{const access=authenticatedReceiptDownloadUrl({payment_receipt_public_id:"zevenra/payment-receipts/receipt",payment_receipt_resource_type:"image",payment_receipt_format:"jpg"},{cloudName:"cloud",apiKey:"key",apiSecret:"test-secret"},1700000000),url=new URL(access.url);assert.equal(url.pathname,"/v1_1/cloud/image/download");assert.equal(url.searchParams.get("type"),"authenticated");assert.equal(url.searchParams.get("public_id"),"zevenra/payment-receipts/receipt");assert.equal(url.searchParams.get("format"),"jpg");assert.ok(url.searchParams.get("signature"));assert.equal(access.expiresAt,1700000300);});
 test("receipt signing contract exposes only the four supported formats and 10 MB limit",async()=>{const source=await readFile(new URL("../server/api-implementation/payment-receipt-sign.ts",import.meta.url),"utf8");assert.match(source,/maxBytes: 10_000_000/);assert.match(source,/\["image\/jpeg", "image\/png", "image\/webp", "application\/pdf"\]/);assert.doesNotMatch(source,/image\/heic|image\/heif/);});
+
+
+test("public receipt configuration does not require the admin session secret", async () => {
+  const source = await readFile(new URL("../server/api-implementation/_shared.ts", import.meta.url), "utf8");
+  const start = source.indexOf("export function cloudinaryEnv");
+  const end = source.indexOf("export function originEnv", start);
+  const cloudinaryBlock = source.slice(start, end);
+  assert.match(cloudinaryBlock, /\.\.\.originEnv\(\)/);
+  assert.doesNotMatch(cloudinaryBlock, /authEnv\(\)/);
+});

@@ -16,7 +16,7 @@ export type AuthEnv = {
   ADMIN_PASSWORD_HASH: string;
   ALLOWED_ORIGIN: string;
 };
-export type CloudinaryEnv = AuthEnv & {
+export type CloudinaryEnv = Pick<AuthEnv, "ALLOWED_ORIGIN"> & {
   CLOUDINARY_CLOUD_NAME: string;
   CLOUDINARY_API_KEY: string;
   CLOUDINARY_API_SECRET: string;
@@ -62,7 +62,7 @@ export function authEnv(): AuthEnv {
 }
 export function cloudinaryEnv(): CloudinaryEnv {
   return {
-    ...authEnv(),
+    ...originEnv(),
     CLOUDINARY_CLOUD_NAME: required("CLOUDINARY_CLOUD_NAME"),
     CLOUDINARY_API_KEY: required("CLOUDINARY_API_KEY"),
     CLOUDINARY_API_SECRET: required("CLOUDINARY_API_SECRET"),

@@ -224,7 +224,7 @@ function OrdersView({
               <small>Payment</small>
               <b>
                 {order.paymentMethod === "cod"
-                  ? "Cash on delivery"
+                  ? (order.fulfillmentMethod === "pickup" ? "Pay at pickup" : "Cash on delivery")
                   : "Bank transfer"}
               </b>
               {order.paymentStatus && <small>{order.paymentStatus}</small>}

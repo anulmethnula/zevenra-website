@@ -343,7 +343,7 @@ export default function CheckoutPage() {
       });
       sessionStorage.setItem(`order:${order.orderId}`, JSON.stringify(order));
       rememberGuestOrder({
-        orderId: order.orderId,
+        orderId: String(order.orderNumber || order.orderId),
         createdAt: order.createdAt,
       });
       cart.clear();
@@ -563,8 +563,8 @@ export default function CheckoutPage() {
                         <input className="sr-only" type="radio" name="pay" checked={selected} onChange={() => setPayment(value)} />
                         {value === "cod" ? <Banknote size={20} /> : <WalletCards size={20} />}
                         <span className="min-w-0 flex-1">
-                          <b className="block text-xs uppercase tracking-[.1em]">{value === "cod" ? "Cash on Delivery" : "Bank Transfer"}</b>
-                          <small className="mt-0.5 block text-[10px] normal-case text-ink/50">{value === "cod" ? "Pay when your order arrives." : "Transfer before confirmation."}</small>
+                          <b className="block text-xs uppercase tracking-[.1em]">{value === "cod" ? (fulfillmentMethod === "pickup" ? "Pay at Pickup" : "Cash on Delivery") : "Bank Transfer"}</b>
+                          <small className="mt-0.5 block text-[10px] normal-case text-ink/50">{value === "cod" ? (fulfillmentMethod === "pickup" ? "Pay when you collect your order." : "Pay when your order arrives.") : "Transfer before confirmation."}</small>
                         </span>
                         <span className={`grid h-5 w-5 place-items-center rounded-full border ${selected ? "border-bronze bg-bronze text-white" : "border-black/20"}`}>{selected && <Check size={12} />}</span>
                       </motion.label>
@@ -572,7 +572,7 @@ export default function CheckoutPage() {
                   })}
                 </div>
                 {payment === "cod" ? (
-                  <PaymentAmount label="Pay on delivery" amounts={amounts} status={paymentStatus} />
+                  <PaymentAmount label={fulfillmentMethod === "pickup" ? "Pay at pickup" : "Pay on delivery"} amounts={amounts} status={paymentStatus} />
                 ) : (
                   <AnimatePresence initial={false}>
                     {bankConfigured && (
@@ -668,11 +668,11 @@ function OrderSuccessModal({ order, viewOrder, continueShopping }: { order: Orde
           Thank you! We received your order.
         </h2>
         <p className="mt-5 text-xs font-medium text-ink/50">Order ID</p>
-        <strong className="mt-1 block text-lg font-semibold">#{order.orderId}</strong>
+        <strong className="mt-1 block text-lg font-semibold">#{order.orderNumber || order.orderId}</strong>
         <p className="mt-2 text-xs leading-5 text-ink/55">Keep your Order ID. You can track this order anytime using your Order ID and the mobile number used at checkout.</p>
         <div className="mt-5 border-y border-black/10 py-4">
-          <p className="text-sm font-semibold">{order.paymentMethod === "cod" ? "Cash on Delivery" : "Payment verification pending"}</p>
-          <p className="mt-2 text-xs leading-5 text-ink/60">{order.paymentMethod === "cod" ? `Pay ${money(order.total)} when your order arrives.` : "Your receipt was submitted successfully."}</p>
+          <p className="text-sm font-semibold">{order.paymentMethod === "cod" ? (order.fulfillmentMethod === "pickup" ? "Pay at Pickup" : "Cash on Delivery") : "Payment verification pending"}</p>
+          <p className="mt-2 text-xs leading-5 text-ink/60">{order.paymentMethod === "cod" ? (order.fulfillmentMethod === "pickup" ? `Pay ${money(order.total)} when you collect your order.` : `Pay ${money(order.total)} when your order arrives.`) : "Your receipt was submitted successfully."}</p>
           {order.minimumDeliveryDays && order.maximumDeliveryDays ? <p className="mt-2 text-xs leading-5 text-ink/60">Standard shipping · {order.minimumDeliveryDays}–{order.maximumDeliveryDays} Business Days</p> : null}
         </div>
         <div className="mt-5 grid gap-3">

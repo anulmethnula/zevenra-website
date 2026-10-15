@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { authenticatedReceiptDownloadUrl } from "./_receipt-access-url.js";
 import { receiptForOrder,receiptForPreorder } from "./_data/orders.js";
 import {
+  authEnv,
   body,
   cloudinaryEnv,
   json,
@@ -13,8 +14,8 @@ import { validAdminSession } from "./_admin-auth.js";
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return methodNotAllowed(res, ["POST"]);
   try {
-    const config = cloudinaryEnv();
-    if (!await validAdminSession(req, config.SESSION_SECRET))
+    const config = cloudinaryEnv(), auth = authEnv();
+    if (!await validAdminSession(req, auth.SESSION_SECRET))
       return json(res, { error: "Session expired" }, 401);
     if (!validOrigin(req, config))
       return json(res, { error: "Invalid request origin" }, 403);

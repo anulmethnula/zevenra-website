@@ -47,8 +47,8 @@ export default function OrderPage() {
       )
       .join("\n"),
     deliveryLabel = `${order.deliveryMethodName || "Delivery"}${order.deliveryAreaGroupName ? ` (${order.deliveryAreaGroupName})` : order.pickupBranchName ? ` (${order.pickupBranchName})` : ""} — ${money(order.deliveryFee)}`,
-    message = `Hello ZEVENRA, I have submitted order ${displayOrderId}.\n\n${lines}\nSubtotal: ${money(order.subtotal)}\nDelivery: ${deliveryLabel}\nTotal: ${money(order.total)}\nName: ${order.customerName}\nCity: ${order.city}\nPayment: ${order.paymentMethod === "cod" ? "Cash on delivery" : "Bank transfer"}`,
-    success = orderSuccessCopy(order.paymentMethod, money(order.total));
+    message = `Hello ZEVENRA, I have submitted order ${displayOrderId}.\n\n${lines}\nSubtotal: ${money(order.subtotal)}\nDelivery: ${deliveryLabel}\nTotal: ${money(order.total)}\nName: ${order.customerName}\nCity: ${order.city}\nPayment: ${order.paymentMethod === "cod" ? (order.fulfillmentMethod === "pickup" ? "Pay at pickup" : "Cash on delivery") : "Bank transfer"}`,
+    success = orderSuccessCopy(order.paymentMethod, money(order.total), order.fulfillmentMethod);
   async function copyOrderId() {
     try {
       await navigator.clipboard.writeText(displayOrderId);
