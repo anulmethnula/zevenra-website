@@ -293,8 +293,8 @@ export async function updateOrder(input: Record<string, unknown>) {
     if(input.courierSentDate!==undefined&&!Number.isFinite(Date.parse(String(input.courierSentDate))))
       throw new Error("Add a valid courier handover date.");
     const cancellationReason=String(input.cancellationReason||"").trim(),cancelledBy=String(input.cancelledBy||"owner");
-    if(nextStatus==="cancelled"&&!(["pending","confirmed"].includes(currentStatus)))throw new Error("Dispatched or delivered orders must use the return workflow.");
-    if(nextStatus==="cancelled"&&!cancellationReason)throw new Error("Choose a cancellation reason.");
+    if(nextStatus==="cancelled"&&!(["pending","confirmed","cancelled"].includes(currentStatus)))throw new Error("Dispatched or delivered orders must use the return workflow.");
+    if(nextStatus==="cancelled"&&currentStatus!=="cancelled"&&!cancellationReason)throw new Error("Choose a cancellation reason.");
     const restoring=currentStatus==="cancelled"&&nextStatus!=="cancelled";
     if(restoring){
       const previous=String(current.cancelled_from_status||"");
@@ -342,7 +342,7 @@ export async function updateOrder(input: Record<string, unknown>) {
       paymentStatus = automaticCodPaid ? "paid" : nextPayment;
     const updates = ["order_status=$2", "stock_state=$3", "payment_status=$4", "updated_at=now()"],
       values: unknown[] = [orderId, nextStatus, stockState, paymentStatus];
-    if(nextStatus==="cancelled"){values.push(cancellationReason);updates.push(`cancellation_reason=$${values.length}`);values.push(cancelledBy);updates.push(`cancelled_by=$${values.length}`);updates.push("cancelled_at=now()");values.push(currentStatus);updates.push(`cancelled_from_status=$${values.length}`);}
+    if(nextStatus==="cancelled"&&currentStatus!=="cancelled"){values.push(cancellationReason);updates.push(`cancellation_reason=$${values.length}`);values.push(cancelledBy);updates.push(`cancelled_by=$${values.length}`);updates.push("cancelled_at=now()");values.push(currentStatus);updates.push(`cancelled_from_status=$${values.length}`);}
     if(restoring)updates.push("cancelled_at=NULL,cancelled_by=NULL,cancellation_reason=NULL");
     for (const key of fields)
       if (input[key] !== undefined) {

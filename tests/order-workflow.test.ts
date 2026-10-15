@@ -116,3 +116,11 @@ test("delivery cleanup creates an empty actual-courier registry and drops the le
   assert.doesNotMatch(sql,/INSERT INTO fulfilment_couriers/i);
   assert.doesNotMatch(sql,/SONIK/i);
 });
+
+
+test("repeat owner cancellation is idempotent and preserves original cancellation evidence", async () => {
+  const source = await readFile(new URL("../server/api-implementation/_data/orders-legacy.ts", import.meta.url), "utf8");
+  assert.match(source, /\["pending","confirmed","cancelled"\]\.includes\(currentStatus\)/);
+  assert.match(source, /currentStatus!=="cancelled"&&!cancellationReason/);
+  assert.match(source, /nextStatus==="cancelled"&&currentStatus!=="cancelled"\)\{values\.push\(cancellationReason\)/);
+});
