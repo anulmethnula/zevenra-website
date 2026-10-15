@@ -137,10 +137,7 @@ export type SiteSettings = {
   accountNumber: string;
   branch: string;
   bankInstructions: string;
-  deliveryEnabled: boolean;
-  deliveryFee: number;
   freeDeliveryThreshold: number;
-  defaultCourierProviderId: string;
   currency: string;
   storeOpen: boolean;
   ordersEnabled: boolean;
@@ -175,8 +172,6 @@ export type StoreData = {
   navigation: NavigationItem[];
   homepageSections: HomepageSection[];
   sizeCharts: SizeChart[];
-  couriers: CourierProvider[];
-  deliveryRates: DeliveryRate[];
   settings: SiteSettings;
   pages: ContentPage[];
 };
@@ -208,7 +203,12 @@ export type GuestTrackedOrder = {
   orderStatus: OrderStatus;
   paymentMethod: string;
   paymentStatus: string;
-  deliveryZoneName: string;
+  fulfillmentMethod?: "flat" | "area_group" | "pickup";
+  deliveryMethodName?: string;
+  deliveryAreaGroupName?: string;
+  pickupBranchName?: string;
+  pickupBranchAddress?: string;
+  pickupInstructions?: string;
   fulfilmentCourierName: string;
   trackingNumber: string;
   trackingUrl: string;
@@ -273,11 +273,6 @@ export type Order = {
   district: string;
   postalCode?: string;
   deliveryNotes?: string;
-  courierProviderId?: string;
-  courierName?: string;
-  deliveryPricingMode?: DeliveryPricingMode;
-  deliveryRatePlan?: string;
-  deliveryZoneName?: string;
   fulfilmentCourierId?: string;
   fulfilmentCourierName?: string;
   trackingNumber?: string;
@@ -334,10 +329,14 @@ export type CustomerOrder = {
   district?: string;
   postalCode?: string;
   deliveryNotes?: string;
-  courierName?: string;
-  deliveryPricingMode?: DeliveryPricingMode;
-  deliveryRatePlan?: string;
-  deliveryZoneName?: string;
+  fulfillmentMethod?: "flat" | "area_group" | "pickup";
+  deliveryMethodName?: string;
+  deliveryAreaGroupId?: string;
+  deliveryAreaGroupName?: string;
+  pickupLocationId?: string;
+  pickupBranchName?: string;
+  pickupBranchAddress?: string;
+  pickupInstructions?: string;
   fulfilmentCourierName?: string;
   trackingNumber?: string;
   trackingUrl?: string;
@@ -355,21 +354,6 @@ export type CustomerOrder = {
   cancellationReason?: string;
   items: CustomerOrderItem[];
 };
-export type DeliveryPricingMode = "zone" | "flat";
-export type CourierProvider = {
-  id: string;
-  name: string;
-  phone?: string;
-  notes?: string;
-  dispatchBranch?: string;
-  pricingMode: DeliveryPricingMode;
-  flatRate: number;
-  active: boolean;
-  minimumDeliveryDays: number;
-  maximumDeliveryDays: number;
-  createdAt?: string;
-  updatedAt?: string;
-};
 export type FulfilmentCourier = {
   id: string;
   name: string;
@@ -381,19 +365,11 @@ export type FulfilmentCourier = {
   createdAt?: string;
   updatedAt?: string;
 };
-export type DeliveryRate = {
-  id: string;
-  courierProviderId?: string;
-  name: string;
-  fee: number;
-  active: boolean;
-  districts: string[];
-  cities: string[];
-  postalCodes: string[];
-  fallback: boolean;
-  sortOrder: number;
-  district?: string;
-};
+export type DeliveryMethod={type:"flat"|"area_group"|"pickup";displayName:string;active:boolean;fee:number|null;minimumDeliveryDays:number|null;maximumDeliveryDays:number|null;sortOrder:number};
+export type DeliveryAreaGroup={id:string;name:string;fee:number|null;active:boolean;fallback:boolean;sortOrder:number};
+export type DeliveryAreaLocation={id:string;groupId:string;district:string;town:string;postcode?:string;aliases:string[];active:boolean};
+export type PickupLocation={id:string;name:string;address:string;instructions:string;active:boolean;sortOrder:number};
+export type FulfillmentConfig={methods:DeliveryMethod[];groups:DeliveryAreaGroup[];locations:DeliveryAreaLocation[];districtDefaults:Array<{district:string;groupId:string}>;pickupLocations:PickupLocation[]};
 export type DashboardTopProduct = {
   productId: string;
   name: string;

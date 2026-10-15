@@ -25,15 +25,16 @@ import { invalidatePublic } from "../../services/publicDataCache";
 import { useStore } from "../../features/store/StoreContext";
 import { adminToast } from "../../components/admin/AdminToasts";
 import { paymentRejectionReasons, paymentRetryMessage } from "../../utils/preorderPayment";
-import { CourierRateSheetImport } from "../../components/admin/CourierRateSheetImport";
 import { convertedOrderStatusLabel, normalizeOrderStatus, orderStatusLabel } from "../../../shared/order-status";
 import { selectDispatchCourierId, sriLankaDateTimeLocal, sriLankaDateTimeToIso } from "../../../shared/dispatch";
 import HomepageBuilder from "../../components/admin/homepage/HomepageBuilder";
 import type {
   Category,
   Collection,
-  CourierProvider,
-  DeliveryRate,
+  DeliveryAreaGroup,
+  DeliveryMethod,
+  FulfillmentConfig,
+  FulfilmentCourier,
   FinanceData,
   HomepageSection,
   NavigationItem,
@@ -1411,779 +1412,27 @@ function ChartCard({
   );
 }
 
-type DeliveryNotice = {
-  tone: "success" | "error";
-  message: string;
-};
-
 function DeliveryRates() {
-  const s = useStore(),
-    [couriers, setCouriers] = useState(s.admin.couriers),
-    [rates, setRates] = useState(s.admin.deliveryRates),
-    [defaultId, setDefaultId] = useState(
-      s.data.settings.defaultCourierProviderId,
-    ),
-    [busy, setBusy] = useState(false),
-    [notice, setNotice] = useState<DeliveryNotice | null>(null),
-    [rateCards, setRateCards] = useState<Array<{courierProviderId:string;version:number;status:string;importedAt:string;total:number}>>([]),
-    [editingCourier, setEditingCourier] = useState<string | null>(null),
-    [editingZone, setEditingZone] = useState<string | null>(null);
-
-  useEffect(() => {
-    setCouriers(s.admin.couriers);
-    setRates(s.admin.deliveryRates);
-    setDefaultId(s.data.settings.defaultCourierProviderId);
-  }, [
-    s.admin.couriers,
-    s.admin.deliveryRates,
-    s.data.settings.defaultCourierProviderId,
-  ]);
-
-  useEffect(() => {
-    if (notice?.tone !== "success") return;
-    const timer = window.setTimeout(() => setNotice(null), 3200);
-    return () => window.clearTimeout(timer);
-  }, [notice]);
-
-  useEffect(() => { void adminApi.get<Array<{courierProviderId:string;version:number;status:string;importedAt:string;total:number}>>("listCourierRateCards").then(setRateCards).catch(()=>undefined); }, []);
-
-  const updateCourier = (id: string, patch: Partial<CourierProvider>) =>
-    setCouriers((items) =>
-      items.map((item) => (item.id === id ? { ...item, ...patch } : item)),
-    );
-
-  const updateRate = (id: string, patch: Partial<DeliveryRate>) =>
-    setRates((items) =>
-      items.map((item) => (item.id === id ? { ...item, ...patch } : item)),
-    );
-
-  const addCourier = () => {
-    const id = crypto.randomUUID();
-    setCouriers((items) => [
-      ...items,
-      {
-        id,
-        name: "",
-        phone: "",
-        notes: "",
-        pricingMode: "flat",
-        flatRate: 0,
-        active: true,
-        minimumDeliveryDays: 2,
-        maximumDeliveryDays: 4,
-      },
-    ]);
-    if (!defaultId) setDefaultId(id);
-    setEditingCourier(id);
-    setNotice(null);
-  };
-
-  const removeCourier = (id: string) => {
-    const next = couriers.filter((item) => item.id !== id);
-    setCouriers(next);
-    setRates((items) =>
-      items.filter((item) => item.courierProviderId !== id),
-    );
-    if (defaultId === id)
-      setDefaultId(next.find((item) => item.active)?.id || "");
-    setNotice(null);
-  };
-
-  const changeActive = (id: string, active: boolean) => {
-    updateCourier(id, { active });
-    if (!active && defaultId === id) {
-      const next = couriers.find((item) => item.id !== id && item.active);
-      setDefaultId(next?.id || "");
-    } else if (active && !defaultId) {
-      setDefaultId(id);
-    }
-  };
-
-  const changePricingMode = (
-    courier: CourierProvider,
-    pricingMode: CourierProvider["pricingMode"],
-  ) => {
-    updateCourier(courier.id, { pricingMode });
-    if (pricingMode !== "zone") return;
-    setRates((items) => {
-      if (items.some((item) => item.courierProviderId === courier.id))
-        return items;
-      return [
-        ...items,
-        {
-          id: crypto.randomUUID(),
-          courierProviderId: courier.id,
-          name: "All other districts",
-          fee: courier.flatRate || 0,
-          active: true,
-          districts: [],
-          cities: [],
-          postalCodes: [],
-          fallback: true,
-          sortOrder: items.length + 1,
-        },
-      ];
-    });
-  };
-
-  const addZone = (courier: CourierProvider) => {
-    const id = crypto.randomUUID();
-    setRates((items) => [
-      ...items,
-      {
-        id,
-        courierProviderId: courier.id,
-        name: "New delivery area",
-        fee: courier.flatRate || 0,
-        active: true,
-        districts: [],
-        cities: [],
-        postalCodes: [],
-        fallback: false,
-        sortOrder: items.length + 1,
-      },
-    ]);
-    setEditingZone(id);
-  };
-
-  const setFallback = (courierId: string, rateId: string) =>
-    setRates((items) =>
-      items.map((item) =>
-        item.courierProviderId !== courierId
-          ? item
-          : { ...item, fallback: item.id === rateId },
-      ),
-    );
-
-  const fail = (message: string) => {
-    setNotice({ tone: "error", message });
-    return false;
-  };
-
-  async function submit(nextDefaultId = defaultId) {
-    setNotice(null);
-
-    const selected = couriers.find((item) => item.id === nextDefaultId);
-    if (!selected?.active)
-      return fail("Choose an active default courier before saving.");
-
-    for (const courier of couriers) {
-      if (!courier.name.trim())
-        return fail("Give every courier a name before saving.");
-      if (!Number.isFinite(courier.flatRate) || courier.flatRate < 0)
-        return fail(courier.name + ": delivery fee must be 0 or more.");
-
-      if (courier.pricingMode === "zone") {
-        const courierRates = rates.filter(
-          (rate) => rate.courierProviderId === courier.id,
-        );
-        if (!courierRates.length)
-          return fail(courier.name + ": add at least one delivery area.");
-        if (
-          courierRates.some(
-            (rate) =>
-              !rate.name.trim() || !Number.isFinite(rate.fee) || rate.fee < 0,
-          )
-        )
-          return fail(
-            courier.name + ": every delivery area needs a name and valid fee.",
-          );
-        if (
-          courierRates.filter((rate) => rate.active && rate.fallback).length !==
-          1
-        )
-          return fail(
-            courier.name + ": choose exactly one fallback delivery area.",
-          );
-        const emptyArea = courierRates.find(
-          (rate) =>
-            rate.active &&
-            !rate.fallback &&
-            !rate.districts.length &&
-            !rate.cities.length &&
-            !rate.postalCodes.length,
-        );
-        if (emptyArea)
-          return fail(
-            emptyArea.name +
-              ": choose at least one district, or make it the fallback area.",
-          );
-      }
-    }
-
-    setBusy(true);
-    try {
-      await s.saveCourierConfig(couriers, rates, nextDefaultId);
-      setNotice({
-        tone: "success",
-        message: "Delivery settings saved",
-      });
-    } catch (reason) {
-      setNotice({
-        tone: "error",
-        message:
-          reason instanceof Error
-            ? reason.message
-            : "Could not save delivery settings.",
-      });
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const makeDefault = async (courier: CourierProvider) => {
-    if (!courier.active || courier.id === defaultId || busy) return;
-    setDefaultId(courier.id);
-    await submit(courier.id);
-  };
-
-  const reset = () => {
-    setCouriers(s.admin.couriers);
-    setRates(s.admin.deliveryRates);
-    setDefaultId(s.data.settings.defaultCourierProviderId);
-    setNotice(null);
-  };
-
-  const selected = couriers.find((item) => item.id === defaultId);
-  const dirty = JSON.stringify({ couriers, rates, defaultId }) !== JSON.stringify({
-    couriers: s.admin.couriers,
-    rates: s.admin.deliveryRates,
-    defaultId: s.data.settings.defaultCourierProviderId,
-  });
-  const zoneBeingEdited = rates.find((rate) => rate.id === editingZone);
-
-  return (
-    <div className="mx-auto max-w-[1120px]">
-      {notice && (
-        <div
-          className={
-            "fixed right-5 top-20 z-[100] w-[min(390px,calc(100vw-40px))] rounded-xl border px-4 py-4 shadow-2xl " +
-            (notice.tone === "success"
-              ? "border-emerald-900/15 bg-[#f2f8f3] text-emerald-950"
-              : "border-red-900/15 bg-[#fff5f2] text-red-950")
-          }
-          role="status"
-        >
-          <div className="flex items-start gap-3">
-            <span
-              className={
-                "mt-1 h-2.5 w-2.5 shrink-0 rounded-full " +
-                (notice.tone === "success" ? "bg-emerald-700" : "bg-red-700")
-              }
-            />
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold uppercase tracking-[.12em]">
-                {notice.tone === "success" ? "Saved" : "Check this"}
-              </p>
-              <p className="mt-1 text-xs leading-5 opacity-75">
-                {notice.message}
-              </p>
-            </div>
-            <button
-              type="button"
-              className="text-lg leading-none opacity-40 hover:opacity-80"
-              onClick={() => setNotice(null)}
-              aria-label="Close message"
-            >
-              ×
-            </button>
-          </div>
-        </div>
-      )}
-
-      <Head
-        eyebrow="Checkout logistics"
-        title="Delivery"
-        action={
-          <button className="btn btn-dark" onClick={addCourier}>
-            <Plus size={15} /> Add courier
-          </button>
-        }
-      />
-
-      <section className="mt-7 overflow-hidden rounded-2xl border border-black/[.07] bg-[#f8f6f1] shadow-[0_18px_60px_rgba(17,17,15,.05)]">
-        <div className="grid gap-6 p-5 sm:p-7 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-center">
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[.18em] text-black/45">
-              Checkout courier
-            </p>
-            <h2 className="mt-2 text-2xl font-medium tracking-[-.02em]">
-              Keep delivery simple.
-            </h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-black/50">
-              Customers never choose a courier. Set one default courier here,
-              then choose either one nationwide price or district-based prices.
-            </p>
-          </div>
-
-          <div className="rounded-xl border border-black/[.07] bg-white p-4 text-xs">
-            <p className="text-[9px] font-semibold uppercase tracking-[.14em] text-black/40">Current default</p>
-            <p className="mt-2 font-medium">{selected?.name || "No default courier"}</p>
-            <p className="mt-1 text-[10px] leading-5 text-black/45">Use Make default on an active courier below to change checkout.</p>
-          </div>
-        </div>
-
-        {selected?.active && (
-          <div className="flex flex-wrap items-center gap-2 border-t border-black/[.07] bg-white/55 px-5 py-4 text-xs sm:px-7">
-            <span className="rounded-full bg-black px-2.5 py-1 text-[9px] uppercase tracking-[.14em] text-white">
-              Live checkout
-            </span>
-            <b>{selected.name || "New courier"}</b>
-            <span className="text-black/45">
-              {selected.pricingMode === "flat"
-                ? money(selected.flatRate) + " nationwide"
-                : "District-based pricing"}
-            </span>
-          </div>
-        )}
-      </section>
-
-      {!!couriers.length && <div className="mt-5 grid gap-3">
-        {couriers.map((courier) => { const courierRates=rates.filter((rate)=>rate.courierProviderId===courier.id),activeCard=rateCards.find((card)=>card.courierProviderId===courier.id&&card.status==="active"); return <article key={courier.id} className="grid gap-4 rounded-2xl border border-black/[.07] bg-white p-5 shadow-[0_8px_30px_rgba(17,17,15,.03)] md:grid-cols-[minmax(0,1fr)_220px_auto] md:items-center">
-          <div><div className="flex flex-wrap items-center gap-2"><h3 className="text-base font-medium">{courier.name || "Unnamed courier"}</h3>{courier.id===defaultId&&<span className="admin-status admin-status--info">Default</span>}<span className={courier.active?"admin-status admin-status--success":"admin-status"}>{courier.active?"Active":"Inactive"}</span></div><p className="mt-2 text-xs text-black/45">{courier.pricingMode==="flat"?`Flat rate · ${money(courier.flatRate)} nationwide`:`Zone pricing · ${courierRates.length} area${courierRates.length===1?"":"s"}`}</p></div>
-          <div className="text-xs text-black/45">{activeCard?<>Imported rate card v{activeCard.version}<span className="mt-1 block text-[10px]">{new Date(activeCard.importedAt).toLocaleDateString()} · {activeCard.total.toLocaleString()} rates</span></>:courier.pricingMode==="zone"?`${courierRates.filter((rate)=>rate.active).length} active delivery zones`:"Simple checkout pricing"}</div>
-          <div className="flex flex-wrap gap-2"><button type="button" className="btn" onClick={()=>setEditingCourier(courier.id)}>Manage</button>{courier.id!==defaultId&&<button type="button" className="btn btn-dark" disabled={busy||!courier.active} title={courier.active?"Make this the checkout courier":"Activate this courier before making it default"} onClick={()=>void makeDefault(courier)}>Make default</button>}</div>
-        </article>;})}
-      </div>}
-
-      {!couriers.length && (
-        <section className="mt-5 rounded-2xl border border-dashed border-black/15 bg-white/45 p-8 text-center sm:p-12">
-          <p className="text-lg font-medium">No courier configured</p>
-          <p className="mx-auto mt-2 max-w-lg text-xs leading-6 text-black/45">
-            Add your courier, enter the actual delivery price, and save. That
-            is enough for a normal nationwide setup.
-          </p>
-          <button className="btn btn-dark mt-5" onClick={addCourier}>
-            <Plus size={15} /> Add first courier
-          </button>
-        </section>
-      )}
-
-      {editingCourier && <AdminDrawer title={couriers.find((courier)=>courier.id===editingCourier)?.name || "Courier details"} onClose={()=>setEditingCourier(null)}><div className="grid gap-5">
-        {couriers.filter((courier)=>courier.id===editingCourier).map((courier, courierIndex) => {
-          const courierRates = rates.filter(
-              (rate) => rate.courierProviderId === courier.id,
-            ),
-            isDefault = courier.id === defaultId;
-
-          return (
-            <section
-              key={courier.id}
-              className="overflow-hidden rounded-2xl border border-black/[.07] bg-white shadow-[0_10px_40px_rgba(17,17,15,.035)]"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-black/[.07] px-5 py-4 sm:px-7">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[10px] font-semibold uppercase tracking-[.16em] text-black/35">
-                    Courier {String(courierIndex + 1).padStart(2, "0")}
-                  </span>
-                  {isDefault && (
-                    <span className="rounded-full bg-black px-2.5 py-1 text-[9px] uppercase tracking-[.12em] text-white">
-                      Default
-                    </span>
-                  )}
-                  <span
-                    className={
-                      courier.active
-                        ? "rounded-full bg-emerald-900/[.06] px-2.5 py-1 text-[9px] uppercase tracking-[.12em] text-emerald-900"
-                        : "rounded-full bg-black/[.04] px-2.5 py-1 text-[9px] uppercase tracking-[.12em] text-black/40"
-                    }
-                  >
-                    {courier.active ? "Active" : "Inactive"}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  className="text-xs text-red-800/75 underline underline-offset-4 hover:text-red-900"
-                  onClick={() => confirm(`Remove ${courier.name || "this courier"} and its unsaved delivery zones?`) && removeCourier(courier.id)}
-                >
-                  Remove
-                </button>
-              </div>
-
-              <div className="p-5 sm:p-7">
-                <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-end">
-                  <label className="block text-xs font-medium">
-                    Courier name
-                    <input
-                      className="field mt-2"
-                      value={courier.name}
-                      placeholder="e.g. Domex, Prompt Xpress"
-                      onChange={(event) =>
-                        updateCourier(courier.id, {
-                          name: event.target.value,
-                        })
-                      }
-                    />
-                  </label>
-
-                  <label className="flex min-h-[52px] items-center gap-3 rounded-xl border border-black/[.08] bg-[#f8f6f1] px-4 text-xs">
-                    <input
-                      className="h-5 w-5 accent-black"
-                      type="checkbox"
-                      checked={courier.active}
-                      onChange={(event) =>
-                        changeActive(courier.id, event.target.checked)
-                      }
-                    />
-                    <span>
-                      <b>Active</b>
-                      <small className="mt-0.5 block text-[10px] leading-4 text-black/40">
-                        Available for checkout
-                      </small>
-                    </span>
-                  </label>
-                </div>
-
-                <div className="mt-7 border-t border-black/[.07] pt-6">
-                  <p className="text-xs font-medium">Delivery pricing</p>
-                  <p className="mt-1 text-[11px] leading-5 text-black/42">
-                    Choose the option that matches the rate card your courier
-                    gave you.
-                  </p>
-
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                    <button
-                      type="button"
-                      className={
-                        "rounded-xl border p-4 text-left transition " +
-                        (courier.pricingMode === "flat"
-                          ? "border-black bg-black text-white"
-                          : "border-black/[.08] bg-[#faf9f6] hover:border-black/25")
-                      }
-                      onClick={() => changePricingMode(courier, "flat")}
-                    >
-                      <b className="block text-sm">One price nationwide</b>
-                      <span
-                        className={
-                          "mt-1 block text-[11px] leading-5 " +
-                          (courier.pricingMode === "flat"
-                            ? "text-white/60"
-                            : "text-black/42")
-                        }
-                      >
-                        Best when the courier charges one delivery fee.
-                      </span>
-                    </button>
-
-                    <button
-                      type="button"
-                      className={
-                        "rounded-xl border p-4 text-left transition " +
-                        (courier.pricingMode === "zone"
-                          ? "border-black bg-black text-white"
-                          : "border-black/[.08] bg-[#faf9f6] hover:border-black/25")
-                      }
-                      onClick={() => changePricingMode(courier, "zone")}
-                    >
-                      <b className="block text-sm">Different by district</b>
-                      <span
-                        className={
-                          "mt-1 block text-[11px] leading-5 " +
-                          (courier.pricingMode === "zone"
-                            ? "text-white/60"
-                            : "text-black/42")
-                        }
-                      >
-                        Pick districts with buttons. No manual lists needed.
-                      </span>
-                    </button>
-                  </div>
-                </div>
-
-                {courier.pricingMode === "flat" ? (
-                  <div className="mt-5 max-w-md rounded-xl border border-black/[.08] bg-[#f8f6f1] p-5">
-                    <label className="block text-xs font-medium">
-                      Nationwide delivery fee
-                      <div className="mt-2 flex items-center overflow-hidden rounded-lg border border-black/10 bg-white">
-                        <span className="border-r border-black/[.07] px-4 text-[11px] font-medium text-black/40">
-                          LKR
-                        </span>
-                        <input
-                          className="min-h-[52px] min-w-0 flex-1 border-0 bg-transparent px-4 text-base outline-none"
-                          type="number"
-                          min="0"
-                          value={courier.flatRate}
-                          onChange={(event) =>
-                            updateCourier(courier.id, {
-                              flatRate: Number(event.target.value),
-                            })
-                          }
-                        />
-                      </div>
-                    </label>
-                    <p className="mt-2 text-[10px] leading-5 text-black/40">
-                      This is the only price required for a nationwide setup.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="mt-6">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-medium">District pricing</p>
-                        <p className="mt-1 text-[11px] leading-5 text-black/42">
-                          Create special areas, then keep one fallback area for
-                          every district that does not match.
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        className="btn"
-                        onClick={() => addZone(courier)}
-                      >
-                        <Plus size={14} /> Add area
-                      </button>
-                    </div>
-
-                    <div className="mt-4 grid gap-4">
-                      {courierRates.map((rate) => (
-                        <div
-                          key={rate.id}
-                          className="rounded-xl border border-black/[.08] bg-[#faf9f6] p-4 sm:p-5"
-                        >
-                          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_190px]">
-                            <label className="block text-xs font-medium">
-                              Area name
-                              <input
-                                className="field mt-2"
-                                value={rate.name}
-                                placeholder="e.g. Colombo & Gampaha"
-                                onChange={(event) =>
-                                  updateRate(rate.id, {
-                                    name: event.target.value,
-                                  })
-                                }
-                              />
-                            </label>
-
-                            <label className="block text-xs font-medium">
-                              Delivery fee
-                              <div className="mt-2 flex items-center overflow-hidden rounded-lg border border-black/10 bg-white">
-                                <span className="border-r border-black/[.07] px-3 text-[10px] text-black/40">
-                                  LKR
-                                </span>
-                                <input
-                                  className="min-h-[48px] min-w-0 flex-1 border-0 bg-transparent px-3 outline-none"
-                                  type="number"
-                                  min="0"
-                                  value={rate.fee}
-                                  onChange={(event) =>
-                                    updateRate(rate.id, {
-                                      fee: Number(event.target.value),
-                                    })
-                                  }
-                                />
-                              </div>
-                            </label>
-                          </div>
-
-                          <div className="mt-4 flex flex-wrap items-center gap-2">
-                            <label className="flex min-h-10 items-center gap-2 rounded-lg border border-black/[.08] bg-white px-3 text-xs">
-                              <input
-                                className="h-4 w-4 accent-black"
-                                type="checkbox"
-                                checked={rate.active}
-                                onChange={(event) =>
-                                  updateRate(rate.id, {
-                                    active: event.target.checked,
-                                  })
-                                }
-                              />
-                              Active
-                            </label>
-
-                            <button
-                              type="button"
-                              className={
-                                rate.fallback
-                                  ? "min-h-10 rounded-lg border border-black bg-black px-3 text-xs text-white"
-                                  : "min-h-10 rounded-lg border border-black/[.08] bg-white px-3 text-xs"
-                              }
-                              onClick={() => setFallback(courier.id, rate.id)}
-                            >
-                              {rate.fallback
-                                ? "Fallback for other districts ✓"
-                                : "Use as fallback"}
-                            </button>
-
-                            <button
-                              type="button"
-                              className="btn"
-                              onClick={() => setEditingZone(rate.id)}
-                            >
-                              Edit details
-                            </button>
-
-                            <button
-                              type="button"
-                              className="ml-auto min-h-10 px-2 text-xs text-red-800/75"
-                              onClick={() =>
-                                setRates((items) =>
-                                  items.filter((item) => item.id !== rate.id),
-                                )
-                              }
-                            >
-                              <Trash2 size={14} className="inline" /> Remove
-                            </button>
-                          </div>
-
-                          {rate.fallback ? (
-                            <p className="mt-4 rounded-lg bg-black/[.035] px-4 py-3 text-[10px] leading-5 text-black/45">
-                              This price is used automatically for every
-                              district not selected in another active area.
-                            </p>
-                          ) : (
-                            <div className="mt-5">
-                              <DistrictPicker
-                                values={rate.districts}
-                                onChange={(districts) =>
-                                  updateRate(rate.id, { districts })
-                                }
-                              />
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <details className="mt-6 rounded-xl border border-black/[.07] bg-[#faf9f6]">
-                  <summary className="cursor-pointer list-none px-4 py-3 text-xs font-medium">
-                    Optional courier details
-                    <span className="ml-2 font-normal text-black/35">
-                      phone & internal note
-                    </span>
-                  </summary>
-                  <div className="grid gap-4 border-t border-black/[.07] p-4 md:grid-cols-2">
-                    <label className="block text-xs">
-                      Contact phone
-                      <input
-                        className="field mt-2"
-                        value={courier.phone || ""}
-                        onChange={(event) =>
-                          updateCourier(courier.id, {
-                            phone: event.target.value,
-                          })
-                        }
-                      />
-                    </label>
-                    <label className="block text-xs">
-                      Internal note
-                      <textarea
-                        className="field mt-2 resize-y"
-                        rows={2}
-                        value={courier.notes || ""}
-                        onChange={(event) =>
-                          updateCourier(courier.id, {
-                            notes: event.target.value,
-                          })
-                        }
-                      />
-                    </label>
-                  </div>
-                </details>
-              </div>
-            </section>
-          );
-        })}
-        <CourierRateSheetImport couriers={couriers} courierId={editingCourier} />
-      </div></AdminDrawer>}
-
-      {zoneBeingEdited && <AdminDrawer title={zoneBeingEdited.name || "Delivery zone"} onClose={() => setEditingZone(null)}><div className="space-y-5">
-        <Panel title="Zone identity"><Field label="Zone name" value={zoneBeingEdited.name} onChange={(name) => updateRate(zoneBeingEdited.id,{name})}/><div className="text-xs">Courier<p className="field mt-2 flex items-center">{couriers.find((courier)=>courier.id===zoneBeingEdited.courierProviderId)?.name || "Unnamed courier"}</p></div></Panel>
-        <Panel title="Price"><label className="block text-xs">Delivery fee (LKR)<input className="field mt-2" type="number" min="0" value={zoneBeingEdited.fee} onChange={(event) => updateRate(zoneBeingEdited.id,{fee:Number(event.target.value)})}/></label></Panel>
-        <Panel title="District coverage"><DistrictPicker values={zoneBeingEdited.districts} onChange={(districts) => updateRate(zoneBeingEdited.id,{districts})}/></Panel>
-        <Panel title="Cities / Areas"><textarea className="field min-h-28" value={zoneBeingEdited.cities.join("\n")} onChange={(event) => updateRate(zoneBeingEdited.id,{cities:event.target.value.split(/[,\n]/).map((value)=>value.trim()).filter(Boolean)})} placeholder="One city or area per line" /></Panel>
-        <Panel title="Postal codes"><textarea className="field min-h-28" value={zoneBeingEdited.postalCodes.join("\n")} onChange={(event) => updateRate(zoneBeingEdited.id,{postalCodes:event.target.value.split(/[,\n]/).map((value)=>value.trim()).filter(Boolean)})} placeholder="One postal code or prefix per line" /></Panel>
-        <Panel title="State & priority"><Toggles items={[["Active",zoneBeingEdited.active,(active)=>updateRate(zoneBeingEdited.id,{active})],["Fallback",zoneBeingEdited.fallback,(fallback)=>fallback?setFallback(zoneBeingEdited.courierProviderId || "",zoneBeingEdited.id):updateRate(zoneBeingEdited.id,{fallback:false})]]}/><label className="block text-xs">Sort order<input className="field mt-2" type="number" min="0" value={zoneBeingEdited.sortOrder} onChange={(event) => updateRate(zoneBeingEdited.id,{sortOrder:Number(event.target.value)})}/></label><div className="mt-5 rounded-xl bg-black/[.04] p-4 text-xs leading-6"><b className="block">Matching priority</b>Postal code<br/>→ City / Area<br/>→ District<br/>→ Outstation / Fallback</div></Panel>
-        <div className="sticky bottom-0 flex items-center justify-between gap-2 border-t border-black/10 bg-[#e9e5de]/95 p-4 backdrop-blur"><span className="text-xs text-amber-800">{dirty ? "Unsaved changes" : ""}</span><div className="flex gap-2"><button type="button" className="btn" onClick={() => setEditingZone(null)}>Close</button><button type="button" className="btn btn-dark" disabled={busy||!dirty} onClick={() => void submit()}>{busy ? "SAVING…" : "SAVE DELIVERY SETTINGS"}</button></div></div>
-      </div></AdminDrawer>}
-
-      {!!couriers.length && (
-        <div className="sticky bottom-4 z-20 mt-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-black/10 bg-[#f8f6f1]/95 p-4 shadow-[0_18px_55px_rgba(17,17,15,.14)] backdrop-blur sm:px-5">
-          <div>
-            <p className="text-xs font-medium">{dirty ? "Unsaved changes" : "Delivery settings are up to date"}</p>
-            <p className="mt-1 text-[10px] text-black/40">
-              Nothing changes for customers until you press Save delivery.
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              className="btn"
-              disabled={busy || !dirty}
-              onClick={reset}
-            >
-              Reset
-            </button>
-            <button
-              type="button"
-              className="btn btn-dark min-w-[150px]"
-              disabled={busy || !dirty}
-              onClick={() => void submit()}
-            >
-              {busy ? "SAVING…" : "SAVE DELIVERY SETTINGS"}
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+  return <DeliveryConfiguration />;
 }
 
-function DistrictPicker({
-  values,
-  onChange,
-}: {
-  values: string[];
-  onChange: (values: string[]) => void;
-}) {
-  const selected = new Set(values);
-  const toggle = (district: string) =>
-    onChange(
-      selected.has(district)
-        ? values.filter((value) => value !== district)
-        : [...values, district],
-    );
-
-  return (
-    <div>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <p className="text-xs font-medium">Select districts</p>
-          <p className="mt-1 text-[10px] leading-4 text-black/40">
-            Click once to include a district. Click again to remove it.
-          </p>
-        </div>
-        {!!values.length && (
-          <button
-            type="button"
-            className="text-[10px] text-black/45 underline underline-offset-4"
-            onClick={() => onChange([])}
-          >
-            Clear selection
-          </button>
-        )}
-      </div>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {sriLankaDistricts.map((district) => (
-          <button
-            key={district}
-            type="button"
-            onClick={() => toggle(district)}
-            className={
-              selected.has(district)
-                ? "rounded-full border border-black bg-black px-3 py-2 text-[10px] text-white"
-                : "rounded-full border border-black/[.08] bg-white px-3 py-2 text-[10px] text-black/60 hover:border-black/30"
-            }
-          >
-            {district}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
+function DeliveryConfiguration() {
+  const [config,setConfig]=useState<FulfillmentConfig|null>(null),[couriers,setCouriers]=useState<FulfilmentCourier[]>([]),[busy,setBusy]=useState(false),[message,setMessage]=useState("");
+  const load=useCallback(async()=>{try{const [nextConfig,nextCouriers]=await Promise.all([adminApi.get<FulfillmentConfig>("getFulfillmentConfig"),adminApi.get<FulfilmentCourier[]>("listFulfilmentCouriers")]);setConfig(nextConfig);setCouriers(nextCouriers);}catch(reason){setMessage(reason instanceof Error?reason.message:"Could not load delivery settings.");}},[]);
+  useEffect(()=>{void load();},[load]);
+  const patchMethod=(type:DeliveryMethod["type"],patch:Partial<DeliveryMethod>)=>setConfig(current=>current?{...current,methods:current.methods.map(item=>item.type===type?{...item,...patch}:item)}:current);
+  const patchGroup=(id:string,patch:Partial<DeliveryAreaGroup>)=>setConfig(current=>current?{...current,groups:current.groups.map(item=>item.id===id?{...item,...patch}:item)}:current);
+  const patchCourier=(id:string,patch:Partial<FulfilmentCourier>)=>setCouriers(items=>items.map(item=>item.id===id?{...item,...patch}:item));
+  async function saveConfig(){if(!config)return;setBusy(true);try{setConfig(await adminApi.post<FulfillmentConfig>("saveFulfillmentConfig",config));setMessage("Customer delivery settings saved.");}catch(reason){setMessage(reason instanceof Error?reason.message:"Could not save delivery settings.");}finally{setBusy(false);}}
+  async function saveCourier(courier:FulfilmentCourier){setBusy(true);try{await adminApi.post("saveFulfilmentCourier",courier);await load();setMessage("Courier company saved.");}catch(reason){setMessage(reason instanceof Error?reason.message:"Could not save courier company.");}finally{setBusy(false);}}
+  if(!config)return <Empty text={message||"Loading delivery settings…"}/>;
+  return <div className="mx-auto max-w-[1120px] space-y-8"><Head eyebrow="Checkout logistics" title="Delivery"/>{message?<p className="rounded-xl border border-black/10 bg-white p-4 text-xs" role="status">{message}</p>:null}
+    <section><p className="eyebrow text-black/45">Customer delivery</p><h2 className="mt-2 text-xl font-medium">Methods shown at checkout</h2><div className="mt-4 grid gap-4 lg:grid-cols-3">{config.methods.map(method=><Panel key={method.type} title={method.type==="flat"?"1. Standard Delivery":method.type==="area_group"?"2. Area Group Delivery":"3. Collect From Branch"}><div className="space-y-3"><Field label="Display name" value={method.displayName} onChange={displayName=>patchMethod(method.type,{displayName})}/><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={method.active} onChange={event=>patchMethod(method.type,{active:event.target.checked})}/> Active</label>{method.type==="flat"?<label className="block text-xs">Fee<input className="field mt-2" type="number" min="0" value={method.fee??0} onChange={event=>patchMethod(method.type,{fee:Number(event.target.value)})}/></label>:null}{method.type!=="pickup"?<div className="grid grid-cols-2 gap-2"><label className="text-xs">Min days<input className="field mt-2" type="number" min="1" value={method.minimumDeliveryDays??2} onChange={event=>patchMethod(method.type,{minimumDeliveryDays:Number(event.target.value)})}/></label><label className="text-xs">Max days<input className="field mt-2" type="number" min="1" value={method.maximumDeliveryDays??4} onChange={event=>patchMethod(method.type,{maximumDeliveryDays:Number(event.target.value)})}/></label></div>:null}</div></Panel>)}</div>
+    <Panel title="Area groups"><div className="space-y-3">{config.groups.map(group=><div key={group.id} className="grid grid-cols-[1fr_120px] gap-2"><Field label={group.fallback?"Fallback group":"Group"} value={group.name} onChange={name=>patchGroup(group.id,{name})}/><label className="text-xs">Fee<input className="field mt-2" type="number" min="0" value={group.fee??0} onChange={event=>patchGroup(group.id,{fee:Number(event.target.value)})}/></label></div>)}</div></Panel><button type="button" className="btn btn-dark mt-4" disabled={busy} onClick={()=>void saveConfig()}>{busy?"Saving…":"Save customer delivery"}</button></section>
+    <section className="border-t border-black/10 pt-8"><p className="eyebrow text-black/45">Actual courier companies</p><h2 className="mt-2 text-xl font-medium">Parcel handover</h2><p className="mt-2 max-w-2xl text-sm text-black/55">These companies are selected only when a parcel is physically handed over. They do not control the customer delivery fee.</p>{!couriers.length?<div className="mt-5 rounded-2xl border border-dashed border-black/15 p-8 text-center"><p className="font-medium">No courier companies added yet.</p></div>:null}<div className="mt-5 grid gap-4">{couriers.map(courier=><Panel key={courier.id} title={courier.name||"New courier company"}><div className="grid gap-3 md:grid-cols-2"><Field label="Name" value={courier.name} onChange={name=>patchCourier(courier.id,{name})}/><Field label="Phone" value={courier.phone} onChange={phone=>patchCourier(courier.id,{phone})}/><Field label="Tracking URL template (optional)" value={courier.trackingUrlTemplate} onChange={trackingUrlTemplate=>patchCourier(courier.id,{trackingUrlTemplate})}/><Field label="Notes (optional)" value={courier.notes} onChange={notes=>patchCourier(courier.id,{notes})}/></div><label className="mt-3 flex items-center gap-2 text-xs"><input type="checkbox" checked={courier.active} onChange={event=>patchCourier(courier.id,{active:event.target.checked})}/> Active</label><button type="button" className="btn btn-dark mt-4" disabled={busy||!courier.name.trim()} onClick={()=>void saveCourier(courier)}>Save courier</button></Panel>)}</div><button type="button" className="btn mt-4" onClick={()=>setCouriers(items=>[...items,{id:crypto.randomUUID(),name:"",phone:"",trackingUrlTemplate:"",notes:"",active:true,sortOrder:items.length+1}])}><Plus size={15}/> Add courier</button></section>
+  </div>;
 }
+
 
 type PreorderAdminDraft = {
   confirmedPrice: string;
@@ -2232,40 +1481,32 @@ function Preorders() {
     expired: "Expired",
   };
   const next: Partial<Record<PreorderStatus, PreorderStatus>> = {
-    new: "awaiting_payment",
     payment_submitted:"paid",
     paid:"confirmed",
-    contacted: "confirmed",
     confirmed: "in_transit",
-    batched: "ordered",
-    ordered: "in_transit",
     in_transit: "arrived",
     arrived: "ready",
   };
   const nextText: Partial<Record<PreorderStatus, string>> = {
-    new: "Move to awaiting payment",
     payment_submitted:"Verify payment",
     paid:"Confirm pre-order",
-    contacted: "Confirm customer",
     confirmed: "Mark in transit",
-    batched: "Mark legacy order placed",
-    ordered: "Mark in transit",
     in_transit: "Mark arrived",
     arrived: "Mark ready for customer",
   };
   const guidance: Record<PreorderStatus, string> = {
-    new: "Legacy new request. Move it to awaiting payment when ready.",
+    new: "Legacy record. Payment state is unknown; keep this record read-only and contact the customer before taking any separate manual action.",
     awaiting_payment:"Waiting for the customer to pay the full product price and upload a bank receipt.",
     payment_submitted:"Open the receipt and verify the full product payment.",
     paid:"Payment is verified. Confirm this pre-order.",
     contacted:
-      "Legacy contacted request. Confirm only after validating its payment.",
+      "Legacy record. Payment state is unknown; no current workflow action is available.",
     confirmed:
       "The paid pre-order is confirmed. Mark it in transit when tracking begins.",
     batched:
-      "Legacy batched request. Continue using the legacy ordered step.",
+      "Legacy record. Its old batch state is preserved for history and is read-only.",
     ordered:
-      "Legacy ordered request. Mark it in transit when tracking starts moving.",
+      "Legacy record. Its old ordered state is preserved for history and is read-only.",
     in_transit:
       "The pre-order is on the way. Mark arrived when you physically receive it.",
     arrived:
@@ -2890,7 +2131,7 @@ function downloadOrdersCsv(rows: Order[]) {
       order.city,
       order.district,
       order.postalCode || "",
-      order.courierName || "",
+      order.deliveryMethodName || "",
       order.fulfilmentCourierName || "",
       order.trackingNumber || "",
       order.paymentMethod === "cod" ? Number(order.total) || 0 : 0,
@@ -3664,7 +2905,7 @@ function Orders() {
                                   }
                                   if(value==="dispatched"){
                                      const existingId=detail.fulfilmentCourierId||"";
-                                     setDispatchOrderId(order.orderId);setDispatchCourierId(selectDispatchCourierId(admin.couriers,existingId));setDispatchTrackingNumber(detail.trackingNumber||"");setDispatchTrackingUrl(detail.trackingUrl||"");
+                                     setDispatchOrderId(order.orderId);setDispatchCourierId(selectDispatchCourierId(admin.fulfilmentCouriers,existingId));setDispatchTrackingNumber(detail.trackingNumber||"");setDispatchTrackingUrl(detail.trackingUrl||"");
                                      setDispatchHandover(sriLankaDateTimeLocal());return;
                                   }
                                   if(value==="delivered"&&!window.confirm("Mark this order as delivered?"))return;
@@ -3724,7 +2965,7 @@ function Orders() {
                                 ))}
                               </select>
                             </label>:<Info label="Payment method" value="Cash on delivery"/>}
-                            {dispatchOrderId===order.orderId?<div className="mt-4 border border-bronze/25 bg-white/45 p-4"><p className="text-xs font-semibold uppercase tracking-wider">Mark as dispatched</p><p className="mt-2 text-xs text-black/55">Confirm that this parcel has been handed over to the courier.</p><div className="mt-4 grid gap-3"><label className="text-xs">Courier<select className="field mt-2" value={dispatchCourierId} onChange={e=>setDispatchCourierId(e.target.value)}><option value="">Select courier</option>{admin.couriers.filter(courier=>courier.active).map(courier=><option key={courier.id} value={courier.id}>{courier.name}</option>)}</select></label><label className="text-xs">Handover date/time (Sri Lanka)<input className="field mt-2" type="datetime-local" value={dispatchHandover} onChange={e=>setDispatchHandover(e.target.value)}/></label><details className="border-t border-black/10 pt-3"><summary className="cursor-pointer text-xs text-black/55">Advanced tracking fields</summary><div className="mt-3 grid gap-3"><Field label="Tracking number (optional)" value={dispatchTrackingNumber} onChange={setDispatchTrackingNumber}/><Field label="Tracking URL (optional)" value={dispatchTrackingUrl} onChange={setDispatchTrackingUrl}/></div></details><div className="flex gap-2"><button type="button" className="btn btn-dark" disabled={savingId===order.orderId||!dispatchCourierId||!dispatchHandover} onClick={async()=>{const url=dispatchTrackingUrl.trim();if(url&&!/^https:\/\//i.test(url)){setStatus("Tracking URL must start with https://");return;}const saved=await change(order.orderId,{orderStatus:"dispatched",fulfilmentCourierId:dispatchCourierId,trackingNumber:dispatchTrackingNumber.trim(),trackingUrl:url,courierSentDate:sriLankaDateTimeToIso(dispatchHandover)});if(saved)setDispatchOrderId("");}}>{savingId===order.orderId?"Updating…":"CONFIRM HANDOVER"}</button><button type="button" className="btn" disabled={savingId===order.orderId} onClick={()=>setDispatchOrderId("")}>Cancel</button></div></div></div>:null}
+                            {dispatchOrderId===order.orderId?<div className="mt-4 border border-bronze/25 bg-white/45 p-4"><p className="text-xs font-semibold uppercase tracking-wider">Prepare dispatch</p><p className="mt-2 text-xs text-black/55">Select the company receiving this parcel from ZEVENRA.</p><div className="mt-4 grid gap-3">{admin.fulfilmentCouriers.some(courier=>courier.active)?<label className="text-xs">Courier<select className="field mt-2" value={dispatchCourierId} onChange={e=>setDispatchCourierId(e.target.value)}><option value="">Select courier</option>{admin.fulfilmentCouriers.filter(courier=>courier.active).map(courier=><option key={courier.id} value={courier.id}>{courier.name}</option>)}</select></label>:<div className="rounded-xl border border-dashed border-black/15 p-4 text-xs"><b>No dispatch courier configured.</b><p className="mt-2">Add the courier company you actually use before dispatching this order.</p><Link className="btn mt-3 inline-flex" to="/admin/delivery">ADD COURIER</Link></div>}<label className="text-xs">Handover date/time (Sri Lanka)<input className="field mt-2" type="datetime-local" value={dispatchHandover} onChange={e=>setDispatchHandover(e.target.value)}/></label><details className="border-t border-black/10 pt-3"><summary className="cursor-pointer text-xs text-black/55">Advanced tracking fields</summary><div className="mt-3 grid gap-3"><Field label="Tracking number (optional)" value={dispatchTrackingNumber} onChange={setDispatchTrackingNumber}/><Field label="Tracking URL (optional)" value={dispatchTrackingUrl} onChange={setDispatchTrackingUrl}/></div></details><div className="flex gap-2"><button type="button" className="btn btn-dark" disabled={savingId===order.orderId||!dispatchCourierId||!dispatchHandover} onClick={async()=>{const url=dispatchTrackingUrl.trim();if(url&&!/^https:\/\//i.test(url)){setStatus("Tracking URL must start with https://");return;}const saved=await change(order.orderId,{orderStatus:"dispatched",fulfilmentCourierId:dispatchCourierId,trackingNumber:dispatchTrackingNumber.trim(),trackingUrl:url,courierSentDate:sriLankaDateTimeToIso(dispatchHandover)});if(saved)setDispatchOrderId("");}}>{savingId===order.orderId?"Updating…":"CONFIRM HANDOVER"}</button><button type="button" className="btn" disabled={savingId===order.orderId} onClick={()=>setDispatchOrderId("")}>Cancel</button></div></div></div>:null}
                           </Panel>
                           <Panel title="Payment">
                             <div className="space-y-3 text-sm">
@@ -3790,12 +3031,7 @@ function Orders() {
                             </div>
                           </Panel>
                           {detail.sourcePreorderRequestId && <Panel title="Status / timeline"><ol className="space-y-2 text-xs"><li><b>Created</b> · {new Date(detail.createdAt).toLocaleString("en-LK")}</li><li><b>Product payment verified</b> · before conversion</li><li><b>Pre-order converted</b> · {new Date(detail.createdAt).toLocaleString("en-LK")}</li><li className={detail.orderStatus === "dispatched" || detail.orderStatus === "delivered" ? "" : "text-black/35"}><b>Dispatched</b>{detail.courierSentDate ? ` · ${new Date(detail.courierSentDate).toLocaleString("en-LK")}` : ""}</li><li className={detail.orderStatus === "delivered" ? "" : "text-black/35"}><b>Delivered</b></li></ol></Panel>}
-                          {normalizedOrderStatus==="dispatched"||normalizedOrderStatus==="delivered"?<Panel title="Delivery"><div className="space-y-3 text-sm"><Info label="Status" value={normalizedOrderStatus==="dispatched"?"Dispatched":"Delivered"}/><Info label="Courier" value={detail.fulfilmentCourierName||detail.courierName||"Not added"}/><Info label="Tracking" value={detail.trackingNumber||"Not added"}/><Info label="Handed to courier" value={detail.courierSentDate?new Date(detail.courierSentDate).toLocaleString("en-LK"):"Not added"}/>{detail.trackingUrl?<a className="btn inline-flex" href={detail.trackingUrl} target="_blank" rel="noreferrer">Open courier tracking</a>:null}</div></Panel>:<FulfilmentPanel
-                            order={detail}
-                            couriers={admin.couriers}
-                            busy={savingId === order.orderId}
-                            save={(patch) => void change(order.orderId, patch)}
-                          />}
+                          {normalizedOrderStatus==="dispatched"||normalizedOrderStatus==="delivered"?<Panel title="Dispatch"><div className="space-y-3 text-sm"><Info label="Status" value={normalizedOrderStatus==="dispatched"?"Dispatched":"Delivered"}/><Info label="Courier" value={detail.fulfilmentCourierName||"Not added"}/><Info label="Tracking" value={detail.trackingNumber||"Not added"}/><Info label="Handed to courier" value={detail.courierSentDate?new Date(detail.courierSentDate).toLocaleString("en-LK"):"Not added"}/>{detail.trackingUrl?<a className="btn inline-flex" href={detail.trackingUrl} target="_blank" rel="noreferrer">Open courier tracking</a>:null}</div></Panel>:null}
                           <ReturnsPanel order={detail} onMessage={setStatus} />
                         </div>
                       </div>
@@ -3908,126 +3144,9 @@ function ProtectedReceipt({ url }: { url?: string }) {
     </div>
   );
 }
-function FulfilmentPanel({
-  order,
-  couriers,
-  busy,
-  save,
-}: {
-  order: AdminOrderDetail;
-  couriers: CourierProvider[];
-  busy: boolean;
-  save: (patch: Partial<Order>) => void;
-}) {
-  const [courierId, setCourierId] = useState(
-      order.fulfilmentCourierId || "",
-    ),
-    [trackingNumber, setTrackingNumber] = useState(order.trackingNumber || ""),
-    [trackingUrl, setTrackingUrl] = useState(order.trackingUrl || ""),
-    [sentDate, setSentDate] = useState(order.courierSentDate || ""),
-    [error, setError] = useState("");
-  const submit = () => {
-    const url = trackingUrl.trim();
-    if (url && !/^https:\/\//i.test(url)) {
-      setError("Tracking URL must start with https://");
-      return;
-    }
-    setError("");
-    save({
-      fulfilmentCourierId: courierId,
-      trackingNumber: trackingNumber.trim(),
-      trackingUrl: url,
-      courierSentDate: sentDate,
-    });
-  };
-  return (
-    <Panel title="Fulfilment">
-      <div className="mb-4 grid gap-3 border-l-2 border-bronze bg-black/[.025] p-3 text-xs sm:grid-cols-2">
-        <Info label="Courier" value={order.courierName || "Legacy delivery"}/>
-        <Info label="Pricing mode" value={order.deliveryPricingMode === "flat" ? "Flat rate" : "Area based"}/>
-        <Info label="Delivery zone" value={order.deliveryZoneName || (order.deliveryPricingMode === "flat" ? "Nationwide" : "Not recorded")}/>
-        <Info label="Delivery fee" value={Number(order.deliveryFee)?money(Number(order.deliveryFee)):"Complimentary"}/>
-      </div>
-      <div className="grid gap-3">
-        <label className="text-xs">
-          Actual fulfilment courier
-          <select
-            className="field mt-2"
-            value={courierId}
-            onChange={(e) => setCourierId(e.target.value)}
-          >
-            <option value="">Select courier</option>
-            {couriers.map((courier) => (
-              <option key={courier.id} value={courier.id}>
-                {courier.name}
-                {courier.active ? "" : " (inactive)"}
-              </option>
-            ))}
-          </select>
-        </label>
-        <Field
-          label="Tracking number"
-          value={trackingNumber}
-          onChange={setTrackingNumber}
-        />
-        <Field
-          label="Tracking URL"
-          value={trackingUrl}
-          onChange={setTrackingUrl}
-        />
-        <label className="text-xs">
-          Courier sent date
-          <input
-            className="field mt-2"
-            type="date"
-            value={sentDate}
-            onChange={(e) => setSentDate(e.target.value)}
-          />
-        </label>
-        {error && (
-          <p className="text-xs text-red-800" role="alert">
-            {error}
-          </p>
-        )}
-        <button disabled={busy} className="btn btn-dark" onClick={submit}>
-          Save fulfilment
-        </button>
-      </div>
-    </Panel>
-  );
-}
-type AdminOrderLine = {
-  orderItemId?: number;
-  productId?: string;
-  variantId?: string;
-  productName?: string;
-  name?: string;
-  color?: string;
-  size?: string;
-  quantity?: number;
-  unitPrice?: number;
-  lineTotal?: number;
-  sku?: string;
-  isPreorder?: boolean | string;
-};
-type AdminOrderDetail = Omit<Order, "items"> & { items: AdminOrderLine[] };
-type AdminReturn = {
-  id: string;
-  type: "customer_return" | "courier_rto";
-  status: string;
-  reason: string;
-  createdAt: string;
-  items?: Array<{
-    id: number;
-    orderItemId: number;
-    quantity: number;
-    restockable?: boolean;
-    productName?: string;
-    color?: string;
-    size?: string;
-  }>;
-};
-
+type AdminOrderLine={orderItemId?:number;productId?:string;variantId?:string;productName?:string;name?:string;color?:string;size?:string;quantity?:number;unitPrice?:number;lineTotal?:number;sku?:string;isPreorder?:boolean|string};
+type AdminOrderDetail=Omit<Order,"items">&{items:AdminOrderLine[]};
+type AdminReturn={id:string;type:"customer_return"|"courier_rto";status:string;reason:string;createdAt:string;items?:Array<{id:number;orderItemId:number;quantity:number;restockable?:boolean;productName?:string;color?:string;size?:string}>};
 function ReturnsPanel({ order, onMessage }: { order: AdminOrderDetail; onMessage: (value: string) => void }) {
   const [returns, setReturns] = useState<AdminReturn[]>([]), [loading, setLoading] = useState(false), [creating, setCreating] = useState(false);
   const eligible = order.orderStatus === "dispatched" || order.orderStatus === "delivered";
@@ -4184,7 +3303,7 @@ function Media() {
 }
 type SettingsSection="brand"|"payments"|"delivery"|"store";
 const settingsSections:SettingsSection[]=["brand","payments","delivery","store"];
-const settingsSectionKeys={brand:["brandName","tagline","announcement","whatsapp","phone","email","instagram","tiktok"],payments:["codEnabled","bankEnabled","bankName","accountName","accountNumber","branch"],delivery:["deliveryEnabled","freeDeliveryThreshold"],store:["storeOpen","ordersEnabled","defaultTitle","defaultDescription"]} as const;
+const settingsSectionKeys={brand:["brandName","tagline","announcement","whatsapp","phone","email","instagram","tiktok"],payments:["codEnabled","bankEnabled","bankName","accountName","accountNumber","branch"],delivery:["freeDeliveryThreshold"],store:["storeOpen","ordersEnabled","defaultTitle","defaultDescription"]} as const;
 const settingsSectionLabels:Record<SettingsSection,string>={brand:"Brand & contact settings",payments:"Payment settings",delivery:"Delivery settings",store:"Store settings"};
 function SectionSave({section,label,busy,status,save}:{section:SettingsSection;label:string;busy:boolean;status:string;save:(section:SettingsSection)=>Promise<void>}){return <div className="mt-5 border-t border-black/10 pt-4"><button type="button" className="btn btn-dark min-h-11 w-full justify-center" disabled={busy} onClick={()=>void save(section)}>{busy?"Saving…":label}</button>{status&&<p className={`mt-3 text-xs ${status.endsWith("saved.")?"text-emerald-800":"text-red-800"}`} role="status">{status}</p>}</div>}
 function ExplicitSettings({ focus }: { focus: string }) {
@@ -4344,15 +3463,6 @@ function ExplicitSettings({ focus }: { focus: string }) {
           </>
         )}
         <Panel title="Delivery">
-          <Toggles
-            items={[
-              [
-                "Islandwide delivery",
-                draft.deliveryEnabled,
-                (v) => change("delivery", "deliveryEnabled", v),
-              ],
-            ]}
-          />
           <Field
             label="Free delivery threshold (LKR)"
             value={String(draft.freeDeliveryThreshold)}

@@ -114,35 +114,6 @@ export const mapHomepageSection = (row: Record<string, unknown>) => ({
   spacing: text(row.spacing),
   sortOrder: number(row.sort_order),
 });
-export const mapCourier = (row: Record<string, unknown>) => ({
-  id: text(row.id),
-  name: text(row.name),
-  phone: text(row.phone),
-  notes: text(row.notes),
-  dispatchBranch: text(row.dispatch_branch),
-  pricingMode: text(row.pricing_mode),
-  flatRate: number(row.flat_rate),
-  active: bool(row.active),
-  minimumDeliveryDays: number(row.minimum_delivery_days) || 2,
-  maximumDeliveryDays: number(row.maximum_delivery_days) || 4,
-  createdAt: date(row.created_at),
-  updatedAt: date(row.updated_at),
-});
-export const mapDeliveryRate = (row: Record<string, unknown>) => ({
-  id: text(row.id),
-  courierProviderId: text(row.courier_provider_id),
-  name: text(row.name),
-  fee: number(row.fee),
-  active: bool(row.active),
-  districts: Array.isArray(row.districts) ? row.districts.map(text) : [],
-  cities: Array.isArray(row.cities) ? row.cities.map(text) : [],
-  postalCodes: Array.isArray(row.postal_codes)
-    ? row.postal_codes.map(text)
-    : [],
-  fallback: bool(row.fallback),
-  sortOrder: number(row.sort_order),
-});
-
 export function mapCustomer(row: Record<string, unknown>) {
   return {
     id: text(row.id),
@@ -179,11 +150,6 @@ export function mapOrder(row: Record<string, unknown>) {
     district: text(row.district),
     postalCode: text(row.postal_code),
     deliveryNotes: text(row.delivery_notes),
-    courierProviderId: text(row.courier_provider_id),
-    courierName: text(row.courier_name),
-    deliveryPricingMode: text(row.delivery_pricing_mode),
-    deliveryRatePlan: text(row.delivery_rate_plan),
-    deliveryZoneName: text(row.delivery_zone_name),
     fulfillmentMethod: text(row.fulfillment_method) || undefined,
     deliveryMethodName: text(row.delivery_method_name),
     deliveryAreaGroupId: text(row.delivery_area_group_id),

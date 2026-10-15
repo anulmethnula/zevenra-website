@@ -10,15 +10,13 @@ import {
 } from "react";
 import { initialStoreData } from "../../data/demo";
 import { adminApi } from "../../services/adminApi";
-import { saveAndReloadDeliverySettings } from "../../services/deliverySettings";
 import { fetchPublic,getCachedPublic,invalidatePublic,revalidatePublic } from "../../services/publicDataCache";
 import type {
   Category,
   Collection,
   ContentPage,
-  CourierProvider,
   DashboardData,
-  DeliveryRate,
+  FulfilmentCourier,
   HomepageSection,
   NavigationItem,
   Order,
@@ -49,8 +47,7 @@ type AdminState = {
   dashboard: DashboardData | null;
   orders: Order[];
   preorders: PreorderRequest[];
-  couriers: CourierProvider[];
-  deliveryRates: DeliveryRate[];
+  fulfilmentCouriers: FulfilmentCourier[];
 };
 type Value = {
   data: StoreData;
@@ -70,12 +67,6 @@ type Value = {
   reorder: (entity: Entity, id: string, direction: -1 | 1) => void;
   saveSettings: (patch: Partial<SiteSettings>) => void;
   commitSettings: (patch: Partial<SiteSettings>) => Promise<void>;
-  saveDeliveryRates: (rates: DeliveryRate[]) => Promise<void>;
-  saveCourierConfig: (
-    couriers: CourierProvider[],
-    rates: DeliveryRate[],
-    defaultCourierProviderId: string,
-  ) => Promise<void>;
   updateOrder: (patch: Partial<Order> & { orderId: string }) => Promise<Order>;
   updatePreorder: (
     patch: Partial<PreorderRequest> & { requestId: string },
@@ -102,7 +93,6 @@ type AdminBootstrap = {
   preorders: PreorderRequest[];
   settings: SettingsRow[];
   couriers?: unknown[];
-  deliveryRates: unknown[];
 };
 
 const demo = import.meta.env.VITE_DEMO_MODE === "true",
@@ -113,8 +103,7 @@ const emptyAdmin: AdminState = {
   dashboard: null,
   orders: [],
   preorders: [],
-  couriers: [],
-  deliveryRates: [],
+  fulfilmentCouriers: [],
 };
 const defaultHero = {
   ...initialStoreData.settings.hero,
@@ -125,7 +114,7 @@ const defaultHero = {
 const liveInitialStoreData: StoreData = {
   ...initialStoreData,
   products: [], categories: [], collections: [], navigation: [],
-  homepageSections: [], sizeCharts: [], pages: [], couriers: [], deliveryRates: [],
+  homepageSections: [], sizeCharts: [], pages: [],
   settings: {
     ...initialStoreData.settings,
     announcement: "", whatsapp: "", phone: "", email: "", instagram: "", tiktok: "",
@@ -144,12 +133,6 @@ const json = <T,>(value: unknown, fallback: T): T => {
   } catch {
     return fallback;
   }
-};
-const stringList = (value: unknown, fallback: string[] = []) => {
-  const parsed = json<unknown>(value, fallback);
-  return Array.isArray(parsed)
-    ? parsed.map((item) => String(item).trim()).filter(Boolean)
-    : fallback;
 };
 const normalizeCategory = (row: unknown): Category => {
   const x = row as Record<string, unknown>;
@@ -229,39 +212,16 @@ const normalizeHomepage = (row: unknown): HomepageSection => {
     sortOrder: number(x.sortOrder),
   } as HomepageSection;
 };
-const normalizeDeliveryRate = (row: unknown, index = 0): DeliveryRate => {
-  const x = row as Record<string, unknown>,
-    legacyDistrict = String(x.district ?? "").trim();
-  return {
-    ...x,
-    id: String(x.id ?? ""),
-    courierProviderId: String(x.courierProviderId ?? "courier-legacy-zone"),
-    name: String(x.name ?? (legacyDistrict || "Delivery zone")),
-    fee: number(x.fee),
-    active: bool(x.active),
-    districts: stringList(
-      x.districts ?? x.districtsJson,
-      legacyDistrict ? [legacyDistrict] : [],
-    ),
-    cities: stringList(x.cities ?? x.citiesJson),
-    postalCodes: stringList(x.postalCodes ?? x.postalCodesJson),
-    fallback: bool(x.fallback),
-    sortOrder: number(x.sortOrder) || index + 1,
-    district: legacyDistrict || undefined,
-  } as DeliveryRate;
-};
-const normalizeCourier = (row: unknown): CourierProvider => {
+const normalizeFulfilmentCourier = (row: unknown): FulfilmentCourier => {
   const x = row as Record<string, unknown>;
   return {
     id: String(x.id ?? ""),
     name: String(x.name ?? ""),
     phone: String(x.phone ?? ""),
     notes: String(x.notes ?? ""),
-    pricingMode: String(x.pricingMode) === "flat" ? "flat" : "zone",
-    flatRate: number(x.flatRate),
+    trackingUrlTemplate: String(x.trackingUrlTemplate ?? ""),
     active: bool(x.active),
-    minimumDeliveryDays: number(x.minimumDeliveryDays) || 2,
-    maximumDeliveryDays: number(x.maximumDeliveryDays) || 4,
+    sortOrder: number(x.sortOrder),
     createdAt: String(x.createdAt ?? ""),
     updatedAt: String(x.updatedAt ?? ""),
   };
@@ -320,7 +280,6 @@ function normalizeSettings(
     : source;
   const mapped: Record<string, unknown> = {
     ...raw,
-    deliveryFee: raw.deliveryFee ?? raw.deliveryFlatFee,
     bankEnabled: raw.bankEnabled ?? raw.bankTransferEnabled,
     accountName: raw.accountName ?? raw.bankAccountName,
     accountNumber: raw.accountNumber ?? raw.bankAccountNumber,
@@ -399,40 +358,16 @@ function cleanCatalogue(input: {
 }
 function settingsPayload(patch: Partial<SiteSettings>) {
   const payload: Record<string, unknown> = { ...patch };
-  if (patch.deliveryFee !== undefined) {
-    payload.deliveryFlatFee = patch.deliveryFee;
-    delete payload.deliveryFee;
-  }
-  if (patch.bankEnabled !== undefined) {
-    payload.bankTransferEnabled = patch.bankEnabled;
-    delete payload.bankEnabled;
-  }
-  if (patch.accountName !== undefined) {
-    payload.bankAccountName = patch.accountName;
-    delete payload.accountName;
-  }
-  if (patch.accountNumber !== undefined) {
-    payload.bankAccountNumber = patch.accountNumber;
-    delete payload.accountNumber;
-  }
-  if (patch.branch !== undefined) {
-    payload.bankBranch = patch.branch;
-    delete payload.branch;
-  }
   return payload;
 }
 function demoLoad(): StoreData {
   try {
     const saved = localStorage.getItem(storageKey);
     if (!saved) return initialStoreData;
-    const parsed = JSON.parse(saved) as StoreData,
-      zones = (parsed.deliveryRates || []).map(normalizeDeliveryRate),
-      couriers = (parsed.couriers || []).map(normalizeCourier);
+    const parsed = JSON.parse(saved) as StoreData;
     return {
       ...initialStoreData,
       ...parsed,
-      couriers: couriers.length ? couriers : initialStoreData.couriers,
-      deliveryRates: zones.length ? zones : initialStoreData.deliveryRates,
     };
   } catch {
     return initialStoreData;
@@ -444,7 +379,7 @@ function message(error: unknown) {
     : "The operation could not be completed.";
 }
 function isPublicPayload(value:unknown):value is PublicPayload{const payload=value as Partial<PublicPayload>|null;return Boolean(payload&&Array.isArray(payload.categories)&&Array.isArray(payload.collections)&&Array.isArray(payload.navigation)&&Array.isArray(payload.homepageSections)&&payload.settings&&typeof payload.settings==="object");}
-function mergePublic(current:StoreData,payload:PublicPayload):StoreData{return{...current,categories:payload.categories.map(normalizeCategory),collections:payload.collections.map(normalizeCollection),navigation:payload.navigation.map(normalizeNavigation),homepageSections:payload.homepageSections.map(normalizeHomepage),settings:{...normalizeSettings(payload.settings,true),codEnabled:false,bankEnabled:false,bankName:"",accountName:"",accountNumber:"",branch:"",bankInstructions:"",deliveryEnabled:false,deliveryFee:0,freeDeliveryThreshold:0,defaultCourierProviderId:"",storeOpen:false,ordersEnabled:false}};}
+function mergePublic(current:StoreData,payload:PublicPayload):StoreData{return{...current,categories:payload.categories.map(normalizeCategory),collections:payload.collections.map(normalizeCollection),navigation:payload.navigation.map(normalizeNavigation),homepageSections:payload.homepageSections.map(normalizeHomepage),settings:{...normalizeSettings(payload.settings,true),codEnabled:false,bankEnabled:false,bankName:"",accountName:"",accountNumber:"",branch:"",bankInstructions:"",freeDeliveryThreshold:0,storeOpen:false,ordersEnabled:false}};}
 function invalidateEntity(entity:Entity){if(entity==="products"){invalidatePublic("/products");invalidatePublic("/home");invalidatePublic("/recommendations");}else if(entity==="categories"||entity==="collections"){invalidatePublic("/products");invalidatePublic("/home");invalidatePublic("/store");}else if(entity==="navigation")invalidatePublic("/store");else if(entity==="homepageSections"){invalidatePublic("/home");invalidatePublic("/store");}}
 
 export function StoreProvider({ children }: { children: ReactNode }) {
@@ -459,11 +394,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [adminError, setAdminError] = useState(""),
     [admin, setAdmin] = useState<AdminState>(() =>
       demo
-        ? {
-            ...emptyAdmin,
-            couriers: demoLoad().couriers,
-            deliveryRates: demoLoad().deliveryRates,
-          }
+        ? emptyAdmin
         : emptyAdmin,
     ),
     timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -566,24 +497,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           normalizeHomepage,
         ),
       });
-      const deliveryRates = (payload.deliveryRates || []).map(
-          normalizeDeliveryRate,
-        ),
-        couriers = (payload.couriers || []).map(normalizeCourier);
+      const fulfilmentCouriers = (payload.couriers || []).map(normalizeFulfilmentCourier);
       setData((current) => ({
         ...current,
         ...clean,
         navigation: current.navigation,
         settings: normalizeSettings(payload.settings || []),
-        couriers,
-        deliveryRates,
       }));
       setAdmin({
         dashboard: payload.dashboard || null,
         orders: payload.orders || [],
         preorders: payload.preorders || [],
-        couriers,
-        deliveryRates,
+        fulfilmentCouriers,
       });
       setAdminReady(true);
     } catch (reason) {
@@ -801,53 +726,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     [data],
   );
-  const saveCourierConfig = useCallback(
-    async (
-      couriers: CourierProvider[],
-      rates: DeliveryRate[],
-      defaultCourierProviderId: string,
-    ) => {
-      if (demo) {
-        const settings = { ...data.settings, defaultCourierProviderId },
-          next = { ...data, couriers, rates, deliveryRates: rates, settings };
-        delete (next as StoreData & { rates?: DeliveryRate[] }).rates;
-        setAdmin((x) => ({ ...x, couriers, deliveryRates: rates }));
-        setData(next);
-        localStorage.setItem(storageKey, JSON.stringify(next));
-        return;
-      }
-      setAdminError("");
-      try {
-        const result = await saveAndReloadDeliverySettings(
-            couriers,
-            rates,
-            defaultCourierProviderId,
-            adminApi,
-          ),
-          normalizedCouriers = result.couriers.map(normalizeCourier),
-          normalizedRates = result.deliveryRates.map(normalizeDeliveryRate);
-        invalidatePublic("/store");invalidatePublic("/checkout-config");
-        setAdmin((x) => ({
-          ...x,
-          couriers: normalizedCouriers,
-          deliveryRates: normalizedRates,
-        }));
-        setData((x) => ({
-          ...x,
-          couriers: normalizedCouriers,
-          deliveryRates: normalizedRates,
-          settings: {
-            ...x.settings,
-            defaultCourierProviderId: result.defaultCourierProviderId,
-          },
-        }));
-      } catch (reason) {
-        setAdminError(message(reason));
-        throw reason;
-      }
-    },
-    [data],
-  );
   const updateOrder = useCallback(
     async (patch: Partial<Order> & { orderId: string }) => {
       if (demo) throw new Error("Order updates are unavailable in demo mode.");
@@ -901,24 +779,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     [],
   );
-  const saveDeliveryRates = useCallback(
-    async (rates: DeliveryRate[]) =>
-      saveCourierConfig(
-        data.couriers,
-        rates,
-        data.settings.defaultCourierProviderId,
-      ),
-    [data.couriers, data.settings.defaultCourierProviderId, saveCourierConfig],
-  );
   const resetDemo = () => {
     if (!demo) return;
     localStorage.removeItem(storageKey);
     setData(initialStoreData);
-    setAdmin((current) => ({
-      ...current,
-      couriers: initialStoreData.couriers,
-      deliveryRates: initialStoreData.deliveryRates,
-    }));
+    setAdmin(emptyAdmin);
   };
   const value = useMemo<Value>(
     () => ({
@@ -939,8 +804,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       reorder,
       saveSettings,
       commitSettings,
-      saveDeliveryRates,
-      saveCourierConfig,
       updateOrder,
       updatePreorder,
       refreshPreorders,
@@ -963,8 +826,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       reorder,
       saveSettings,
       commitSettings,
-      saveDeliveryRates,
-      saveCourierConfig,
       updateOrder,
       updatePreorder,
       refreshPreorders,

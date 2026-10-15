@@ -247,7 +247,14 @@ const ROUTES: Record<string, RouteHandler> = {
         district?: unknown;
         postalCode?: unknown;
         deliveryNotes?: unknown;
-        deliveryZoneName?: unknown;
+        fulfillmentMethod?: unknown;
+        deliveryMethodName?: unknown;
+        deliveryAreaGroupId?: unknown;
+        deliveryAreaGroupName?: unknown;
+        pickupLocationId?: unknown;
+        pickupBranchName?: unknown;
+        pickupBranchAddress?: unknown;
+        pickupInstructions?: unknown;
         paymentMethod?: unknown;
         paymentReference?: unknown;
         paymentReceiptUrl?: unknown;
@@ -281,16 +288,14 @@ const ROUTES: Record<string, RouteHandler> = {
         district: String(order.district || ""),
         postalCode: String(order.postalCode || ""),
         deliveryNotes: String(order.deliveryNotes || ""),
-        courierName: String(
-          (order as Record<string, unknown>).courierName || "",
-        ),
-        deliveryPricingMode: String(
-          (order as Record<string, unknown>).deliveryPricingMode || "",
-        ),
-        deliveryRatePlan: String(
-          (order as Record<string, unknown>).deliveryRatePlan || "",
-        ),
-        deliveryZoneName: String(order.deliveryZoneName || ""),
+        fulfillmentMethod: String(order.fulfillmentMethod || ""),
+        deliveryMethodName: String(order.deliveryMethodName || ""),
+        deliveryAreaGroupId: String(order.deliveryAreaGroupId || ""),
+        deliveryAreaGroupName: String(order.deliveryAreaGroupName || ""),
+        pickupLocationId: String(order.pickupLocationId || ""),
+        pickupBranchName: String(order.pickupBranchName || ""),
+        pickupBranchAddress: String(order.pickupBranchAddress || ""),
+        pickupInstructions: String(order.pickupInstructions || ""),
         fulfilmentCourierName: String(
           (order as Record<string, unknown>).fulfilmentCourierName || "",
         ),

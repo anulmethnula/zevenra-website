@@ -154,7 +154,6 @@ export async function adminBootstrap(section = "/admin") {
     preorders,
     settings,
     couriers,
-    deliveryRates,
   ] = await Promise.all([
     section === "/admin" ? dashboard() : Promise.resolve(null),
     productEditorId ? getProductById(productEditorId).then(value => value ? [value] : []) : (isOrders || isPreorders ? listProducts() : Promise.resolve([])),
@@ -179,6 +178,5 @@ export async function adminBootstrap(section = "/admin") {
     preorders,
     settings,
     couriers,
-    deliveryRates,
   };
 }

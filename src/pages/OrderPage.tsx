@@ -45,9 +45,7 @@ export default function OrderPage() {
           `${item.name} — ${item.color}/${item.size} × ${item.quantity}${item.isPreorder ? " (PRE-ORDER)" : ""}`,
       )
       .join("\n"),
-    deliveryLabel = order.deliveryZoneName
-      ? `${order.deliveryZoneName} — ${money(order.deliveryFee)}`
-      : money(order.deliveryFee),
+    deliveryLabel = `${order.deliveryMethodName || "Delivery"}${order.deliveryAreaGroupName ? ` (${order.deliveryAreaGroupName})` : order.pickupBranchName ? ` (${order.pickupBranchName})` : ""} — ${money(order.deliveryFee)}`,
     message = `Hello ZEVENRA, I have submitted order ${order.orderId}.\n\n${lines}\nSubtotal: ${money(order.subtotal)}\nDelivery: ${deliveryLabel}\nTotal: ${money(order.total)}\nName: ${order.customerName}\nCity: ${order.city}\nPayment: ${order.paymentMethod === "cod" ? "Cash on delivery" : "Bank transfer"}`,
     success = orderSuccessCopy(order.paymentMethod, money(order.total));
   async function copyOrderId() {
@@ -132,8 +130,8 @@ export default function OrderPage() {
             ) : null}
             <div className="flex items-start justify-between gap-4 py-3 text-sm">
               <span className="min-w-0 break-words">
-                Delivery
-                {order.deliveryZoneName ? `: ${order.deliveryZoneName}` : ""}
+                {order.deliveryMethodName || "Delivery"}
+                {order.deliveryAreaGroupName ? `: ${order.deliveryAreaGroupName}` : order.pickupBranchName ? `: ${order.pickupBranchName}` : ""}
               </span>
               <span className="shrink-0 text-right tabular-nums">
                 {order.deliveryFee ? money(order.deliveryFee) : "Complimentary"}

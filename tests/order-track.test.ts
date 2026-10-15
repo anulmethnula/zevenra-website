@@ -43,7 +43,7 @@ test("correct normalized ID and phone return only the safe customer order", asyn
     { res, state } = response();
   await handler(request({ orderId: stored.order_id, phone: "+94 77-000-0000" }, { origin }, "198.51.100.2"), res);
   assert.equal(state.status, 200);
-  assert.deepEqual(Object.keys(state.body as object).sort(), ["kind","address1","address2","city","courierSentDate","createdAt","customerName","deliveryFee","deliveryZoneName","discountAmount","discountCode","district","fulfilmentCourierName","items","orderId","orderStatus","paymentMethod","paymentStatus","postalCode","subtotal","total","trackingNumber","trackingUrl"].sort());
+  assert.deepEqual(Object.keys(state.body as object).sort(), ["kind","address1","address2","city","courierSentDate","createdAt","customerName","deliveryFee","fulfillmentMethod","deliveryMethodName","deliveryAreaGroupName","pickupBranchName","pickupBranchAddress","pickupInstructions","discountAmount","discountCode","district","fulfilmentCourierName","items","orderId","orderStatus","paymentMethod","paymentStatus","postalCode","subtotal","total","trackingNumber","trackingUrl"].sort());
   assert.equal((state.body as {kind:string}).kind,"order");
   const result = state.body as { items: Array<Record<string, unknown>> };
   assert.deepEqual(Object.keys(result.items[0]).sort(), ["color","imageUrl","isPreorder","name","productSlug","quantity","size","unitPrice"].sort());

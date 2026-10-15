@@ -68,10 +68,7 @@ export default function CheckoutPage() {
       accountNumber: String(raw.accountNumber ?? raw.bankAccountNumber ?? ""),
       branch: String(raw.branch ?? raw.bankBranch ?? ""),
       bankInstructions: String(raw.bankInstructions || ""),
-      deliveryEnabled: bool(raw.deliveryEnabled),
-      deliveryFee: Number(raw.deliveryFee ?? raw.deliveryFlatFee) || 0,
       freeDeliveryThreshold: Number(raw.freeDeliveryThreshold) || 0,
-      defaultCourierProviderId: String(raw.defaultCourierProviderId || ""),
       storeOpen: bool(raw.storeOpen),
       ordersEnabled: bool(raw.ordersEnabled),
     };

@@ -4,8 +4,6 @@ import { homepageSectionSchema } from "../_shared.js";
 import {
   mapCategory,
   mapCollection,
-  mapCourier,
-  mapDeliveryRate,
   mapHomepageSection,
   mapNavigation,
   mapProduct,
@@ -221,20 +219,6 @@ export async function reorderHomepageSections(ids: string[]) {
   return withTransaction(async(client)=>{const existing=await client.query<{id:string}>("SELECT id FROM homepage_sections WHERE id=ANY($1::text[]) FOR UPDATE",[ids]);if(existing.rowCount!==ids.length)throw new Error("One or more homepage sections no longer exist.");for(let index=0;index<ids.length;index++)await client.query("UPDATE homepage_sections SET sort_order=$2,updated_at=now() WHERE id=$1",[ids[index],index+1]);await client.query("INSERT INTO audit_logs(actor,action,entity_type,entity_id,details) VALUES('owner','sections_reordered','homepage','homepage',$1::jsonb)",[JSON.stringify({ids})]);return (await client.query<Record<string,unknown>>("SELECT * FROM homepage_sections ORDER BY sort_order,id")).rows.map(mapHomepageSection);});
 }
 export async function deleteHomepageSection(id:string){return withTransaction(async(client)=>{const row=(await client.query<Record<string,unknown>>("DELETE FROM homepage_sections WHERE id=$1 RETURNING title,type",[id])).rows[0];if(!row)throw new Error("Homepage section not found.");await client.query("INSERT INTO audit_logs(actor,action,entity_type,entity_id,details) VALUES('owner','section_deleted','homepage_section',$1,$2::jsonb)",[id,JSON.stringify({title:row.title,type:row.type})]);return {deleted:true};});}
-export async function listCouriers(activeOnly = false) {
-  return (
-    await query<Record<string, unknown>>(
-      `SELECT * FROM courier_providers${activeOnly ? " WHERE active=true" : ""} ORDER BY name`,
-    )
-  ).rows.map(mapCourier);
-}
-export async function listDeliveryRates() {
-  return (
-    await query<Record<string, unknown>>(
-      "SELECT * FROM delivery_rates ORDER BY sort_order,name",
-    )
-  ).rows.map(mapDeliveryRate);
-}
 export async function listSettings() {
   return (
     await query<{ key: string; value: unknown }>(
@@ -251,7 +235,7 @@ export async function publicStoreBootstrap() {
 
 export async function publicCheckoutConfig(){
   const [settings,fulfillment]=await Promise.all([listSettings(),publicFulfillmentConfig()]);
-  return {...buildPublicCheckoutConfig(settings,[],[]),...fulfillment};
+  return {...buildPublicCheckoutConfig(settings),...fulfillment};
 }
 
 type Entity =
@@ -542,120 +526,4 @@ export async function saveSettings(patch: Record<string, unknown>) {
       [key, JSON.stringify(value)],
     );
   return listSettings();
-}
-
-export async function saveCourierConfig(input: Record<string, unknown>) {
-  const couriers = Array.isArray(input.couriers)
-      ? (input.couriers as Record<string, unknown>[])
-      : [],
-    rates = Array.isArray(input.rates)
-      ? (input.rates as Record<string, unknown>[])
-      : [];
-  const defaultId = String(input.defaultCourierProviderId || ""),
-    defaultCourier = couriers.find(
-      (courier) => String(courier.id) === defaultId && courier.active === true,
-    );
-  if (!defaultCourier)
-    throw new Error("Choose one active default checkout courier.");
-  for (const courier of couriers) {
-    if (!courier.id || !String(courier.name || "").trim())
-      throw new Error("Every courier needs an ID and name.");
-    if (!["zone", "flat"].includes(String(courier.pricingMode)))
-      throw new Error("Courier pricing mode must be zone or flat.");
-    if (courier.active!==true&&courier.active!==false)
-      throw new Error("Courier status must be active or inactive.");
-    if (!Number.isFinite(Number(courier.flatRate))||Number(courier.flatRate) < 0)
-      throw new Error("Courier rates cannot be negative.");
-    if (!Number.isInteger(Number(courier.minimumDeliveryDays)) || Number(courier.minimumDeliveryDays) <= 0 ||
-        !Number.isInteger(Number(courier.maximumDeliveryDays)) || Number(courier.maximumDeliveryDays) < Number(courier.minimumDeliveryDays))
-      throw new Error("Courier delivery estimates are invalid.");
-    if (String(courier.dispatchBranch || "").trim().length > 120)
-      throw new Error("Courier dispatch branch is too long.");
-    if (courier.active && courier.pricingMode === "zone") {
-      const fallbacks = rates.filter(
-        (rate) =>
-          rate.courierProviderId === courier.id &&
-          rate.active===true &&
-          rate.fallback===true,
-      );
-      if (fallbacks.length !== 1)
-        throw new Error(
-          "Each active zone-based courier needs one fallback zone.",
-        );
-    }
-  }
-  if (rates.some((rate) => !Number.isFinite(Number(rate.fee))||Number(rate.fee) < 0))
-    throw new Error("Delivery rates cannot be negative.");
-  if(rates.some(rate=>rate.active!==true&&rate.active!==false||rate.fallback!==true&&rate.fallback!==false||!Array.isArray(rate.districts)||!Array.isArray(rate.cities)||!Array.isArray(rate.postalCodes)))
-    throw new Error("Delivery area configuration is invalid.");
-  await withTransaction(async (client) => {
-    for (const courier of couriers)
-      await client.query(
-        `INSERT INTO courier_providers(id,name,phone,notes,dispatch_branch,pricing_mode,flat_rate,active,minimum_delivery_days,maximum_delivery_days,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,now()) ON CONFLICT(id) DO UPDATE SET name=EXCLUDED.name,phone=EXCLUDED.phone,notes=EXCLUDED.notes,dispatch_branch=EXCLUDED.dispatch_branch,pricing_mode=EXCLUDED.pricing_mode,flat_rate=EXCLUDED.flat_rate,active=EXCLUDED.active,minimum_delivery_days=EXCLUDED.minimum_delivery_days,maximum_delivery_days=EXCLUDED.maximum_delivery_days,updated_at=now()`,
-        [
-          courier.id,
-          courier.name,
-          courier.phone || "",
-          courier.notes || "",
-          String(courier.dispatchBranch || "").trim(),
-          courier.pricingMode,
-          courier.flatRate || 0,
-          courier.active,
-          courier.minimumDeliveryDays,
-          courier.maximumDeliveryDays,
-        ],
-      );
-    for (const courier of couriers) {
-      const activeCard = await client.query(
-        "SELECT 1 FROM courier_rate_cards WHERE courier_provider_id=$1 AND status='active' LIMIT 1",
-        [courier.id],
-      );
-      if (activeCard.rowCount) {
-        const branch = String(courier.dispatchBranch || "").trim();
-        if (!branch)
-          throw new Error(`${courier.name}: set a dispatch branch for the active imported rate card.`);
-        const matchingRate = await client.query(
-          `SELECT 1 FROM courier_rates r JOIN courier_rate_cards c ON c.id=r.rate_card_id
-           WHERE c.courier_provider_id=$1 AND c.status='active'
-             AND lower(btrim(r.from_branch))=lower(btrim($2)) LIMIT 1`,
-          [courier.id, branch],
-        );
-        if (!matchingRate.rowCount)
-          throw new Error(`${courier.name}: the active rate card has no rates for dispatch branch "${branch}".`);
-      }
-    }
-    for (const rate of rates)
-      await client.query(
-        `INSERT INTO delivery_rates(id,courier_provider_id,name,fee,active,districts,cities,postal_codes,fallback,sort_order,updated_at) VALUES($1,$2,$3,$4,$5,$6::text[],$7::text[],$8::text[],$9,$10,now()) ON CONFLICT(id) DO UPDATE SET courier_provider_id=EXCLUDED.courier_provider_id,name=EXCLUDED.name,fee=EXCLUDED.fee,active=EXCLUDED.active,districts=EXCLUDED.districts,cities=EXCLUDED.cities,postal_codes=EXCLUDED.postal_codes,fallback=EXCLUDED.fallback,sort_order=EXCLUDED.sort_order,updated_at=now()`,
-        [
-          rate.id,
-          rate.courierProviderId,
-          rate.name,
-          rate.fee,
-          rate.active,
-          rate.districts || [],
-          rate.cities || [],
-          rate.postalCodes || [],
-          rate.fallback,
-          rate.sortOrder || 0,
-        ],
-      );
-    await client.query(
-      "DELETE FROM delivery_rates WHERE NOT(id=ANY($1::text[]))",
-      [rates.map((rate) => String(rate.id))],
-    );
-    await client.query(
-      "DELETE FROM courier_providers WHERE NOT(id=ANY($1::text[]))",
-      [couriers.map((courier) => String(courier.id))],
-    );
-    await client.query(
-      "INSERT INTO site_settings(key,value,updated_at) VALUES('defaultCourierProviderId',$1::jsonb,now()) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=now()",
-      [JSON.stringify(defaultId)],
-    );
-  });
-  return {
-    couriers: await listCouriers(),
-    deliveryRates: await listDeliveryRates(),
-    defaultCourierProviderId: defaultId,
-  };
 }

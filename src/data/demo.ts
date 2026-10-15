@@ -9,11 +9,6 @@ import type {
   SizeChart,
   StoreData,
 } from "../types";
-import {
-  defaultCourier,
-  defaultDeliveryZones,
-  legacyCourierId,
-} from "../utils/delivery";
 const img = (id: string, alt: string) => ({
   url: `https://images.unsplash.com/${id}?auto=format&fit=crop&w=1200&q=82`,
   alt,
@@ -391,10 +386,7 @@ export const settings: SiteSettings = {
   branch: "",
   bankInstructions:
     "Your order is confirmed only after ZEVENRA verifies your payment.",
-  deliveryEnabled: true,
-  deliveryFee: 450,
   freeDeliveryThreshold: 15000,
-  defaultCourierProviderId: legacyCourierId,
   currency: "LKR",
   storeOpen: true,
   ordersEnabled: true,
@@ -479,8 +471,6 @@ export const initialStoreData: StoreData = {
   navigation,
   homepageSections,
   sizeCharts,
-  couriers: [defaultCourier],
-  deliveryRates: defaultDeliveryZones,
   settings,
   pages: contentPages,
 };

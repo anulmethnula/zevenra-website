@@ -300,9 +300,7 @@ function OrdersView({
                   <div>
                     <small>Courier tracking</small>
                     <p>
-                      {order.fulfilmentCourierName ||
-                        order.courierName ||
-                        "Courier"}
+                      {order.fulfilmentCourierName || "Courier"}
                       {order.trackingNumber ? ` · ${order.trackingNumber}` : ""}
                       {order.courierSentDate
                         ? ` · Sent ${order.courierSentDate}`
@@ -333,10 +331,8 @@ function OrdersView({
                 {Number(order.discountAmount || 0)>0&&<div><dt>Discount{order.discountCode?` (${order.discountCode})`:""}</dt><dd>-{money(Number(order.discountAmount))}</dd></div>}
                 <div>
                   <dt>
-                    Delivery
-                    {order.deliveryZoneName
-                      ? ` · ${order.deliveryZoneName}`
-                      : ""}
+                    {order.deliveryMethodName || "Delivery"}
+                    {order.deliveryAreaGroupName ? ` · ${order.deliveryAreaGroupName}` : order.pickupBranchName ? ` · ${order.pickupBranchName}` : ""}
                   </dt>
                   <dd>
                     {order.deliveryFee

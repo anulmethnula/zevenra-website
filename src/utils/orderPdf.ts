@@ -10,7 +10,10 @@ export type OrderPdfData = {
   city: string;
   district: string;
   postalCode?: string;
-  deliveryZoneName?: string;
+  fulfillmentMethod?: "flat" | "area_group" | "pickup";
+  deliveryMethodName?: string;
+  deliveryAreaGroupName?: string;
+  pickupBranchName?: string;
   subtotal: number;
   discountCode?: string;
   discountAmount?: number;
@@ -74,7 +77,8 @@ export async function createOrderPdf(order: OrderPdfData) {
     details: Array<[string, string | string[]]> = [
       ["Customer", order.customerName || "-"],
       ["Delivery address", address.length ? address : ["-"]],
-      ["Delivery area", order.deliveryZoneName || [order.city, order.district].filter(Boolean).join(", ") || "-"],
+      ["Delivery method", order.deliveryMethodName || order.fulfillmentMethod || "Delivery"],
+      ["Delivery detail", order.deliveryAreaGroupName || order.pickupBranchName || [order.city, order.district].filter(Boolean).join(", ") || "-"],
       ["Payment", order.paymentMethod === "cod" ? "Cash on delivery" : "Bank transfer"],
       ["Payment status", order.paymentStatus || "-"],
     ];
