@@ -6,72 +6,56 @@
   <img src="public/brand/logo.svg" width="150" alt="ZEVENRA" />
 </p>
 
-<p align="center"><b>Fashion storefront + checkout + pre-order + admin operations for a real online retail workflow.</b></p>
+<p align="center"><b>Fashion storefront • checkout • pre-orders • stock • admin operations</b></p>
 
 <p align="center">
   <a href="https://zevenra-website.vercel.app"><img src="https://img.shields.io/badge/LIVE_DEMO-OPEN_SITE-7C3AED?style=for-the-badge&logo=vercel&logoColor=white" alt="Open ZEVENRA live site" /></a>
   <img src="https://img.shields.io/badge/TypeScript-Frontend-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" />
 </p>
 
----
-
-## Project Snapshot
-
-| | |
-|---|---|
-| **Business problem** | Fashion sales across website, Instagram and WhatsApp need shared stock and a clear order process. |
-| **Solution** | A modern storefront with normal orders, pre-orders, payments, admin tools and media handling. |
-| **Customer options** | Guest checkout, COD and bank transfer. |
-| **Operations** | Stock reservation, order fulfilment, pre-order batches and admin control. |
-
-## Visual Experience
+## ✦ Visual Experience
 
 <div align="center">
-  <img src="public/brand/hero.jpg" width="78%" alt="ZEVENRA storefront visual" />
+<table>
+<tr>
+<td align="center" width="52%"><img src="public/brand/hero.jpg" width="96%" alt="ZEVENRA storefront visual" /></td>
+<td align="center" width="48%"><img src="public/brand/about-hero.webp" width="96%" alt="ZEVENRA brand visual" /></td>
+</tr>
+<tr>
+<td colspan="2" align="center"><img src="public/brand/about-story.webp" width="74%" alt="ZEVENRA story visual" /></td>
+</tr>
+</table>
 </div>
 
-## Key Features
+## What It Solves
 
-- Product catalogue and responsive shopping experience
-- Shared inventory across sales channels
+ZEVENRA brings website, Instagram and WhatsApp selling into a clearer commerce workflow with shared stock, checkout, pre-orders and admin control.
+
+### Main Features
+- Responsive product catalogue
 - COD and bank-transfer checkout
-- Customer receipt upload for bank payments
+- Receipt upload for bank payments
 - Separate no-payment pre-order flow
-- Admin product, stock and order management
-- Signed Cloudinary media uploads
+- Product, stock and order administration
+- Cloudinary media handling
 - Guest checkout with optional customer accounts
 
 ## Commerce Flow
 
-**In-stock order**  
-`Browse` → `Add to cart` → `Checkout` → `Reserve stock` → `Order fulfilment`
+**In stock:** `Browse` → `Cart` → `Checkout` → `Reserve stock` → `Fulfil`
 
-**Pre-order**  
-`Request item` → `Admin confirms` → `Batch ordering` → `Item arrives` → `Convert to normal order`
+**Pre-order:** `Request` → `Confirm` → `Batch order` → `Arrive` → `Convert to order`
 
-## What This Project Demonstrates
+## Why This Project Matters
 
-- Turning a retail process into a complete digital workflow
-- Separating normal orders from pre-orders without confusing the customer journey
-- Connecting customer-facing UI with admin-side operations
-- Handling payment evidence, stock and media safely through server-side services
-- Thinking about both business usability and technical delivery
+- Connects customer-facing shopping with admin operations
+- Handles two different sales flows without mixing them
+- Supports payment evidence, stock control and media safely
+- Built around a real retail workflow, not only a visual storefront
 
 ## Tech Stack
 
-<p>
-  <img src="https://img.shields.io/badge/React-20232A?style=flat-square&logo=react&logoColor=61DAFB" alt="React" />
-  <img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
-  <img src="https://img.shields.io/badge/Vite-646CFF?style=flat-square&logo=vite&logoColor=white" alt="Vite" />
-  <img src="https://img.shields.io/badge/Vercel-000000?style=flat-square&logo=vercel&logoColor=white" alt="Vercel" />
-  <img src="https://img.shields.io/badge/Cloudinary-3448C5?style=flat-square&logo=cloudinary&logoColor=white" alt="Cloudinary" />
-</p>
-
-- **Frontend:** React + Vite + TypeScript
-- **API/Hosting:** Vercel + Vercel Functions
-- **Data:** Google Sheets + Apps Script
-- **Media:** Cloudinary signed uploads
-- **Auth:** signed HttpOnly admin/customer sessions
+`React` · `TypeScript` · `Vite` · `Vercel Functions` · `Cloudinary` · `Google Sheets / Apps Script`
 
 ## Run Locally
 
@@ -80,16 +64,12 @@ npm install
 npm run dev
 ```
 
-Production checks:
-
 ```bash
 npm run typecheck
 npm run lint
 npm run build
 ```
 
-> Server secrets and production credentials are kept outside the repository through environment variables.
-
 ---
 
-<p align="center"><b>Designed around the complete selling workflow — from discovery to fulfilment.</b></p>
+<p align="center"><b>Discovery → checkout → operations → fulfilment.</b></p>
