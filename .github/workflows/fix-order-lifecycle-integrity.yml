@@ -22,97 +22,8 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - name: Patch order, return, cancellation and inventory sync
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          def replace_once(path, old, new):
-              p = Path(path)
-              text = p.read_text()
-              count = text.count(old)
-              if count != 1:
-                  raise SystemExit(f"{path}: expected exactly one match, found {count}\n--- OLD ---\n{old[:500]}")
-              p.write_text(text.replace(old, new, 1))
-
-          # Store context: expose targeted refreshes so order/return mutations do not need a full admin bootstrap.
-          path = "src/features/store/StoreContext.tsx"
-          replace_once(path,
-          '''  updateOrder: (patch: Partial<Order> & { orderId: string }) => Promise<Order>;\n  updatePreorder: (\n''',
-          '''  updateOrder: (patch: Partial<Order> & { orderId: string }) => Promise<Order>;\n  refreshOrder: (orderId: string) => Promise<Order>;\n  refreshProducts: () => Promise<void>;\n  updatePreorder: (\n''')
-
-          replace_once(path,
-          '''  const refreshPreorders = useCallback(async () => {\n''',
-          '''  const refreshOrder = useCallback(async (orderId: string) => {\n    if (demo) throw new Error("Order refresh is unavailable in demo mode.");\n    const updated = await adminApi.get<Order>("getOrder", { orderId });\n    setAdmin((current) => ({\n      ...current,\n      orders: current.orders.some((order) => order.orderId === updated.orderId)\n        ? current.orders.map((order) =>\n            order.orderId === updated.orderId ? { ...order, ...updated } : order,\n          )\n        : [updated, ...current.orders],\n    }));\n    return updated;\n  }, []);\n  const refreshProducts = useCallback(async () => {\n    if (demo) return;\n    await refreshEntity("products");\n  }, [refreshEntity]);\n  const refreshPreorders = useCallback(async () => {\n''')
-
-          replace_once(path,
-          '''      updateOrder,\n      updatePreorder,\n''',
-          '''      updateOrder,\n      refreshOrder,\n      refreshProducts,\n      updatePreorder,\n''')
-
-          replace_once(path,
-          '''      updateOrder,\n      updatePreorder,\n      refreshPreorders,\n''',
-          '''      updateOrder,\n      refreshOrder,\n      refreshProducts,\n      updatePreorder,\n      refreshPreorders,\n''')
-
-          # Backend: cancelling a verified/paid bank order must enter refund-pending, while COD remains unchanged.
-          path = "server/api-implementation/_data/orders-legacy.ts"
-          replace_once(path,
-          '''    const automaticCodPaid = !preorderOrder && current.payment_method === "cod" && nextStatus === "delivered",\n      paymentStatus = automaticCodPaid ? "paid" : nextPayment;\n''',
-          '''    const automaticCodPaid = !preorderOrder && current.payment_method === "cod" && nextStatus === "delivered",\n      cancellingPrepaidBank = nextStatus === "cancelled" && currentStatus !== "cancelled" && current.payment_method === "bank" && ["paid", "verified"].includes(nextPayment.toLowerCase()),\n      paymentStatus = automaticCodPaid ? "paid" : cancellingPrepaidBank ? "refund pending" : nextPayment;\n''')
-
-          # Admin orders: use lightweight order/product refreshes; add a clear cancellation action.
-          path = "src/pages/admin/AdminPage.tsx"
-          replace_once(path,
-          '''function Orders() {\n  const { admin, updateOrder, data, loadAdmin } = useStore(),\n''',
-          '''function Orders() {\n  const { admin, updateOrder, refreshOrder, refreshProducts, data, loadAdmin } = useStore(),\n''')
-
-          replace_once(path,
-          '''      setStatus("Order updated.");\n      return true;\n''',
-          '''      setStatus("Order updated.");\n      if (patch.orderStatus === "cancelled" && updated.stockState === "restored")\n        void refreshProducts().catch(() => undefined);\n      return true;\n''')
-
-          replace_once(path,
-          '''                    {normalizedOrderStatus === "dispatched" && (\n                      <button type="button" className="btn btn-dark w-full justify-center" disabled={savingId === order.orderId} onClick={() => { if(window.confirm("Mark this order as delivered?")) void change(order.orderId,{orderStatus:"delivered"}); }}>\n''',
-          '''                    {["pending", "confirmed"].includes(normalizedOrderStatus) && (\n                      <button type="button" className="btn w-full justify-center text-red-800" disabled={savingId === order.orderId} onClick={async () => {\n                        const answer = window.prompt("Reason for cancelling this order?");\n                        if (answer === null) return;\n                        const reason = answer.trim();\n                        if (!reason) { setStatus("Add a cancellation reason."); return; }\n                        const saved = await change(order.orderId,{orderStatus:"cancelled",cancellationReason:reason,cancelledBy:"owner"});\n                        if (saved) setStatus(detail.paymentMethod === "bank" && ["verified","paid"].includes(String(detail.paymentStatus||"").toLowerCase()) ? "Order cancelled. Stock restored and bank payment moved to refund pending." : "Order cancelled. Reserved stock restored.");\n                      }}>\n                        Cancel order\n                      </button>\n                    )}\n                    {normalizedOrderStatus === "dispatched" && (\n                      <button type="button" className="btn btn-dark w-full justify-center" disabled={savingId === order.orderId} onClick={() => { if(window.confirm("Mark this order as delivered?")) void change(order.orderId,{orderStatus:"delivered"}); }}>\n''')
-
-          replace_once(path,
-          '''                          <ReturnsPanel order={detail} onMessage={setStatus} />\n''',
-          '''                          <ReturnsPanel\n                            order={detail}\n                            onMessage={setStatus}\n                            onChanged={async (inventoryChanged) => {\n                              const updated = await refreshOrder(order.orderId);\n                              setDetails((current) => ({\n                                ...current,\n                                [order.orderId]: {\n                                  ...(current[order.orderId] || {}),\n                                  ...updated,\n                                } as AdminOrderDetail,\n                              }));\n                              if (inventoryChanged) void refreshProducts().catch(() => undefined);\n                            }}\n                          />\n''')
-
-          replace_once(path,
-          '''function ReturnsPanel({ order, onMessage }: { order: AdminOrderDetail; onMessage: (value: string) => void }) {\n''',
-          '''function ReturnsPanel({ order, onMessage, onChanged }: { order: AdminOrderDetail; onMessage: (value: string) => void; onChanged: (inventoryChanged: boolean) => Promise<void> }) {\n''')
-
-          replace_once(path,
-          '''  async function create(event: React.FormEvent<HTMLFormElement>) { event.preventDefault(); const raw = new FormData(event.currentTarget), items = order.items.map((item) => ({ orderItemId: item.orderItemId, quantity: Number(raw.get(`qty-${item.orderItemId}`) || 0) })).filter((item) => item.orderItemId && item.quantity > 0); try { await adminApi.post("createReturn", { orderId: order.orderId, type: raw.get("type"), reason: raw.get("reason"), notes: raw.get("notes"), refundRequired: raw.get("refundRequired") === "on", items }); setCreating(false); onMessage("Return created. Stock has not been changed."); await load(); } catch (reason) { onMessage(reason instanceof Error ? reason.message : "Could not create return."); } }\n  async function advance(item: AdminReturn, status: string) { try { const payload: Record<string, unknown> = { returnId: item.id, status }; if (status === "received") payload.items = item.items?.map((line) => ({ id: line.id, restockable: (document.querySelector<HTMLInputElement>(`#restock-${line.id}`)?.checked ?? false) })); const result = await adminApi.post<{ restoredUnits: number }>("updateReturn", payload); onMessage(status === "received" ? `Return received. ${result.restoredUnits} unit${result.restoredUnits === 1 ? "" : "s"} restored to stock.` : `Return marked ${status.replace("_", " ")}.`); await load(); } catch (reason) { onMessage(reason instanceof Error ? reason.message : "Could not update return."); } }\n''',
-          '''  async function create(event: React.FormEvent<HTMLFormElement>) { event.preventDefault(); const raw = new FormData(event.currentTarget), items = order.items.map((item) => ({ orderItemId: item.orderItemId, quantity: Number(raw.get(`qty-${item.orderItemId}`) || 0) })).filter((item) => item.orderItemId && item.quantity > 0); try { await adminApi.post("createReturn", { orderId: order.orderId, type: raw.get("type"), reason: raw.get("reason"), notes: raw.get("notes"), refundRequired: raw.get("refundRequired") === "on", items }); setCreating(false); await load(); await onChanged(false); onMessage("Return created. It is now visible in the Returns filter. Stock changes only when the return is received."); } catch (reason) { onMessage(reason instanceof Error ? reason.message : "Could not create return."); } }\n  async function advance(item: AdminReturn, status: string) { try { const payload: Record<string, unknown> = { returnId: item.id, status }; if (status === "received") payload.items = item.items?.map((line) => ({ id: line.id, restockable: (document.querySelector<HTMLInputElement>(`#restock-${line.id}`)?.checked ?? false) })); const result = await adminApi.post<{ restoredUnits: number }>("updateReturn", payload); await load(); await onChanged(status === "received"); onMessage(status === "received" ? `Return received. ${result.restoredUnits} unit${result.restoredUnits === 1 ? "" : "s"} restored to stock.` : `Return marked ${status.replace("_", " ")}.`); } catch (reason) { onMessage(reason instanceof Error ? reason.message : "Could not update return."); } }\n''')
-
-          # Tests: guard the business rules and the no-full-bootstrap return sync.
-          path = "tests/order-workflow.test.ts"
-          p = Path(path)
-          text = p.read_text()
-          marker = '''test("delivery cleanup creates an empty actual-courier registry and drops the legacy model",async()=>{'''
-          if marker not in text:
-              raise SystemExit("order-workflow test insertion marker missing")
-          addition = r'''test("admin return and cancellation mutations keep filters and inventory in sync",async()=>{
-  const ui=await readFile(new URL("../src/pages/admin/AdminPage.tsx",import.meta.url),"utf8");
-  const store=await readFile(new URL("../src/features/store/StoreContext.tsx",import.meta.url),"utf8");
-  const backend=await readFile(new URL("../server/api-implementation/_data/orders-legacy.ts",import.meta.url),"utf8");
-  assert.match(ui,/onChanged=\{async \(inventoryChanged\)/);
-  assert.match(ui,/await refreshOrder\(order\.orderId\)/);
-  assert.match(ui,/if \(inventoryChanged\) void refreshProducts\(\)/);
-  assert.match(ui,/Return created\. It is now visible in the Returns filter/);
-  assert.match(store,/const refreshOrder = useCallback/);
-  assert.match(store,/const refreshProducts = useCallback/);
-  assert.match(ui,/Reason for cancelling this order\?/);
-  assert.match(ui,/orderStatus:"cancelled",cancellationReason:reason,cancelledBy:"owner"/);
-  assert.match(backend,/cancellingPrepaidBank/);
-  assert.match(backend,/cancellingPrepaidBank \? "refund pending"/);
-  assert.match(backend,/stock=stock\+\$2/);
-});
-
-'''
-          p.write_text(text.replace(marker, addition + marker, 1))
-          PY
+      - name: Patch order lifecycle
+        run: python3 .github/scripts/fix_order_lifecycle_integrity.py
       - name: Install exact dependencies
         run: npm ci
       - name: Full QA
@@ -120,7 +31,6 @@ jobs:
       - name: Production dependency audit
         run: npm audit --omit=dev --audit-level=high
       - name: Commit fixes
-        shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
