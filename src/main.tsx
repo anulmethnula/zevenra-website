@@ -13,7 +13,7 @@ import { AdminLayout } from "./layouts/AdminLayout";
 import "./styles/index.css";
 import { CustomerAuthProvider } from "./features/account/CustomerAuthContext";
 import { StoreErrorBoundary } from "./components/store/StoreErrorBoundary";
-// Deployment sync marker: includes durable public preorder IDs.
+// Deployment sync marker: includes simplified, faster order admin.
 const Home = lazy(() => import("./pages/HomePage")),
   Shop = lazy(() => import("./pages/ShopPage")),
   Product = lazy(() => import("./pages/ProductPage")),
