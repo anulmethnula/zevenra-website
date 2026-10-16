@@ -12,6 +12,7 @@ const legacyDispatchedStatuses = new Set(["sourcing", "packed", "shipped"]);
 
 export function normalizeOrderStatus(value: unknown): OrderStatus {
   const status = String(value ?? "pending").trim().toLowerCase();
+  if (status === "processing") return "confirmed";
   if (legacyDispatchedStatuses.has(status)) return "dispatched";
   return orderStatuses.includes(status as OrderStatus)
     ? (status as OrderStatus)
