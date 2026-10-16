@@ -23,7 +23,7 @@ jobs:
           node-version: 24
           cache: npm
       - name: Patch order lifecycle
-        run: python3 .github/scripts/fix_order_lifecycle_integrity.py
+        run: python3 .github/scripts/fix_order_lifecycle_integrity_v2.py
       - name: Install exact dependencies
         run: npm ci
       - name: Full QA
