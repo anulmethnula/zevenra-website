@@ -27,135 +27,75 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          import re
+
+          def sub_once(text, pattern, replacement, label, flags=0):
+              updated, count = re.subn(pattern, replacement, text, count=1, flags=flags)
+              if count != 1:
+                  raise SystemExit(f'{label} pattern not found exactly once (found {count})')
+              return updated
 
           backend = Path('server/api-implementation/_data/orders-legacy.ts')
           s = backend.read_text()
 
-          old = '''    const storedStatus = String(current.order_status),
-              currentStatus = normalizeAdminOrderStatus(storedStatus),
-              nextStatus = String(input.orderStatus ?? currentStatus).toLowerCase(),
-              preorderOrder = Boolean(current.source_preorder_request_id),
-              transitions: Record<string, string[]> = preorderOrder ? {'''
-          new = '''    const storedStatus = String(current.order_status),
-              currentStatus = normalizeAdminOrderStatus(storedStatus),
-              preorderOrder = Boolean(current.source_preorder_request_id),
-              nextPayment = String(input.paymentStatus ?? current.payment_status),
-              rejectingBankPayment = current.payment_method === "bank" && input.paymentStatus !== undefined && nextPayment.toLowerCase() === "rejected",
-              requestedStatus = String(input.orderStatus ?? currentStatus).toLowerCase(),
-              paymentRollback = rejectingBankPayment && currentStatus === "confirmed" && input.orderStatus === undefined,
-              nextStatus = paymentRollback ? "pending" : requestedStatus,
-              transitions: Record<string, string[]> = preorderOrder ? {'''
-          if old not in s:
-              raise SystemExit('backend status declaration pattern not found')
-          s = s.replace(old, new, 1)
+          s = sub_once(
+              s,
+              r'''    const storedStatus = String\(current\.order_status\),\n\s+currentStatus = normalizeAdminOrderStatus\(storedStatus\),\n\s+nextStatus = String\(input\.orderStatus \?\? currentStatus\)\.toLowerCase\(\),\n\s+preorderOrder = Boolean\(current\.source_preorder_request_id\),\n\s+transitions: Record<string, string\[\]> = preorderOrder \? \{''',
+              '''    const storedStatus = String(current.order_status),\n      currentStatus = normalizeAdminOrderStatus(storedStatus),\n      preorderOrder = Boolean(current.source_preorder_request_id),\n      nextPayment = String(input.paymentStatus ?? current.payment_status),\n      rejectingBankPayment = current.payment_method === "bank" && input.paymentStatus !== undefined && nextPayment.toLowerCase() === "rejected",\n      requestedStatus = String(input.orderStatus ?? currentStatus).toLowerCase(),\n      paymentRollback = rejectingBankPayment && currentStatus === "confirmed" && input.orderStatus === undefined,\n      nextStatus = paymentRollback ? "pending" : requestedStatus,\n      transitions: Record<string, string[]> = preorderOrder ? {''',
+              'backend status declaration',
+          )
 
-          old = '''    if (nextStatus !== currentStatus && !transitions[currentStatus]?.includes(nextStatus))
-              throw new Error(`Order cannot move from ${currentStatus} to ${nextStatus}.`);
-            const nextPayment = String(input.paymentStatus ?? current.payment_status),
-              bankReady = ["paid", "verified"].includes(nextPayment.toLowerCase());'''
-          new = '''    if (nextStatus !== currentStatus && !transitions[currentStatus]?.includes(nextStatus) && !paymentRollback)
-              throw new Error(`Order cannot move from ${currentStatus} to ${nextStatus}.`);
-            const bankReady = ["paid", "verified"].includes(nextPayment.toLowerCase());'''
-          if old not in s:
-              raise SystemExit('backend transition/payment pattern not found')
-          s = s.replace(old, new, 1)
+          s = sub_once(
+              s,
+              r'''    if \(nextStatus !== currentStatus && !transitions\[currentStatus\]\?\.includes\(nextStatus\)\)\n\s+throw new Error\(`Order cannot move from \$\{currentStatus\} to \$\{nextStatus\}\.`\);\n\s+const nextPayment = String\(input\.paymentStatus \?\? current\.payment_status\),\n\s+bankReady = \["paid", "verified"\]\.includes\(nextPayment\.toLowerCase\(\)\);''',
+              '''    if (nextStatus !== currentStatus && !transitions[currentStatus]?.includes(nextStatus) && !paymentRollback)\n      throw new Error(`Order cannot move from ${currentStatus} to ${nextStatus}.`);\n    const bankReady = ["paid", "verified"].includes(nextPayment.toLowerCase());''',
+              'backend transition/payment',
+          )
 
-          old = '''    if (current.payment_method === "bank" && nextStatus === "confirmed" && !bankReady)
-              throw new Error("Verify or mark the bank payment paid before confirming this order.");'''
-          new = '''    if (current.payment_method === "bank" && ["confirmed", "dispatched", "delivered"].includes(nextStatus) && !bankReady)
-              throw new Error("Verify or mark the bank payment paid before processing this order.");'''
-          if old not in s:
-              raise SystemExit('backend bank readiness pattern not found')
-          s = s.replace(old, new, 1)
+          s = sub_once(
+              s,
+              r'''    if \(current\.payment_method === "bank" && nextStatus === "confirmed" && !bankReady\)\n\s+throw new Error\("Verify or mark the bank payment paid before confirming this order\."\);''',
+              '''    if (current.payment_method === "bank" && ["confirmed", "dispatched", "delivered"].includes(nextStatus) && !bankReady)\n      throw new Error("Verify or mark the bank payment paid before processing this order.");''',
+              'backend bank readiness',
+          )
 
-          old = '''    for (const key of fields)
-              if (input[key] !== undefined) {
-                values.push(input[key] || null);
-                updates.push(`${map[key]}=$${values.length}`);
-              }'''
-          new = '''    for (const key of fields)
-              if (input[key] !== undefined) {
-                const value = key === "trackingNumber" || key === "trackingUrl"
-                  ? String(input[key] ?? "").trim()
-                  : key === "fulfilmentCourierId"
-                    ? String(input[key] ?? "").trim() || null
-                    : input[key] || null;
-                values.push(value);
-                updates.push(`${map[key]}=$${values.length}`);
-              }'''
-          if old not in s:
-              raise SystemExit('backend optional tracking pattern not found')
-          s = s.replace(old, new, 1)
+          s = sub_once(
+              s,
+              r'''    for \(const key of fields\)\n\s+if \(input\[key\] !== undefined\) \{\n\s+values\.push\(input\[key\] \|\| null\);\n\s+updates\.push\(`\$\{map\[key\]\}=\$\$\{values\.length\}`\);\n\s+\}''',
+              '''    for (const key of fields)\n      if (input[key] !== undefined) {\n        const value = key === "trackingNumber" || key === "trackingUrl"\n          ? String(input[key] ?? "").trim()\n          : key === "fulfilmentCourierId"\n            ? String(input[key] ?? "").trim() || null\n            : input[key] || null;\n        values.push(value);\n        updates.push(`${map[key]}=$${values.length}`);\n      }''',
+              'backend optional tracking',
+          )
           backend.write_text(s)
 
           ui = Path('src/pages/admin/AdminPage.tsx')
           s = ui.read_text()
 
-          old = '''              additionalItems = Math.max(0, (order.items?.length || 0) - 1),
-              normalizedOrderStatus = normalizeOrderStatus(detail?.orderStatus||order.orderStatus);'''
-          new = '''              additionalItems = Math.max(0, (order.items?.length || 0) - 1),
-              normalizedOrderStatus = normalizeOrderStatus(detail?.orderStatus||order.orderStatus),
-              paymentState = String(detail?.paymentStatus||order.paymentStatus||"").toLowerCase(),
-              bankPaymentReady = detail?.paymentMethod !== "bank" || ["verified","paid"].includes(paymentState);'''
-          if old not in s:
-              raise SystemExit('UI order state pattern not found')
+          old = '              additionalItems = Math.max(0, (order.items?.length || 0) - 1),\n              normalizedOrderStatus = normalizeOrderStatus(detail?.orderStatus||order.orderStatus);'
+          new = '              additionalItems = Math.max(0, (order.items?.length || 0) - 1),\n              normalizedOrderStatus = normalizeOrderStatus(detail?.orderStatus||order.orderStatus),\n              paymentState = String(detail?.paymentStatus||order.paymentStatus||"").toLowerCase(),\n              bankPaymentReady = detail?.paymentMethod !== "bank" || ["verified","paid"].includes(paymentState);'
+          if old not in s: raise SystemExit('UI order state pattern not found')
           s = s.replace(old, new, 1)
 
-          old = '''                    {normalizedOrderStatus === "pending" && (
-                      <button type="button" className="btn btn-dark w-full justify-center" disabled={savingId === order.orderId} onClick={() => void change(order.orderId,{orderStatus:"confirmed"})}>
-                        {savingId===order.orderId?"Updating…":"Start processing"}
-                      </button>
-                    )}'''
-          new = '''                    {normalizedOrderStatus === "pending" && !bankPaymentReady && (
-                      <p className="rounded-xl border border-amber-900/15 bg-amber-50/70 p-3 text-xs leading-5 text-amber-950">{paymentState === "rejected" ? "Receipt rejected. Processing is locked until the payment is verified." : "Verify the bank receipt before processing this order."}</p>
-                    )}
-                    {normalizedOrderStatus === "pending" && (
-                      <button type="button" className="btn btn-dark w-full justify-center" disabled={savingId === order.orderId || !bankPaymentReady} onClick={() => void change(order.orderId,{orderStatus:"confirmed"})}>
-                        {savingId===order.orderId?"Updating…":"Start processing"}
-                      </button>
-                    )}'''
-          if old not in s:
-              raise SystemExit('UI pending control pattern not found')
+          old = '''                    {normalizedOrderStatus === "pending" && (\n                      <button type="button" className="btn btn-dark w-full justify-center" disabled={savingId === order.orderId} onClick={() => void change(order.orderId,{orderStatus:"confirmed"})}>\n                        {savingId===order.orderId?"Updating…":"Start processing"}\n                      </button>\n                    )}'''
+          new = '''                    {normalizedOrderStatus === "pending" && !bankPaymentReady && (\n                      <p className="rounded-xl border border-amber-900/15 bg-amber-50/70 p-3 text-xs leading-5 text-amber-950">{paymentState === "rejected" ? "Receipt rejected. Processing is locked until the payment is verified." : "Verify the bank receipt before processing this order."}</p>\n                    )}\n                    {normalizedOrderStatus === "pending" && (\n                      <button type="button" className="btn btn-dark w-full justify-center" disabled={savingId === order.orderId || !bankPaymentReady} onClick={() => void change(order.orderId,{orderStatus:"confirmed"})}>\n                        {savingId===order.orderId?"Updating…":"Start processing"}\n                      </button>\n                    )}'''
+          if old not in s: raise SystemExit('UI pending control pattern not found')
           s = s.replace(old, new, 1)
 
-          old = '''                      <button type="button" className="btn btn-dark w-full justify-center" disabled={savingId === order.orderId} onClick={() => { const existingId=detail.fulfilmentCourierId||""; setDispatchOrderId(order.orderId); setDispatchCourierId(selectDispatchCourierId(admin.fulfilmentCouriers,existingId)); setDispatchTrackingNumber(detail.trackingNumber||""); setDispatchTrackingUrl(detail.trackingUrl||""); setDispatchHandover(sriLankaDateTimeLocal()); }}>'''
-          new = '''                      <button type="button" className="btn btn-dark w-full justify-center" disabled={savingId === order.orderId || !bankPaymentReady} onClick={() => { const existingId=detail.fulfilmentCourierId||""; setDispatchOrderId(order.orderId); setDispatchCourierId(selectDispatchCourierId(admin.fulfilmentCouriers,existingId)); setDispatchTrackingNumber(detail.trackingNumber||""); setDispatchTrackingUrl(detail.trackingUrl||""); setDispatchHandover(sriLankaDateTimeLocal()); }}>'''
-          if old not in s:
-              raise SystemExit('UI dispatch control pattern not found')
+          old = '                      <button type="button" className="btn btn-dark w-full justify-center" disabled={savingId === order.orderId} onClick={() => { const existingId=detail.fulfilmentCourierId||""; setDispatchOrderId(order.orderId); setDispatchCourierId(selectDispatchCourierId(admin.fulfilmentCouriers,existingId)); setDispatchTrackingNumber(detail.trackingNumber||""); setDispatchTrackingUrl(detail.trackingUrl||""); setDispatchHandover(sriLankaDateTimeLocal()); }}>'
+          new = '                      <button type="button" className="btn btn-dark w-full justify-center" disabled={savingId === order.orderId || !bankPaymentReady} onClick={() => { const existingId=detail.fulfilmentCourierId||""; setDispatchOrderId(order.orderId); setDispatchCourierId(selectDispatchCourierId(admin.fulfilmentCouriers,existingId)); setDispatchTrackingNumber(detail.trackingNumber||""); setDispatchTrackingUrl(detail.trackingUrl||""); setDispatchHandover(sriLankaDateTimeLocal()); }}>'
+          if old not in s: raise SystemExit('UI dispatch control pattern not found')
           s = s.replace(old, new, 1)
 
-          old = '''                          disabled={savingId === order.orderId}
-                          value={["verified","paid"].includes(String(detail.paymentStatus||"").toLowerCase()) ? "verified" : String(detail.paymentStatus||"").toLowerCase() === "rejected" ? "rejected" : ""}
-                          onChange={(event) => { const value=event.target.value; if(value) void change(order.orderId,{paymentStatus:value}); }}'''
-          new = '''                          disabled={savingId === order.orderId || ["dispatched","delivered","cancelled"].includes(normalizedOrderStatus)}
-                          value={["verified","paid"].includes(String(detail.paymentStatus||"").toLowerCase()) ? "verified" : String(detail.paymentStatus||"").toLowerCase() === "rejected" ? "rejected" : ""}
-                          onChange={(event) => { const value=event.target.value; if(!value)return; if(value==="rejected"&&normalizedOrderStatus==="confirmed"&&!window.confirm("Rejecting this receipt will move the order back to Pending and stop processing. Continue?")){event.currentTarget.value="verified";return;} void change(order.orderId,{paymentStatus:value}); }}'''
-          if old not in s:
-              raise SystemExit('UI receipt decision pattern not found')
+          old = '''                          disabled={savingId === order.orderId}\n                          value={["verified","paid"].includes(String(detail.paymentStatus||"").toLowerCase()) ? "verified" : String(detail.paymentStatus||"").toLowerCase() === "rejected" ? "rejected" : ""}\n                          onChange={(event) => { const value=event.target.value; if(value) void change(order.orderId,{paymentStatus:value}); }}'''
+          new = '''                          disabled={savingId === order.orderId || ["dispatched","delivered","cancelled"].includes(normalizedOrderStatus)}\n                          value={["verified","paid"].includes(String(detail.paymentStatus||"").toLowerCase()) ? "verified" : String(detail.paymentStatus||"").toLowerCase() === "rejected" ? "rejected" : ""}\n                          onChange={(event) => { const value=event.target.value; if(!value)return; if(value==="rejected"&&normalizedOrderStatus==="confirmed"&&!window.confirm("Rejecting this receipt will move the order back to Pending and stop processing. Continue?")){event.currentTarget.value="verified";return;} void change(order.orderId,{paymentStatus:value}); }}'''
+          if old not in s: raise SystemExit('UI receipt decision pattern not found')
           s = s.replace(old, new, 1)
           ui.write_text(s)
 
           tests = Path('tests/order-workflow.test.ts')
           s = tests.read_text()
-          marker = '''test("delivery cleanup creates an empty actual-courier registry and drops the legacy model",async()=>{'''
-          addition = '''test("dispatch keeps optional tracking fields empty instead of writing database nulls",async()=>{
-            const source=await readFile(new URL("../server/api-implementation/_data/orders-legacy.ts",import.meta.url),"utf8");
-            assert.match(source,/key === "trackingNumber" \\|\\| key === "trackingUrl"/);
-            assert.match(source,/String\\(input\\[key\\] \\?\\? ""\\)\\.trim\\(\\)/);
-          });
-
-          test("rejected bank receipts cannot continue fulfilment and processing rolls back safely",async()=>{
-            const backend=await readFile(new URL("../server/api-implementation/_data/orders-legacy.ts",import.meta.url),"utf8");
-            const ui=await readFile(new URL("../src/pages/admin/AdminPage.tsx",import.meta.url),"utf8");
-            assert.match(backend,/paymentRollback = rejectingBankPayment && currentStatus === "confirmed"/);
-            assert.match(backend,/\\["confirmed", "dispatched", "delivered"\\]\\.includes\\(nextStatus\\) && !bankReady/);
-            assert.match(ui,/bankPaymentReady/);
-            assert.match(ui,/Receipt rejected\\. Processing is locked until the payment is verified\\./);
-          });
-
-          '''
-          if marker not in s:
-              raise SystemExit('test insertion marker not found')
+          marker = 'test("delivery cleanup creates an empty actual-courier registry and drops the legacy model",async()=>{'
+          addition = '''test("dispatch keeps optional tracking fields empty instead of writing database nulls",async()=>{\n  const source=await readFile(new URL("../server/api-implementation/_data/orders-legacy.ts",import.meta.url),"utf8");\n  assert.match(source,/key === "trackingNumber" \\|\\| key === "trackingUrl"/);\n  assert.match(source,/String\\(input\\[key\\] \\?\\? ""\\)\\.trim\\(\\)/);\n});\n\ntest("rejected bank receipts cannot continue fulfilment and processing rolls back safely",async()=>{\n  const backend=await readFile(new URL("../server/api-implementation/_data/orders-legacy.ts",import.meta.url),"utf8");\n  const ui=await readFile(new URL("../src/pages/admin/AdminPage.tsx",import.meta.url),"utf8");\n  assert.match(backend,/paymentRollback = rejectingBankPayment && currentStatus === "confirmed"/);\n  assert.match(backend,/\\["confirmed", "dispatched", "delivered"\\]\\.includes\\(nextStatus\\) && !bankReady/);\n  assert.match(ui,/bankPaymentReady/);\n  assert.match(ui,/Receipt rejected\\. Processing is locked until the payment is verified\\./);\n});\n\n'''
+          if marker not in s: raise SystemExit('test insertion marker not found')
           s = s.replace(marker, addition + marker, 1)
           tests.write_text(s)
           PY
