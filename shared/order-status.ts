@@ -20,6 +20,7 @@ export function normalizeOrderStatus(value: unknown): OrderStatus {
 
 export function orderStatusLabel(value: unknown) {
   const status = normalizeOrderStatus(value);
+  if (status === "confirmed") return "Processing";
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 

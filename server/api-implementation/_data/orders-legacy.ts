@@ -259,7 +259,8 @@ export async function updateOrder(input: Record<string, unknown>) {
       nextStatus = String(input.orderStatus ?? currentStatus).toLowerCase(),
       preorderOrder = Boolean(current.source_preorder_request_id),
       transitions: Record<string, string[]> = preorderOrder ? {
-        pending: ["dispatched", "cancelled"],
+        pending: ["confirmed", "dispatched", "cancelled"],
+        confirmed: ["dispatched", "cancelled"],
         dispatched: ["delivered"],
         delivered: [],
         cancelled: ["pending","confirmed"],

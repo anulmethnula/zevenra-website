@@ -92,19 +92,24 @@ test("forward migration stores only the current order status vocabulary",async()
   assert.match(sql,/pending','confirmed','dispatched','delivered','cancelled/);
 });
 
-test("admin status UI blocks duplicates, restores server state, and captures dispatch details",async()=>{
+test("admin order UI uses a simple forward flow and avoids duplicate refreshes",async()=>{
   const source=await readFile(new URL("../src/pages/admin/AdminPage.tsx",import.meta.url),"utf8");
   assert.match(source,/updateInFlight\.current\.has\(orderId\)/);
   assert.match(source,/finally[\s\S]*updateInFlight\.current\.delete\(orderId\)/);
-  assert.match(source,/adminApi\.get<AdminOrderDetail>\("getOrder"/);
+  assert.match(source,/const updated = await updateOrder\(\{ orderId, \.\.\.patch \}\)/);
+  assert.match(source,/const cached = admin\.orders\.find/);
+  assert.match(source,/Start processing/);
+  assert.match(source,/Dispatch order/);
+  assert.match(source,/Mark delivered/);
+  assert.match(source,/Receipt decision/);
+  assert.match(source,/<option value="verified">Verified<\/option>/);
+  assert.match(source,/<option value="rejected">Rejected<\/option>/);
+  assert.doesNotMatch(source,/Payment status[\s\S]{0,500}refund pending/);
   assert.match(source,/fulfilmentCourierId:dispatchCourierId/);
   assert.doesNotMatch(source,/fulfilmentCourierProviderId:dispatchCourierId/);
   assert.match(source,/courierSentDate:sriLankaDateTimeToIso\(dispatchHandover\)/);
-  assert.match(source,/Tracking number \(optional\)/);
-  assert.match(source,/Tracking URL \(optional\)/);
   assert.match(source,/CONFIRM HANDOVER/);
-  assert.match(source,/value=\{normalizedOrderStatus\}/);
-  assert.match(source,/onClick=\{\(\)=>setDispatchOrderId\(""\)\}/);
+  assert.match(source,/if \(expanded\) void load\(\)/);
 });
 
 test("delivery cleanup creates an empty actual-courier registry and drops the legacy model",async()=>{

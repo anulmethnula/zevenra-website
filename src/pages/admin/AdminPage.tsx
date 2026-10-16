@@ -1686,7 +1686,6 @@ function Preorders() {
         fulfillmentMethod:selected.method,
         pickupLocationId:selected.method==="pickup"?selected.pickupLocationId:undefined,
       });
-      await store.loadAdmin();
       setOpen("");
       const publicOrderNumber = String(order.orderNumber || order.orderId);
       window.location.assign(
@@ -2218,6 +2217,11 @@ function Orders() {
     setOpen(orderId);
     setStatus("");
     if (details[orderId]) return;
+    const cached = admin.orders.find((item) => item.orderId === orderId);
+    if (cached) {
+      setDetails((current) => ({ ...current, [orderId]: cached as AdminOrderDetail }));
+      return;
+    }
     setLoadingId(orderId);
     try {
       const detail = await adminApi.get<AdminOrderDetail>("getOrder", {
@@ -2241,8 +2245,7 @@ function Orders() {
     setSavingId(orderId);
     setStatus("");
     try {
-      await updateOrder({ orderId, ...patch });
-      const updated = await adminApi.get<AdminOrderDetail>("getOrder", { orderId });
+      const updated = await updateOrder({ orderId, ...patch });
       setDetails((current) => ({
         ...current,
         [orderId]: {
@@ -2786,7 +2789,7 @@ function Orders() {
                   <button type="button" aria-label="Close order details" onClick={() => setOpen("")} className="fixed inset-0 z-[90] bg-black/45 backdrop-blur-[1px]" />
                   <motion.div initial={{ x: "100%" }} animate={{ x: 0 }} transition={{ type: "tween", duration: .28 }} className="fixed inset-y-0 right-0 z-[100] w-full overflow-y-auto overflow-x-hidden bg-[#f6f3ed] p-5 shadow-[-20px_0_60px_rgba(0,0,0,.18)] sm:w-[760px] sm:p-7 lg:w-[860px]">
                     <div className="mb-6 flex items-start justify-between gap-4 border-b border-black/10 pb-5">
-                      <div className="min-w-0"><p className="eyebrow text-black/45">Order details</p><h2 className="mt-2 break-all text-xl font-medium">#{order.orderNumber || order.orderId}</h2><p className="mt-1 text-xs text-black/45">{new Date(order.createdAt).toLocaleString("en-LK")}</p><div className="mt-3 flex flex-wrap items-center gap-2"><button type="button" className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-black/50" onClick={() => { void navigator.clipboard.writeText(String(order.orderNumber || order.orderId)); setStatus("Order number copied."); }}><Copy size={12}/> Copy order number</button><span className="admin-status">{order.sourcePreorderRequestId ? "PRE-ORDER" : "NORMAL ORDER"}</span><span className="admin-status">{order.orderStatus}</span><span className="admin-status admin-status--info">{order.paymentStatus}</span></div></div>
+                      <div className="min-w-0"><p className="eyebrow text-black/45">Order details</p><h2 className="mt-2 break-all text-xl font-medium">#{order.orderNumber || order.orderId}</h2><p className="mt-1 text-xs text-black/45">{new Date(order.createdAt).toLocaleString("en-LK")}</p><div className="mt-3 flex flex-wrap items-center gap-2"><button type="button" className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-black/50" onClick={() => { void navigator.clipboard.writeText(String(order.orderNumber || order.orderId)); setStatus("Order number copied."); }}><Copy size={12}/> Copy order number</button><span className="admin-status">{order.sourcePreorderRequestId ? "PRE-ORDER" : "NORMAL ORDER"}</span><span className="admin-status">{orderStatusLabel(order.orderStatus)}</span><span className="admin-status admin-status--info">{order.paymentStatus}</span></div></div>
                       <button type="button" onClick={() => setOpen("")} className="btn px-4">Close</button>
                     </div>
                     {loadingId === order.orderId ? (
@@ -2876,82 +2879,30 @@ function Orders() {
                         </div>
                         <div className="space-y-5">
                           <Panel title="Order control">
-                            <label className="mb-3 block text-xs">
-                              Order status
-                              <select
-                                disabled={savingId === order.orderId}
-                                className="field mt-2"
-                                value={normalizedOrderStatus}
-                                onChange={(e) => {
-                                   const value = normalizeOrderStatus(e.target.value);
-                                  if(value==="cancelled"){
-                                    const reason=window.prompt("CANCEL ORDER\n\nEnter one reason exactly or add a short custom reason:\nCustomer requested cancellation\nUnable to fulfil\nPayment issue\nDuplicate order\nIncorrect order\nOther");
-                                    if(!reason?.trim())return;
-                                    void change(order.orderId,{orderStatus:value,cancellationReason:reason.trim(),cancelledBy:"owner"});return;
-                                  }
-                                  if(value==="dispatched"){
-                                     const existingId=detail.fulfilmentCourierId||"";
-                                     setDispatchOrderId(order.orderId);setDispatchCourierId(selectDispatchCourierId(admin.fulfilmentCouriers,existingId));setDispatchTrackingNumber(detail.trackingNumber||"");setDispatchTrackingUrl(detail.trackingUrl||"");
-                                     setDispatchHandover(sriLankaDateTimeLocal());return;
-                                  }
-                                  if(value==="delivered"&&!window.confirm("Mark this order as delivered?"))return;
-                                  void change(order.orderId,{orderStatus:value});
-                                }}
-                              >
-                                {[
-                                  normalizedOrderStatus,
-                                  ...(
-                                    detail.sourcePreorderRequestId ? {
-                                      pending: ["dispatched", "cancelled"],
-                                      dispatched: ["delivered"],
-                                      delivered: [],
-                                      cancelled: [detail.cancelledFromStatus||"pending"],
-                                    } : {
-                                      pending: ["confirmed", "cancelled"],
-                                      confirmed: ["dispatched","cancelled"],
-                                      dispatched: ["delivered"],
-                                      delivered: [],
-                                      cancelled: [detail.cancelledFromStatus||"pending"],
-                                    } as Record<string, string[]>
-                                  )[
-                                    normalizedOrderStatus
-                                  ],
-                                ].map((value) => (
-                                  <option key={value} value={value}>
-                                    {value===String(detail.cancelledFromStatus||"")&&String(detail.orderStatus).toLowerCase()==="cancelled"?`Restore to ${value}`:value}
-                                  </option>
-                                ))}
-                              </select>
-                              {savingId===order.orderId?<span className="mt-2 block text-[11px] text-black/45">Updating…</span>:null}
-                            </label>
-                            {detail.paymentMethod==="bank"?<label className="block text-xs">
-                              Payment status
-                              <select
-                                disabled={savingId === order.orderId || Boolean(detail.sourcePreorderRequestId)}
-                                className="field mt-2"
-                                value={String(detail.paymentStatus || "")}
-                                onChange={(e) =>
-                                  void change(order.orderId, {
-                                    paymentStatus: e.target.value,
-                                  })
-                                }
-                              >
-                                {[
-                                      "verification required",
-                                      "receipt submitted",
-                                      "paid",
-                                      "verified",
-                                      "rejected",
-                                      "refund pending",
-                                      "refunded",
-                                    ].map((value) => (
-                                  <option key={value} value={value}>
-                                    {value}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>:<Info label="Payment method" value="Cash on delivery"/>}
-                            {dispatchOrderId===order.orderId?<div className="mt-4 border border-bronze/25 bg-white/45 p-4"><p className="text-xs font-semibold uppercase tracking-wider">Prepare dispatch</p><p className="mt-2 text-xs text-black/55">Select the company receiving this parcel from ZEVENRA.</p><div className="mt-4 grid gap-3">{admin.fulfilmentCouriers.some(courier=>courier.active)?<label className="text-xs">Courier<select className="field mt-2" value={dispatchCourierId} onChange={e=>setDispatchCourierId(e.target.value)}><option value="">Select courier</option>{admin.fulfilmentCouriers.filter(courier=>courier.active).map(courier=><option key={courier.id} value={courier.id}>{courier.name}</option>)}</select></label>:<div className="rounded-xl border border-dashed border-black/15 p-4 text-xs"><b>No dispatch courier configured.</b><p className="mt-2">Add the courier company you actually use before dispatching this order.</p><Link className="btn mt-3 inline-flex" to="/admin/delivery">ADD COURIER</Link></div>}<label className="text-xs">Handover date/time (Sri Lanka)<input className="field mt-2" type="datetime-local" value={dispatchHandover} onChange={e=>setDispatchHandover(e.target.value)}/></label><details className="border-t border-black/10 pt-3"><summary className="cursor-pointer text-xs text-black/55">Advanced tracking fields</summary><div className="mt-3 grid gap-3"><Field label="Tracking number (optional)" value={dispatchTrackingNumber} onChange={setDispatchTrackingNumber}/><Field label="Tracking URL (optional)" value={dispatchTrackingUrl} onChange={setDispatchTrackingUrl}/></div></details><div className="flex gap-2"><button type="button" className="btn btn-dark" disabled={savingId===order.orderId||!dispatchCourierId||!dispatchHandover} onClick={async()=>{const url=dispatchTrackingUrl.trim();if(url&&!/^https:\/\//i.test(url)){setStatus("Tracking URL must start with https://");return;}const saved=await change(order.orderId,{orderStatus:"dispatched",fulfilmentCourierId:dispatchCourierId,trackingNumber:dispatchTrackingNumber.trim(),trackingUrl:url,courierSentDate:sriLankaDateTimeToIso(dispatchHandover)});if(saved)setDispatchOrderId("");}}>{savingId===order.orderId?"Updating…":"CONFIRM HANDOVER"}</button><button type="button" className="btn" disabled={savingId===order.orderId} onClick={()=>setDispatchOrderId("")}>Cancel</button></div></div></div>:null}
+                  <div className="grid gap-3">
+                    <div className="flex items-center justify-between gap-3 border-b border-black/10 pb-3 text-xs">
+                      <span className="text-black/55">Order status</span>
+                      <b>{orderStatusLabel(normalizedOrderStatus)}</b>
+                    </div>
+                    {normalizedOrderStatus === "pending" && (
+                      <button type="button" className="btn btn-dark w-full justify-center" disabled={savingId === order.orderId} onClick={() => void change(order.orderId,{orderStatus:"confirmed"})}>
+                        {savingId===order.orderId?"Updating…":"Start processing"}
+                      </button>
+                    )}
+                    {normalizedOrderStatus === "confirmed" && (
+                      <button type="button" className="btn btn-dark w-full justify-center" disabled={savingId === order.orderId} onClick={() => { const existingId=detail.fulfilmentCourierId||""; setDispatchOrderId(order.orderId); setDispatchCourierId(selectDispatchCourierId(admin.fulfilmentCouriers,existingId)); setDispatchTrackingNumber(detail.trackingNumber||""); setDispatchTrackingUrl(detail.trackingUrl||""); setDispatchHandover(sriLankaDateTimeLocal()); }}>
+                        Dispatch order
+                      </button>
+                    )}
+                    {normalizedOrderStatus === "dispatched" && (
+                      <button type="button" className="btn btn-dark w-full justify-center" disabled={savingId === order.orderId} onClick={() => { if(window.confirm("Mark this order as delivered?")) void change(order.orderId,{orderStatus:"delivered"}); }}>
+                        {savingId===order.orderId?"Updating…":"Mark delivered"}
+                      </button>
+                    )}
+                    {normalizedOrderStatus === "delivered" && <p className="text-xs leading-5 text-black/50">Delivered. Use Return below only if the customer sends an item back.</p>}
+                    {normalizedOrderStatus === "cancelled" && <p className="text-xs leading-5 text-black/50">This order is cancelled.</p>}
+                  </div>
+                  {dispatchOrderId===order.orderId?<div className="mt-4 border border-bronze/25 bg-white/45 p-4"><p className="text-xs font-semibold uppercase tracking-wider">Prepare dispatch</p><p className="mt-2 text-xs text-black/55">Select the company receiving this parcel from ZEVENRA.</p><div className="mt-4 grid gap-3">{admin.fulfilmentCouriers.some(courier=>courier.active)?<label className="text-xs">Courier<select className="field mt-2" value={dispatchCourierId} onChange={e=>setDispatchCourierId(e.target.value)}><option value="">Select courier</option>{admin.fulfilmentCouriers.filter(courier=>courier.active).map(courier=><option key={courier.id} value={courier.id}>{courier.name}</option>)}</select></label>:<div className="rounded-xl border border-dashed border-black/15 p-4 text-xs"><b>No dispatch courier configured.</b><p className="mt-2">Add the courier company you actually use before dispatching this order.</p><Link className="btn mt-3 inline-flex" to="/admin/delivery">ADD COURIER</Link></div>}<label className="text-xs">Handover date/time (Sri Lanka)<input className="field mt-2" type="datetime-local" value={dispatchHandover} onChange={e=>setDispatchHandover(e.target.value)}/></label><details className="border-t border-black/10 pt-3"><summary className="cursor-pointer text-xs text-black/55">Advanced tracking fields</summary><div className="mt-3 grid gap-3"><Field label="Tracking number (optional)" value={dispatchTrackingNumber} onChange={setDispatchTrackingNumber}/><Field label="Tracking URL (optional)" value={dispatchTrackingUrl} onChange={setDispatchTrackingUrl}/></div></details><div className="flex gap-2"><button type="button" className="btn btn-dark" disabled={savingId===order.orderId||!dispatchCourierId||!dispatchHandover} onClick={async()=>{const url=dispatchTrackingUrl.trim();if(url&&!/^https:\/\//i.test(url)){setStatus("Tracking URL must start with https://");return;}const saved=await change(order.orderId,{orderStatus:"dispatched",fulfilmentCourierId:dispatchCourierId,trackingNumber:dispatchTrackingNumber.trim(),trackingUrl:url,courierSentDate:sriLankaDateTimeToIso(dispatchHandover)});if(saved)setDispatchOrderId("");}}>{savingId===order.orderId?"Updating…":"CONFIRM HANDOVER"}</button><button type="button" className="btn" disabled={savingId===order.orderId} onClick={()=>setDispatchOrderId("")}>Cancel</button></div></div></div>:null}
                           </Panel>
                           <Panel title="Payment">
                             <div className="space-y-3 text-sm">
@@ -2976,15 +2927,23 @@ function Orders() {
                                   value={detail.paymentReference}
                                 />
                               )}
-                              <Info
-                                label="Payment status"
-                                value={detail.paymentStatus}
-                              />
-                              {detail.paymentReceiptUrl && (
-                                <ProtectedReceipt
-                                  url={detail.paymentReceiptUrl}
-                                />
-                              )}{" "}
+                              <Info label="Payment status" value={detail.paymentStatus} />
+                    {detail.paymentReceiptUrl && <ProtectedReceipt url={detail.paymentReceiptUrl} />}
+                    {detail.paymentMethod === "bank" && !detail.sourcePreorderRequestId && detail.paymentReceiptUrl && (
+                      <label className="block text-xs">
+                        Receipt decision
+                        <select
+                          className="field mt-2"
+                          disabled={savingId === order.orderId}
+                          value={["verified","paid"].includes(String(detail.paymentStatus||"").toLowerCase()) ? "verified" : String(detail.paymentStatus||"").toLowerCase() === "rejected" ? "rejected" : ""}
+                          onChange={(event) => { const value=event.target.value; if(value) void change(order.orderId,{paymentStatus:value}); }}
+                        >
+                          <option value="">Choose decision</option>
+                          <option value="verified">Verified</option>
+                          <option value="rejected">Rejected</option>
+                        </select>
+                      </label>
+                    )}
                             </div>
                           </Panel>
                           <Panel title={detail.sourcePreorderRequestId ? "Delivery" : "Totals"}>
@@ -3138,13 +3097,15 @@ type AdminOrderLine={orderItemId?:number;productId?:string;variantId?:string;pro
 type AdminOrderDetail=Omit<Order,"items">&{items:AdminOrderLine[]};
 type AdminReturn={id:string;type:"customer_return"|"courier_rto";status:string;reason:string;createdAt:string;items?:Array<{id:number;orderItemId:number;quantity:number;restockable?:boolean;productName?:string;color?:string;size?:string}>};
 function ReturnsPanel({ order, onMessage }: { order: AdminOrderDetail; onMessage: (value: string) => void }) {
-  const [returns, setReturns] = useState<AdminReturn[]>([]), [loading, setLoading] = useState(false), [creating, setCreating] = useState(false);
+  const [returns, setReturns] = useState<AdminReturn[]>([]), [loading, setLoading] = useState(false), [creating, setCreating] = useState(false), [expanded, setExpanded] = useState(false);
   const eligible = order.orderStatus === "dispatched" || order.orderStatus === "delivered";
   const load = useCallback(async () => { setLoading(true); try { setReturns(await adminApi.get<AdminReturn[]>("listReturns", { orderId: order.orderId })); } catch (reason) { onMessage(reason instanceof Error ? reason.message : "Could not load returns."); } finally { setLoading(false); } }, [onMessage, order.orderId]);
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { if (expanded) void load(); }, [expanded, load]);
+  if (!eligible && !Number(order.returnCount)) return null;
+  if (!expanded) return <Panel title="Return"><button type="button" className="btn w-full justify-center" onClick={() => setExpanded(true)}>{Number(order.returnCount) ? "View return" : "Create return"}</button></Panel>;
   async function create(event: React.FormEvent<HTMLFormElement>) { event.preventDefault(); const raw = new FormData(event.currentTarget), items = order.items.map((item) => ({ orderItemId: item.orderItemId, quantity: Number(raw.get(`qty-${item.orderItemId}`) || 0) })).filter((item) => item.orderItemId && item.quantity > 0); try { await adminApi.post("createReturn", { orderId: order.orderId, type: raw.get("type"), reason: raw.get("reason"), notes: raw.get("notes"), refundRequired: raw.get("refundRequired") === "on", items }); setCreating(false); onMessage("Return created. Stock has not been changed."); await load(); } catch (reason) { onMessage(reason instanceof Error ? reason.message : "Could not create return."); } }
   async function advance(item: AdminReturn, status: string) { try { const payload: Record<string, unknown> = { returnId: item.id, status }; if (status === "received") payload.items = item.items?.map((line) => ({ id: line.id, restockable: (document.querySelector<HTMLInputElement>(`#restock-${line.id}`)?.checked ?? false) })); const result = await adminApi.post<{ restoredUnits: number }>("updateReturn", payload); onMessage(status === "received" ? `Return received. ${result.restoredUnits} unit${result.restoredUnits === 1 ? "" : "s"} restored to stock.` : `Return marked ${status.replace("_", " ")}.`); await load(); } catch (reason) { onMessage(reason instanceof Error ? reason.message : "Could not update return."); } }
-  return <Panel title="Returns"><div className="space-y-4">{loading && <p className="text-xs text-black/45">Loading returns…</p>}{returns.map((item) => <div key={item.id} className="border border-black/10 bg-white/40 p-3 text-xs"><div className="flex justify-between gap-3"><b>{item.type === "courier_rto" ? "Courier RTO" : "Customer return"}</b><span className="uppercase text-black/45">{item.status}</span></div><p className="mt-2 text-black/60">{item.reason}</p>{item.status === "in_transit" && <div className="mt-3 space-y-2">{item.items?.map((line) => <label key={line.id} className="flex items-center justify-between gap-3"><span>{line.productName} · {line.color}/{line.size} · Qty {line.quantity}</span><span><input id={`restock-${line.id}`} type="checkbox" className="mr-2 accent-black"/>Restockable</span></label>)}</div>}<div className="mt-3 flex flex-wrap gap-2">{item.status === "requested" && <><button className="btn" onClick={() => void advance(item,"approved")}>Approve</button><button className="btn" onClick={() => void advance(item,"rejected")}>Reject</button></>}{item.status === "approved" && <button className="btn" onClick={() => void advance(item,"in_transit")}>Mark in transit</button>}{item.status === "in_transit" && <button className="btn btn-dark" onClick={() => void advance(item,"received")}>Mark received</button>}{item.status === "received" && <button className="btn" onClick={() => void advance(item,"completed")}>Complete</button>}</div></div>)}{eligible && !creating && <button className="btn w-full" onClick={() => setCreating(true)}>Create return</button>}{creating && <form onSubmit={create} className="space-y-3 border border-black/10 p-3"><select name="type" className="field" defaultValue={order.orderStatus === "dispatched" ? "courier_rto" : "customer_return"}>{order.orderStatus === "dispatched" && <option value="courier_rto">Courier return / RTO</option>}{order.orderStatus === "delivered" && <option value="customer_return">Customer return</option>}</select><input name="reason" required className="field" placeholder="Reason"/><textarea name="notes" className="field" placeholder="Notes"/><label className="flex items-center gap-2 text-xs"><input name="refundRequired" type="checkbox" className="accent-black"/>Money refund will be required</label>{order.items.map((item) => <label key={item.orderItemId} className="flex items-center justify-between gap-3 text-xs"><span>{item.productName || item.name} · purchased {item.quantity}</span><input name={`qty-${item.orderItemId}`} type="number" min="0" max={item.quantity} defaultValue="0" className="field w-20"/></label>)}<div className="flex gap-2"><button className="btn btn-dark">Create return</button><button type="button" className="btn" onClick={() => setCreating(false)}>Close</button></div></form>}{!eligible && !returns.length && <p className="text-xs leading-5 text-black/45">Returns become available after dispatch or delivery as applicable.</p>}</div></Panel>;
+  return <Panel title="Return"><div className="space-y-4">{loading && <p className="text-xs text-black/45">Loading returns…</p>}{returns.map((item) => <div key={item.id} className="border border-black/10 bg-white/40 p-3 text-xs"><div className="flex justify-between gap-3"><b>{item.type === "courier_rto" ? "Courier RTO" : "Customer return"}</b><span className="uppercase text-black/45">{item.status}</span></div><p className="mt-2 text-black/60">{item.reason}</p>{item.status === "in_transit" && <div className="mt-3 space-y-2">{item.items?.map((line) => <label key={line.id} className="flex items-center justify-between gap-3"><span>{line.productName} · {line.color}/{line.size} · Qty {line.quantity}</span><span><input id={`restock-${line.id}`} type="checkbox" className="mr-2 accent-black"/>Restockable</span></label>)}</div>}<div className="mt-3 flex flex-wrap gap-2">{item.status === "requested" && <><button className="btn" onClick={() => void advance(item,"approved")}>Approve</button><button className="btn" onClick={() => void advance(item,"rejected")}>Reject</button></>}{item.status === "approved" && <button className="btn" onClick={() => void advance(item,"in_transit")}>Mark in transit</button>}{item.status === "in_transit" && <button className="btn btn-dark" onClick={() => void advance(item,"received")}>Mark received</button>}{item.status === "received" && <button className="btn" onClick={() => void advance(item,"completed")}>Complete</button>}</div></div>)}{eligible && !creating && <button className="btn w-full" onClick={() => setCreating(true)}>Create return</button>}{creating && <form onSubmit={create} className="space-y-3 border border-black/10 p-3"><select name="type" className="field" defaultValue={order.orderStatus === "dispatched" ? "courier_rto" : "customer_return"}>{order.orderStatus === "dispatched" && <option value="courier_rto">Courier return / RTO</option>}{order.orderStatus === "delivered" && <option value="customer_return">Customer return</option>}</select><input name="reason" required className="field" placeholder="Reason"/><textarea name="notes" className="field" placeholder="Notes"/><label className="flex items-center gap-2 text-xs"><input name="refundRequired" type="checkbox" className="accent-black"/>Money refund will be required</label>{order.items.map((item) => <label key={item.orderItemId} className="flex items-center justify-between gap-3 text-xs"><span>{item.productName || item.name} · purchased {item.quantity}</span><input name={`qty-${item.orderItemId}`} type="number" min="0" max={item.quantity} defaultValue="0" className="field w-20"/></label>)}<div className="flex gap-2"><button className="btn btn-dark">Create return</button><button type="button" className="btn" onClick={() => setCreating(false)}>Close</button></div></form>}{!eligible && !returns.length && <p className="text-xs leading-5 text-black/45">Returns become available after dispatch or delivery as applicable.</p>}</div></Panel>;
 }
 function OrderDetailsEditor({ order, onSaved }: { order: AdminOrderDetail; onSaved: (order: AdminOrderDetail) => void }) {
   const [editing,setEditing]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState("");
