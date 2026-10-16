@@ -1,0 +1,190 @@
+from pathlib import Path
+
+
+def replace_once(path: str, old: str, new: str) -> None:
+    p = Path(path)
+    text = p.read_text()
+    if old not in text:
+        raise SystemExit(f"needle not found in {path}: {old[:100]!r}")
+    p.write_text(text.replace(old, new, 1))
+
+
+# Backend: cancellation reason + safe restock for physically received preorders.
+path = "server/api-implementation/_data/preorders.ts"
+replace_once(
+    path,
+    '''      confirmedPrice = resolvePreorderConfirmedPrice(
+        input.confirmedPrice,
+        current.confirmed_price,
+      );
+    if (!isPreorderTransitionAllowed(current.status, nextStatus))
+''',
+    '''      confirmedPrice = resolvePreorderConfirmedPrice(
+        input.confirmedPrice,
+        current.confirmed_price,
+      ),
+      cancellationReason = String(input.cancellationReason || "").trim(),
+      cancelling = nextStatus === "cancelled" && current.status !== "cancelled";
+    if (cancelling && !cancellationReason)
+      throw new Error("Add a cancellation reason.");
+    if (!isPreorderTransitionAllowed(current.status, nextStatus))
+''',
+)
+replace_once(
+    path,
+    '''    if(nextStatus==="paid"&&!current.payment_receipt_public_id)throw new Error("A verified payment receipt is required.");
+    if(nextStatus==="confirmed"&&current.status!=="paid"&&current.status!=="confirmed")throw new Error("Only a paid pre-order can be confirmed.");
+
+    const result = await client.query<Record<string, unknown>>(
+''',
+    '''    if(nextStatus==="paid"&&!current.payment_receipt_public_id)throw new Error("A verified payment receipt is required.");
+    if(nextStatus==="confirmed"&&current.status!=="paid"&&current.status!=="confirmed")throw new Error("Only a paid pre-order can be confirmed.");
+
+    let restockedUnits = 0;
+    const receivedReservation = ["arrived", "ready", "notified"].includes(String(current.status));
+    if (cancelling && receivedReservation && !current.released_at) {
+      await client.query(
+        "UPDATE variants SET stock=stock+$2,updated_at=now() WHERE id=$1",
+        [current.variant_id, current.quantity],
+      );
+      restockedUnits = Number(current.quantity) || 0;
+    }
+
+    const result = await client.query<Record<string, unknown>>(
+''',
+)
+replace_once(
+    path,
+    '''    await client.query(
+      "INSERT INTO audit_logs(actor,action,entity_type,entity_id,details) VALUES('owner','update','preorder',$1,$2::jsonb)",
+      [input.requestId, JSON.stringify(input)],
+    );
+    return mapPreorder(result.rows[0]);
+''',
+    '''    if (cancelling) {
+      await client.query(
+        "UPDATE preorders SET claim_token_hash=NULL,reservation_expires_at=NULL,released_at=CASE WHEN $2::boolean THEN COALESCE(released_at,now()) ELSE released_at END,updated_at=now() WHERE request_id=$1",
+        [input.requestId, restockedUnits > 0],
+      );
+    }
+    const auditDetails = cancelling
+      ? {
+          ...input,
+          cancellationReason,
+          previousStatus: current.status,
+          restockedUnits,
+          refundRequired: Boolean(current.payment_verified_at),
+        }
+      : input;
+    await client.query(
+      "INSERT INTO audit_logs(actor,action,entity_type,entity_id,details) VALUES('owner','update','preorder',$1,$2::jsonb)",
+      [input.requestId, JSON.stringify(auditDetails)],
+    );
+    const finalRow = cancelling
+      ? (await client.query<Record<string, unknown>>("SELECT * FROM preorders WHERE request_id=$1", [input.requestId])).rows[0]
+      : result.rows[0];
+    return mapPreorder(finalRow);
+''',
+)
+
+# Admin UI: explicit cancel button for every safe preorder stage.
+path = "src/pages/admin/AdminPage.tsx"
+replace_once(
+    path,
+    '''  async function notifyCustomer(item:PreorderRequest){
+''',
+    '''  async function cancelPreorder(item: PreorderRequest) {
+    if (item.status === "in_transit") {
+      setMessage("This pre-order is already in transit. Receive it first, then cancel it so the item can be released to stock safely.");
+      return;
+    }
+    const answer = window.prompt("Reason for cancelling this pre-order?");
+    if (answer === null) return;
+    const cancellationReason = answer.trim();
+    if (!cancellationReason) {
+      setMessage("Add a cancellation reason.");
+      return;
+    }
+    const refundRequired = Boolean(item.paymentVerifiedAt);
+    if (refundRequired && !window.confirm("This pre-order payment was already verified. Cancelling will stop the pre-order and record that a customer refund is required. Continue?")) return;
+    setBusy(item.requestId);
+    setMessage("");
+    try {
+      await adminApi.post<PreorderRequest>("updatePreorder", {
+        requestId: item.requestId,
+        status: "cancelled",
+        cancellationReason,
+      });
+      await store.refreshPreorders();
+      const released = ["arrived", "ready", "notified"].includes(item.status);
+      setMessage(
+        preorderDisplayId(item) +
+          " cancelled." +
+          (released ? " Reserved item released to stock." : "") +
+          (refundRequired ? " Customer refund required." : ""),
+      );
+    } catch (reason) {
+      setMessage(reason instanceof Error ? reason.message : "Could not cancel pre-order.");
+    } finally {
+      setBusy("");
+    }
+  }
+  async function notifyCustomer(item:PreorderRequest){
+''',
+)
+replace_once(
+    path,
+    '''                    {item.status==="notified"&&<div className="grid gap-2">
+''',
+    '''                    {(["new","awaiting_payment","payment_submitted","paid","contacted","confirmed","batched","ordered","arrived","ready","notified"] as PreorderStatus[]).includes(item.status) && (
+                      <button type="button" className="btn w-full justify-center text-red-800" disabled={busy===item.requestId} onClick={()=>void cancelPreorder(item)}>
+                        {busy===item.requestId?"Saving…":"Cancel pre-order"}
+                      </button>
+                    )}
+                    {item.status==="in_transit"&&<p className="rounded-xl border border-amber-900/15 bg-amber-50/70 p-3 text-xs leading-5 text-amber-950">Already in transit. Receive the item first, then cancel it to release the reserved piece to stock safely.</p>}
+                    {item.status==="notified"&&<div className="grid gap-2">
+''',
+)
+
+# Tests: lock both order and preorder cancellation into QA.
+path = "tests/preorder-lifecycle.test.ts"
+text = Path(path).read_text()
+addition = r'''
+
+test("admin preorder cancellation is explicit and received reservations return to stock safely",async()=>{
+  const [ui,data]=await Promise.all([
+    readFile(new URL("../src/pages/admin/AdminPage.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../server/api-implementation/_data/preorders.ts",import.meta.url),"utf8"),
+  ]);
+  const update=data.slice(data.indexOf("export async function updatePreorder"),data.indexOf("export async function convertPreorderToOrder"));
+  assert.match(ui,/Reason for cancelling this pre-order\?/);
+  assert.match(ui,/Cancel pre-order/);
+  assert.match(ui,/Already in transit\. Receive the item first/);
+  assert.match(update,/cancelling && !cancellationReason/);
+  assert.match(update,/\["arrived", "ready", "notified"\]\.includes/);
+  assert.match(update,/UPDATE variants SET stock=stock\+\$2/);
+  assert.match(update,/claim_token_hash=NULL,reservation_expires_at=NULL/);
+  assert.match(update,/refundRequired: Boolean\(current\.payment_verified_at\)/);
+  assert.match(update,/restockedUnits > 0/);
+});
+'''
+if "admin preorder cancellation is explicit" not in text:
+    Path(path).write_text(text + addition)
+
+path = "tests/order-workflow.test.ts"
+text = Path(path).read_text()
+old = '''  assert.match(ui,/Reason for cancelling this order\\?/);
+  assert.match(ui,/orderStatus:"cancelled",cancellationReason:reason,cancelledBy:"owner"/);
+'''
+new = '''  assert.match(ui,/Reason for cancelling this order\\?/);
+  assert.match(ui,/\\["pending", "confirmed"\\]\\.includes\\(normalizedOrderStatus\\)/);
+  assert.match(ui,/Cancel order/);
+  assert.match(ui,/orderStatus:"cancelled",cancellationReason:reason,cancelledBy:"owner"/);
+'''
+if old not in text:
+    raise SystemExit("order workflow cancellation test needle not found")
+Path(path).write_text(text.replace(old, new, 1))
+
+# Remove temporary patch machinery from the final branch state.
+Path("scripts/fix-preorder-cancel-flow.py").unlink()
+Path(".github/workflows/fix-preorder-cancel-flow.yml").unlink()
