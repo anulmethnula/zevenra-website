@@ -1,4 +1,4 @@
-name: Fix fulfilment integrity v2
+name: Fix fulfilment integrity v3
 
 on:
   push:
