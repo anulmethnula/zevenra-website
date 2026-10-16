@@ -112,6 +112,21 @@ test("admin order UI uses a simple forward flow and avoids duplicate refreshes",
   assert.match(source,/if \(expanded\) void load\(\)/);
 });
 
+test("dispatch keeps optional tracking fields empty instead of writing database nulls",async()=>{
+  const source=await readFile(new URL("../server/api-implementation/_data/orders-legacy.ts",import.meta.url),"utf8");
+  assert.match(source,/key === "trackingNumber" \|\| key === "trackingUrl"/);
+  assert.match(source,/String\(input\[key\] \?\? ""\)\.trim\(\)/);
+});
+
+test("rejected bank receipts cannot continue fulfilment and processing rolls back safely",async()=>{
+  const backend=await readFile(new URL("../server/api-implementation/_data/orders-legacy.ts",import.meta.url),"utf8");
+  const ui=await readFile(new URL("../src/pages/admin/AdminPage.tsx",import.meta.url),"utf8");
+  assert.match(backend,/paymentRollback = rejectingBankPayment && currentStatus === "confirmed"/);
+  assert.match(backend,/\["confirmed", "dispatched", "delivered"\]\.includes\(nextStatus\) && !bankReady/);
+  assert.match(ui,/bankPaymentReady/);
+  assert.match(ui,/Receipt rejected\. Processing is locked until the payment is verified\./);
+});
+
 test("delivery cleanup creates an empty actual-courier registry and drops the legacy model",async()=>{
   const sql=await readFile(new URL("../database/migrations/028_delivery_architecture_cleanup.sql",import.meta.url),"utf8");
   assert.match(sql,/CREATE TABLE IF NOT EXISTS fulfilment_couriers/);

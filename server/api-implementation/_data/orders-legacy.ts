@@ -256,8 +256,12 @@ export async function updateOrder(input: Record<string, unknown>) {
     if (!current) throw new Error("Order not found");
     const storedStatus = String(current.order_status),
       currentStatus = normalizeAdminOrderStatus(storedStatus),
-      nextStatus = String(input.orderStatus ?? currentStatus).toLowerCase(),
       preorderOrder = Boolean(current.source_preorder_request_id),
+      nextPayment = String(input.paymentStatus ?? current.payment_status),
+      rejectingBankPayment = current.payment_method === "bank" && input.paymentStatus !== undefined && nextPayment.toLowerCase() === "rejected",
+      requestedStatus = String(input.orderStatus ?? currentStatus).toLowerCase(),
+      paymentRollback = rejectingBankPayment && currentStatus === "confirmed" && input.orderStatus === undefined,
+      nextStatus = paymentRollback ? "pending" : requestedStatus,
       transitions: Record<string, string[]> = preorderOrder ? {
         pending: ["confirmed", "dispatched", "cancelled"],
         confirmed: ["dispatched", "cancelled"],
@@ -271,17 +275,16 @@ export async function updateOrder(input: Record<string, unknown>) {
         delivered: [],
         cancelled: ["pending","confirmed"],
       };
-    if (nextStatus !== currentStatus && !transitions[currentStatus]?.includes(nextStatus))
+    if (nextStatus !== currentStatus && !transitions[currentStatus]?.includes(nextStatus) && !paymentRollback)
       throw new Error(`Order cannot move from ${currentStatus} to ${nextStatus}.`);
-    const nextPayment = String(input.paymentStatus ?? current.payment_status),
-      bankReady = ["paid", "verified"].includes(nextPayment.toLowerCase());
+    const bankReady = ["paid", "verified"].includes(nextPayment.toLowerCase());
     const paymentOptions = current.payment_method === "bank"
       ? ["verification required", "receipt submitted", "verified", "paid", "rejected", "refund pending", "refunded"]
       : ["cod", "paid", "refund pending", "refunded"];
     if (!paymentOptions.includes(nextPayment.toLowerCase()))
       throw new Error("That payment status is not valid for this payment method.");
-    if (current.payment_method === "bank" && nextStatus === "confirmed" && !bankReady)
-      throw new Error("Verify or mark the bank payment paid before confirming this order.");
+    if (current.payment_method === "bank" && ["confirmed", "dispatched", "delivered"].includes(nextStatus) && !bankReady)
+      throw new Error("Verify or mark the bank payment paid before processing this order.");
     if (current.payment_method === "bank" && nextPayment.toLowerCase() === "rejected" && !["pending", "cancelled"].includes(nextStatus))
       throw new Error("A rejected bank payment cannot progress through fulfilment.");
     let selectedCourier:Record<string,unknown>|undefined;
@@ -347,7 +350,12 @@ export async function updateOrder(input: Record<string, unknown>) {
     if(restoring)updates.push("cancelled_at=NULL,cancelled_by=NULL,cancellation_reason=NULL");
     for (const key of fields)
       if (input[key] !== undefined) {
-        values.push(input[key] || null);
+        const value = key === "trackingNumber" || key === "trackingUrl"
+          ? String(input[key] ?? "").trim()
+          : key === "fulfilmentCourierId"
+            ? String(input[key] ?? "").trim() || null
+            : input[key] || null;
+        values.push(value);
         updates.push(`${map[key]}=$${values.length}`);
       }
     if(nextStatus==="dispatched"&&selectedCourier){

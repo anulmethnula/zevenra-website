@@ -2725,7 +2725,9 @@ function Orders() {
                 (media) => media.type === "image",
               ),
               additionalItems = Math.max(0, (order.items?.length || 0) - 1),
-              normalizedOrderStatus = normalizeOrderStatus(detail?.orderStatus||order.orderStatus);
+              normalizedOrderStatus = normalizeOrderStatus(detail?.orderStatus||order.orderStatus),
+              paymentState = String(detail?.paymentStatus||order.paymentStatus||"").toLowerCase(),
+              bankPaymentReady = detail?.paymentMethod !== "bank" || ["verified","paid"].includes(paymentState);
             return (
               <article
                 key={order.orderId}
@@ -2884,13 +2886,16 @@ function Orders() {
                       <span className="text-black/55">Order status</span>
                       <b>{orderStatusLabel(normalizedOrderStatus)}</b>
                     </div>
+                    {normalizedOrderStatus === "pending" && !bankPaymentReady && (
+                      <p className="rounded-xl border border-amber-900/15 bg-amber-50/70 p-3 text-xs leading-5 text-amber-950">{paymentState === "rejected" ? "Receipt rejected. Processing is locked until the payment is verified." : "Verify the bank receipt before processing this order."}</p>
+                    )}
                     {normalizedOrderStatus === "pending" && (
-                      <button type="button" className="btn btn-dark w-full justify-center" disabled={savingId === order.orderId} onClick={() => void change(order.orderId,{orderStatus:"confirmed"})}>
+                      <button type="button" className="btn btn-dark w-full justify-center" disabled={savingId === order.orderId || !bankPaymentReady} onClick={() => void change(order.orderId,{orderStatus:"confirmed"})}>
                         {savingId===order.orderId?"Updating…":"Start processing"}
                       </button>
                     )}
                     {normalizedOrderStatus === "confirmed" && (
-                      <button type="button" className="btn btn-dark w-full justify-center" disabled={savingId === order.orderId} onClick={() => { const existingId=detail.fulfilmentCourierId||""; setDispatchOrderId(order.orderId); setDispatchCourierId(selectDispatchCourierId(admin.fulfilmentCouriers,existingId)); setDispatchTrackingNumber(detail.trackingNumber||""); setDispatchTrackingUrl(detail.trackingUrl||""); setDispatchHandover(sriLankaDateTimeLocal()); }}>
+                      <button type="button" className="btn btn-dark w-full justify-center" disabled={savingId === order.orderId || !bankPaymentReady} onClick={() => { const existingId=detail.fulfilmentCourierId||""; setDispatchOrderId(order.orderId); setDispatchCourierId(selectDispatchCourierId(admin.fulfilmentCouriers,existingId)); setDispatchTrackingNumber(detail.trackingNumber||""); setDispatchTrackingUrl(detail.trackingUrl||""); setDispatchHandover(sriLankaDateTimeLocal()); }}>
                         Dispatch order
                       </button>
                     )}
@@ -2934,9 +2939,9 @@ function Orders() {
                         Receipt decision
                         <select
                           className="field mt-2"
-                          disabled={savingId === order.orderId}
+                          disabled={savingId === order.orderId || ["dispatched","delivered","cancelled"].includes(normalizedOrderStatus)}
                           value={["verified","paid"].includes(String(detail.paymentStatus||"").toLowerCase()) ? "verified" : String(detail.paymentStatus||"").toLowerCase() === "rejected" ? "rejected" : ""}
-                          onChange={(event) => { const value=event.target.value; if(value) void change(order.orderId,{paymentStatus:value}); }}
+                          onChange={(event) => { const value=event.target.value; if(!value)return; if(value==="rejected"&&normalizedOrderStatus==="confirmed"&&!window.confirm("Rejecting this receipt will move the order back to Pending and stop processing. Continue?")){event.currentTarget.value="verified";return;} void change(order.orderId,{paymentStatus:value}); }}
                         >
                           <option value="">Choose decision</option>
                           <option value="verified">Verified</option>
