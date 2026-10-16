@@ -9,7 +9,7 @@ p.write_text(text.replace(old,new,1))
 
 p=Path('tests/order-workflow.test.ts')
 text=p.read_text()
-old='assert.match(orders,/cancellingPrepaidBank/);'
-new='assert.match(orders,/cancellingPaidOrder/);'
-assert text.count(old)==1, 'old cancellation payment assertion missing'
+old='''  assert.match(backend,/cancellingPrepaidBank/);\n  assert.match(backend,/cancellingPrepaidBank \\? "refund pending"/);'''
+new='''  assert.match(backend,/cancellingPaidOrder/);\n  assert.match(backend,/cancellingPaidOrder \\? "refund pending"/);'''
+assert text.count(old)==1, 'old cancellation payment assertions missing'
 p.write_text(text.replace(old,new,1))
