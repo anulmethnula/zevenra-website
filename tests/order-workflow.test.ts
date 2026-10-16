@@ -127,6 +127,23 @@ test("rejected bank receipts cannot continue fulfilment and processing rolls bac
   assert.match(ui,/Receipt rejected\. Processing is locked until the payment is verified\./);
 });
 
+test("admin return and cancellation mutations keep filters and inventory in sync",async()=>{
+  const ui=await readFile(new URL("../src/pages/admin/AdminPage.tsx",import.meta.url),"utf8");
+  const store=await readFile(new URL("../src/features/store/StoreContext.tsx",import.meta.url),"utf8");
+  const backend=await readFile(new URL("../server/api-implementation/_data/orders-legacy.ts",import.meta.url),"utf8");
+  assert.match(ui,/onChanged=\{async \(inventoryChanged\)/);
+  assert.match(ui,/await refreshOrder\(order\.orderId\)/);
+  assert.match(ui,/if \(inventoryChanged\) void refreshProducts\(\)/);
+  assert.match(ui,/Return created\. It is now visible in the Returns filter/);
+  assert.match(store,/const refreshOrder = useCallback/);
+  assert.match(store,/const refreshProducts = useCallback/);
+  assert.match(ui,/Reason for cancelling this order\?/);
+  assert.match(ui,/orderStatus:"cancelled",cancellationReason:reason,cancelledBy:"owner"/);
+  assert.match(backend,/cancellingPrepaidBank/);
+  assert.match(backend,/cancellingPrepaidBank \? "refund pending"/);
+  assert.match(backend,/stock=stock\+\$2/);
+});
+
 test("delivery cleanup creates an empty actual-courier registry and drops the legacy model",async()=>{
   const sql=await readFile(new URL("../database/migrations/028_delivery_architecture_cleanup.sql",import.meta.url),"utf8");
   assert.match(sql,/CREATE TABLE IF NOT EXISTS fulfilment_couriers/);

@@ -68,6 +68,8 @@ type Value = {
   saveSettings: (patch: Partial<SiteSettings>) => void;
   commitSettings: (patch: Partial<SiteSettings>) => Promise<void>;
   updateOrder: (patch: Partial<Order> & { orderId: string }) => Promise<Order>;
+  refreshOrder: (orderId: string) => Promise<Order>;
+  refreshProducts: () => Promise<void>;
   updatePreorder: (
     patch: Partial<PreorderRequest> & { requestId: string },
   ) => Promise<PreorderRequest>;
@@ -748,6 +750,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     [],
   );
+  const refreshOrder = useCallback(async (orderId: string) => {
+    if (demo) throw new Error("Order refresh is unavailable in demo mode.");
+    const updated = await adminApi.get<Order>("getOrder", { orderId });
+    setAdmin((current) => ({
+      ...current,
+      orders: current.orders.some((order) => order.orderId === updated.orderId)
+        ? current.orders.map((order) =>
+            order.orderId === updated.orderId ? { ...order, ...updated } : order,
+          )
+        : [updated, ...current.orders],
+    }));
+    return updated;
+  }, []);
+  const refreshProducts = useCallback(async () => {
+    if (demo) return;
+    await refreshEntity("products");
+  }, [refreshEntity]);
   const refreshPreorders = useCallback(async () => {
     if (demo) return;
     const rows = await adminApi.get<PreorderRequest[]>("listPreorders");
@@ -805,6 +824,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       saveSettings,
       commitSettings,
       updateOrder,
+      refreshOrder,
+      refreshProducts,
       updatePreorder,
       refreshPreorders,
       resetDemo,
@@ -827,6 +848,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       saveSettings,
       commitSettings,
       updateOrder,
+      refreshOrder,
+      refreshProducts,
       updatePreorder,
       refreshPreorders,
     ],

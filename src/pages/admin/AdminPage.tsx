@@ -2130,7 +2130,7 @@ function downloadOrdersCsv(rows: Order[]) {
   URL.revokeObjectURL(url);
 }
 function Orders() {
-  const { admin, updateOrder, data, loadAdmin } = useStore(),
+  const { admin, updateOrder, refreshOrder, refreshProducts, data, loadAdmin } = useStore(),
     location = useLocation(),
     { id: routeOrderId } = useParams(),
     initialParams = new URLSearchParams(location.search),
@@ -2254,6 +2254,8 @@ function Orders() {
         } as AdminOrderDetail,
       }));
       setStatus("Order updated.");
+      if (patch.orderStatus === "cancelled" && updated.stockState === "restored")
+        void refreshProducts().catch(() => undefined);
       return true;
     } catch (reason) {
       setStatus(
@@ -2899,6 +2901,18 @@ function Orders() {
                         Dispatch order
                       </button>
                     )}
+                    {["pending", "confirmed"].includes(normalizedOrderStatus) && (
+                      <button type="button" className="btn w-full justify-center text-red-800" disabled={savingId === order.orderId} onClick={async () => {
+                        const answer = window.prompt("Reason for cancelling this order?");
+                        if (answer === null) return;
+                        const reason = answer.trim();
+                        if (!reason) { setStatus("Add a cancellation reason."); return; }
+                        const saved = await change(order.orderId,{orderStatus:"cancelled",cancellationReason:reason,cancelledBy:"owner"});
+                        if (saved) setStatus(detail.paymentMethod === "bank" && ["verified","paid"].includes(String(detail.paymentStatus||"").toLowerCase()) ? "Order cancelled. Stock restored and bank payment moved to refund pending." : "Order cancelled. Reserved stock restored.");
+                      }}>
+                        Cancel order
+                      </button>
+                    )}
                     {normalizedOrderStatus === "dispatched" && (
                       <button type="button" className="btn btn-dark w-full justify-center" disabled={savingId === order.orderId} onClick={() => { if(window.confirm("Mark this order as delivered?")) void change(order.orderId,{orderStatus:"delivered"}); }}>
                         {savingId===order.orderId?"Updating…":"Mark delivered"}
@@ -2982,7 +2996,21 @@ function Orders() {
                           </Panel>
                           {detail.sourcePreorderRequestId && <Panel title="Status / timeline"><ol className="space-y-2 text-xs"><li><b>Created</b> · {new Date(detail.createdAt).toLocaleString("en-LK")}</li><li><b>Product payment verified</b> · before conversion</li><li><b>Pre-order converted</b> · {new Date(detail.createdAt).toLocaleString("en-LK")}</li><li className={detail.orderStatus === "dispatched" || detail.orderStatus === "delivered" ? "" : "text-black/35"}><b>Dispatched</b>{detail.courierSentDate ? ` · ${new Date(detail.courierSentDate).toLocaleString("en-LK")}` : ""}</li><li className={detail.orderStatus === "delivered" ? "" : "text-black/35"}><b>Delivered</b></li></ol></Panel>}
                           {normalizedOrderStatus==="dispatched"||normalizedOrderStatus==="delivered"?<Panel title="Dispatch"><div className="space-y-3 text-sm"><Info label="Status" value={normalizedOrderStatus==="dispatched"?"Dispatched":"Delivered"}/><Info label="Courier" value={detail.fulfilmentCourierName||"Not added"}/><Info label="Tracking" value={detail.trackingNumber||"Not added"}/><Info label="Handed to courier" value={detail.courierSentDate?new Date(detail.courierSentDate).toLocaleString("en-LK"):"Not added"}/>{detail.trackingUrl?<a className="btn inline-flex" href={detail.trackingUrl} target="_blank" rel="noreferrer">Open courier tracking</a>:null}</div></Panel>:null}
-                          <ReturnsPanel order={detail} onMessage={setStatus} />
+                          <ReturnsPanel
+                            order={detail}
+                            onMessage={setStatus}
+                            onChanged={async (inventoryChanged) => {
+                              const updated = await refreshOrder(order.orderId);
+                              setDetails((current) => ({
+                                ...current,
+                                [order.orderId]: {
+                                  ...(current[order.orderId] || {}),
+                                  ...updated,
+                                } as AdminOrderDetail,
+                              }));
+                              if (inventoryChanged) void refreshProducts().catch(() => undefined);
+                            }}
+                          />
                         </div>
                       </div>
                     ) : (
@@ -3101,15 +3129,15 @@ function ProtectedReceipt({ url }: { url?: string }) {
 type AdminOrderLine={orderItemId?:number;productId?:string;variantId?:string;productName?:string;name?:string;color?:string;size?:string;quantity?:number;unitPrice?:number;lineTotal?:number;sku?:string;isPreorder?:boolean|string};
 type AdminOrderDetail=Omit<Order,"items">&{items:AdminOrderLine[]};
 type AdminReturn={id:string;type:"customer_return"|"courier_rto";status:string;reason:string;createdAt:string;items?:Array<{id:number;orderItemId:number;quantity:number;restockable?:boolean;productName?:string;color?:string;size?:string}>};
-function ReturnsPanel({ order, onMessage }: { order: AdminOrderDetail; onMessage: (value: string) => void }) {
+function ReturnsPanel({ order, onMessage, onChanged }: { order: AdminOrderDetail; onMessage: (value: string) => void; onChanged: (inventoryChanged: boolean) => Promise<void> }) {
   const [returns, setReturns] = useState<AdminReturn[]>([]), [loading, setLoading] = useState(false), [creating, setCreating] = useState(false), [expanded, setExpanded] = useState(false);
   const eligible = order.orderStatus === "dispatched" || order.orderStatus === "delivered";
   const load = useCallback(async () => { setLoading(true); try { setReturns(await adminApi.get<AdminReturn[]>("listReturns", { orderId: order.orderId })); } catch (reason) { onMessage(reason instanceof Error ? reason.message : "Could not load returns."); } finally { setLoading(false); } }, [onMessage, order.orderId]);
   useEffect(() => { if (expanded) void load(); }, [expanded, load]);
   if (!eligible && !Number(order.returnCount)) return null;
   if (!expanded) return <Panel title="Return"><button type="button" className="btn w-full justify-center" onClick={() => setExpanded(true)}>{Number(order.returnCount) ? "View return" : "Create return"}</button></Panel>;
-  async function create(event: React.FormEvent<HTMLFormElement>) { event.preventDefault(); const raw = new FormData(event.currentTarget), items = order.items.map((item) => ({ orderItemId: item.orderItemId, quantity: Number(raw.get(`qty-${item.orderItemId}`) || 0) })).filter((item) => item.orderItemId && item.quantity > 0); try { await adminApi.post("createReturn", { orderId: order.orderId, type: raw.get("type"), reason: raw.get("reason"), notes: raw.get("notes"), refundRequired: raw.get("refundRequired") === "on", items }); setCreating(false); onMessage("Return created. Stock has not been changed."); await load(); } catch (reason) { onMessage(reason instanceof Error ? reason.message : "Could not create return."); } }
-  async function advance(item: AdminReturn, status: string) { try { const payload: Record<string, unknown> = { returnId: item.id, status }; if (status === "received") payload.items = item.items?.map((line) => ({ id: line.id, restockable: (document.querySelector<HTMLInputElement>(`#restock-${line.id}`)?.checked ?? false) })); const result = await adminApi.post<{ restoredUnits: number }>("updateReturn", payload); onMessage(status === "received" ? `Return received. ${result.restoredUnits} unit${result.restoredUnits === 1 ? "" : "s"} restored to stock.` : `Return marked ${status.replace("_", " ")}.`); await load(); } catch (reason) { onMessage(reason instanceof Error ? reason.message : "Could not update return."); } }
+  async function create(event: React.FormEvent<HTMLFormElement>) { event.preventDefault(); const raw = new FormData(event.currentTarget), items = order.items.map((item) => ({ orderItemId: item.orderItemId, quantity: Number(raw.get(`qty-${item.orderItemId}`) || 0) })).filter((item) => item.orderItemId && item.quantity > 0); try { await adminApi.post("createReturn", { orderId: order.orderId, type: raw.get("type"), reason: raw.get("reason"), notes: raw.get("notes"), refundRequired: raw.get("refundRequired") === "on", items }); setCreating(false); await load(); await onChanged(false); onMessage("Return created. It is now visible in the Returns filter. Stock changes only when the return is received."); } catch (reason) { onMessage(reason instanceof Error ? reason.message : "Could not create return."); } }
+  async function advance(item: AdminReturn, status: string) { try { const payload: Record<string, unknown> = { returnId: item.id, status }; if (status === "received") payload.items = item.items?.map((line) => ({ id: line.id, restockable: (document.querySelector<HTMLInputElement>(`#restock-${line.id}`)?.checked ?? false) })); const result = await adminApi.post<{ restoredUnits: number }>("updateReturn", payload); await load(); await onChanged(status === "received"); onMessage(status === "received" ? `Return received. ${result.restoredUnits} unit${result.restoredUnits === 1 ? "" : "s"} restored to stock.` : `Return marked ${status.replace("_", " ")}.`); } catch (reason) { onMessage(reason instanceof Error ? reason.message : "Could not update return."); } }
   return <Panel title="Return"><div className="space-y-4">{loading && <p className="text-xs text-black/45">Loading returns…</p>}{returns.map((item) => <div key={item.id} className="border border-black/10 bg-white/40 p-3 text-xs"><div className="flex justify-between gap-3"><b>{item.type === "courier_rto" ? "Courier RTO" : "Customer return"}</b><span className="uppercase text-black/45">{item.status}</span></div><p className="mt-2 text-black/60">{item.reason}</p>{item.status === "in_transit" && <div className="mt-3 space-y-2">{item.items?.map((line) => <label key={line.id} className="flex items-center justify-between gap-3"><span>{line.productName} · {line.color}/{line.size} · Qty {line.quantity}</span><span><input id={`restock-${line.id}`} type="checkbox" className="mr-2 accent-black"/>Restockable</span></label>)}</div>}<div className="mt-3 flex flex-wrap gap-2">{item.status === "requested" && <><button className="btn" onClick={() => void advance(item,"approved")}>Approve</button><button className="btn" onClick={() => void advance(item,"rejected")}>Reject</button></>}{item.status === "approved" && <button className="btn" onClick={() => void advance(item,"in_transit")}>Mark in transit</button>}{item.status === "in_transit" && <button className="btn btn-dark" onClick={() => void advance(item,"received")}>Mark received</button>}{item.status === "received" && <button className="btn" onClick={() => void advance(item,"completed")}>Complete</button>}</div></div>)}{eligible && !creating && <button className="btn w-full" onClick={() => setCreating(true)}>Create return</button>}{creating && <form onSubmit={create} className="space-y-3 border border-black/10 p-3"><select name="type" className="field" defaultValue={order.orderStatus === "dispatched" ? "courier_rto" : "customer_return"}>{order.orderStatus === "dispatched" && <option value="courier_rto">Courier return / RTO</option>}{order.orderStatus === "delivered" && <option value="customer_return">Customer return</option>}</select><input name="reason" required className="field" placeholder="Reason"/><textarea name="notes" className="field" placeholder="Notes"/><label className="flex items-center gap-2 text-xs"><input name="refundRequired" type="checkbox" className="accent-black"/>Money refund will be required</label>{order.items.map((item) => <label key={item.orderItemId} className="flex items-center justify-between gap-3 text-xs"><span>{item.productName || item.name} · purchased {item.quantity}</span><input name={`qty-${item.orderItemId}`} type="number" min="0" max={item.quantity} defaultValue="0" className="field w-20"/></label>)}<div className="flex gap-2"><button className="btn btn-dark">Create return</button><button type="button" className="btn" onClick={() => setCreating(false)}>Close</button></div></form>}{!eligible && !returns.length && <p className="text-xs leading-5 text-black/45">Returns become available after dispatch or delivery as applicable.</p>}</div></Panel>;
 }
 function OrderDetailsEditor({ order, onSaved }: { order: AdminOrderDetail; onSaved: (order: AdminOrderDetail) => void }) {

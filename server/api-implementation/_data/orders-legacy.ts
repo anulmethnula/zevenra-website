@@ -343,7 +343,8 @@ export async function updateOrder(input: Record<string, unknown>) {
         courierSentDate: "courier_sent_date",
       } as const;
     const automaticCodPaid = !preorderOrder && current.payment_method === "cod" && nextStatus === "delivered",
-      paymentStatus = automaticCodPaid ? "paid" : nextPayment;
+      cancellingPrepaidBank = nextStatus === "cancelled" && currentStatus !== "cancelled" && current.payment_method === "bank" && ["paid", "verified"].includes(nextPayment.toLowerCase()),
+      paymentStatus = automaticCodPaid ? "paid" : cancellingPrepaidBank ? "refund pending" : nextPayment;
     const updates = ["order_status=$2", "stock_state=$3", "payment_status=$4", "updated_at=now()"],
       values: unknown[] = [orderId, nextStatus, stockState, paymentStatus];
     if(nextStatus==="cancelled"&&currentStatus!=="cancelled"){values.push(cancellationReason);updates.push(`cancellation_reason=$${values.length}`);values.push(cancelledBy);updates.push(`cancelled_by=$${values.length}`);updates.push("cancelled_at=now()");values.push(currentStatus);updates.push(`cancelled_from_status=$${values.length}`);}
