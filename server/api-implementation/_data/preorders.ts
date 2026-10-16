@@ -248,13 +248,27 @@ export async function updatePreorder(input: Record<string, unknown>) {
       confirmedPrice = resolvePreorderConfirmedPrice(
         input.confirmedPrice,
         current.confirmed_price,
-      );
+      ),
+      cancellationReason = String(input.cancellationReason || "").trim(),
+      cancelling = nextStatus === "cancelled" && current.status !== "cancelled";
+    if (cancelling && !cancellationReason)
+      throw new Error("Add a cancellation reason.");
     if (!isPreorderTransitionAllowed(current.status, nextStatus))
       throw new Error(
         "Invalid pre-order step. Follow the next action shown in the admin panel.",
       );
     if(nextStatus==="paid"&&!current.payment_receipt_public_id)throw new Error("A verified payment receipt is required.");
     if(nextStatus==="confirmed"&&current.status!=="paid"&&current.status!=="confirmed")throw new Error("Only a paid pre-order can be confirmed.");
+
+    let restockedUnits = 0;
+    const receivedReservation = ["arrived", "ready", "notified"].includes(String(current.status));
+    if (cancelling && receivedReservation && !current.released_at) {
+      await client.query(
+        "UPDATE variants SET stock=stock+$2,updated_at=now() WHERE id=$1",
+        [current.variant_id, current.quantity],
+      );
+      restockedUnits = Number(current.quantity) || 0;
+    }
 
     const result = await client.query<Record<string, unknown>>(
       `UPDATE preorders SET status=$2,confirmed_price=$3,batch_id=$4,notes=$5,customer_name=$6,phone=$7,whatsapp=$8,email=$9,address1=$10,address2=$11,city=$12,district=$13,postal_code=$14,payment_verified_at=CASE WHEN $2='paid' THEN now() ELSE payment_verified_at END,updated_at=now() WHERE request_id=$1 RETURNING *`,
@@ -275,11 +289,29 @@ export async function updatePreorder(input: Record<string, unknown>) {
         input.postalCode ?? current.postal_code,
       ],
     );
+    if (cancelling) {
+      await client.query(
+        "UPDATE preorders SET claim_token_hash=NULL,reservation_expires_at=NULL,released_at=CASE WHEN $2::boolean THEN COALESCE(released_at,now()) ELSE released_at END,updated_at=now() WHERE request_id=$1",
+        [input.requestId, restockedUnits > 0],
+      );
+    }
+    const auditDetails = cancelling
+      ? {
+          ...input,
+          cancellationReason,
+          previousStatus: current.status,
+          restockedUnits,
+          refundRequired: Boolean(current.payment_verified_at),
+        }
+      : input;
     await client.query(
       "INSERT INTO audit_logs(actor,action,entity_type,entity_id,details) VALUES('owner','update','preorder',$1,$2::jsonb)",
-      [input.requestId, JSON.stringify(input)],
+      [input.requestId, JSON.stringify(auditDetails)],
     );
-    return mapPreorder(result.rows[0]);
+    const finalRow = cancelling
+      ? (await client.query<Record<string, unknown>>("SELECT * FROM preorders WHERE request_id=$1", [input.requestId])).rows[0]
+      : result.rows[0];
+    return mapPreorder(finalRow);
   });
 }
 

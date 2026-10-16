@@ -237,3 +237,21 @@ test("claim lookup and checkout share the existing preorder API entry",async()=>
   await assert.rejects(()=>access(new URL("../api/preorder-claim.ts",import.meta.url)));
   await assert.rejects(()=>access(new URL("../api/preorder-checkout.ts",import.meta.url)));
 });
+
+
+test("admin preorder cancellation is explicit and received reservations return to stock safely",async()=>{
+  const [ui,data]=await Promise.all([
+    readFile(new URL("../src/pages/admin/AdminPage.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../server/api-implementation/_data/preorders.ts",import.meta.url),"utf8"),
+  ]);
+  const update=data.slice(data.indexOf("export async function updatePreorder"),data.indexOf("export async function convertPreorderToOrder"));
+  assert.match(ui,/Reason for cancelling this pre-order\?/);
+  assert.match(ui,/Cancel pre-order/);
+  assert.match(ui,/Already in transit\. Receive the item first/);
+  assert.match(update,/cancelling && !cancellationReason/);
+  assert.match(update,/\["arrived", "ready", "notified"\]\.includes/);
+  assert.match(update,/UPDATE variants SET stock=stock\+\$2/);
+  assert.match(update,/claim_token_hash=NULL,reservation_expires_at=NULL/);
+  assert.match(update,/refundRequired: Boolean\(current\.payment_verified_at\)/);
+  assert.match(update,/restockedUnits > 0/);
+});

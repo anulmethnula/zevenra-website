@@ -1603,6 +1603,42 @@ function Preorders() {
       setBusy("");
     }
   }
+  async function cancelPreorder(item: PreorderRequest) {
+    if (item.status === "in_transit") {
+      setMessage("This pre-order is already in transit. Receive it first, then cancel it so the item can be released to stock safely.");
+      return;
+    }
+    const answer = window.prompt("Reason for cancelling this pre-order?");
+    if (answer === null) return;
+    const cancellationReason = answer.trim();
+    if (!cancellationReason) {
+      setMessage("Add a cancellation reason.");
+      return;
+    }
+    const refundRequired = Boolean(item.paymentVerifiedAt);
+    if (refundRequired && !window.confirm("This pre-order payment was already verified. Cancelling will stop the pre-order and record that a customer refund is required. Continue?")) return;
+    setBusy(item.requestId);
+    setMessage("");
+    try {
+      await adminApi.post<PreorderRequest>("updatePreorder", {
+        requestId: item.requestId,
+        status: "cancelled",
+        cancellationReason,
+      });
+      await store.refreshPreorders();
+      const released = ["arrived", "ready", "notified"].includes(item.status);
+      setMessage(
+        preorderDisplayId(item) +
+          " cancelled." +
+          (released ? " Reserved item released to stock." : "") +
+          (refundRequired ? " Customer refund required." : ""),
+      );
+    } catch (reason) {
+      setMessage(reason instanceof Error ? reason.message : "Could not cancel pre-order.");
+    } finally {
+      setBusy("");
+    }
+  }
   async function notifyCustomer(item:PreorderRequest){
     setBusy(item.requestId);setMessage("");
     try{
@@ -1914,6 +1950,12 @@ function Preorders() {
                           : nextText[item.status]}
                       </button>
                     )}
+                    {(["new","awaiting_payment","payment_submitted","paid","contacted","confirmed","batched","ordered","arrived","ready","notified"] as PreorderStatus[]).includes(item.status) && (
+                      <button type="button" className="btn w-full justify-center text-red-800" disabled={busy===item.requestId} onClick={()=>void cancelPreorder(item)}>
+                        {busy===item.requestId?"Saving…":"Cancel pre-order"}
+                      </button>
+                    )}
+                    {item.status==="in_transit"&&<p className="rounded-xl border border-amber-900/15 bg-amber-50/70 p-3 text-xs leading-5 text-amber-950">Already in transit. Receive the item first, then cancel it to release the reserved piece to stock safely.</p>}
                     {item.status==="notified"&&<div className="grid gap-2">
                       <p className="text-xs text-black/55">Reserved until {item.reservationExpiresAt?new Date(item.reservationExpiresAt).toLocaleString("en-LK"):"—"}</p>
                       <a href={wa} target="_blank" rel="noreferrer" className={"btn btn-dark justify-center "+(!claimLink?"pointer-events-none opacity-40":"")}>WhatsApp customer</a>

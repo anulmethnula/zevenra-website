@@ -138,6 +138,8 @@ test("admin return and cancellation mutations keep filters and inventory in sync
   assert.match(store,/const refreshOrder = useCallback/);
   assert.match(store,/const refreshProducts = useCallback/);
   assert.match(ui,/Reason for cancelling this order\?/);
+  assert.match(ui,/\["pending", "confirmed"\]\.includes\(normalizedOrderStatus\)/);
+  assert.match(ui,/Cancel order/);
   assert.match(ui,/orderStatus:"cancelled",cancellationReason:reason,cancelledBy:"owner"/);
   assert.match(backend,/cancellingPrepaidBank/);
   assert.match(backend,/cancellingPrepaidBank \? "refund pending"/);
