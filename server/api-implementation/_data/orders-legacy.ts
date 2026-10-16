@@ -242,7 +242,7 @@ export async function findGuestOrder(orderId: string, phone: string) {
 }
 
 export const normalizeAdminOrderStatus = normalizeOrderStatus;
-export function validOrderTransition(current:unknown,next:unknown){const from=normalizeAdminOrderStatus(current),to=normalizeAdminOrderStatus(next),transitions:Record<string,string[]>={pending:["confirmed"],confirmed:["dispatched"],dispatched:["delivered"],delivered:[]};return from===to||Boolean(transitions[from]?.includes(to));}
+export function validOrderTransition(current:unknown,next:unknown){const from=normalizeAdminOrderStatus(current),to=normalizeAdminOrderStatus(next),transitions:Record<string,string[]>={pending:["confirmed","cancelled"],confirmed:["dispatched","cancelled"],dispatched:["delivered"],delivered:[],cancelled:["pending","confirmed"]};return from===to||Boolean(transitions[from]?.includes(to));}
 
 export async function updateOrder(input: Record<string, unknown>) {
   const orderId = String(input.orderId || "");
@@ -294,6 +294,13 @@ export async function updateOrder(input: Record<string, unknown>) {
       selectedCourier=(await client.query<Record<string,unknown>>("SELECT id,name,tracking_url_template FROM fulfilment_couriers WHERE id=$1 AND active=true",[requestedCourierId])).rows[0];
       if(!selectedCourier)throw new Error("Select an active actual fulfilment courier before marking this order dispatched.");
     }
+    if(nextStatus==="delivered"){
+      const existingCourierId=String(current.fulfilment_courier_id||"").trim(),
+        existingCourierName=String(current.fulfilment_courier_name||"").trim(),
+        existingHandover=input.courierSentDate??current.courier_sent_date;
+      if(!existingCourierId||!existingCourierName||!existingHandover)
+        throw new Error("Complete the courier handover details before marking this order delivered.");
+    }
     if(input.courierSentDate!==undefined&&!Number.isFinite(Date.parse(String(input.courierSentDate))))
       throw new Error("Add a valid courier handover date.");
     const cancellationReason=String(input.cancellationReason||"").trim(),cancelledBy=String(input.cancelledBy||"owner");
@@ -305,26 +312,33 @@ export async function updateOrder(input: Record<string, unknown>) {
       if(!["pending","confirmed"].includes(previous)||nextStatus!==previous)throw new Error("This order cannot be restored to that status.");
       if(current.stock_state==="restored"){
         const items=await client.query<Record<string,unknown>>("SELECT * FROM order_items WHERE order_id=$1 ORDER BY id FOR UPDATE",[orderId]);
-        for(const item of items.rows)if(!item.is_preorder&&item.variant_id){const updated=await client.query("UPDATE variants SET stock=stock-$2,updated_at=now() WHERE id=$1 AND stock>=$2",[item.variant_id,item.quantity]);if(!updated.rowCount)throw new Error("Order cannot be restored because inventory is no longer available.");}
+        for(const item of items.rows){
+          const inventoryBacked=preorderOrder||!item.is_preorder;
+          if(inventoryBacked&&item.variant_id){const updated=await client.query("UPDATE variants SET stock=stock-$2,updated_at=now() WHERE id=$1 AND stock>=$2",[item.variant_id,item.quantity]);if(!updated.rowCount)throw new Error("Order cannot be restored because inventory is no longer available.");}
+        }
       }
     }
     let restoredUnits = 0;
-    if (nextStatus === "cancelled" && currentStatus !== "cancelled" && current.stock_state === "reserved") {
+    const cancellationReleasesStock = nextStatus === "cancelled" && currentStatus !== "cancelled" &&
+      (current.stock_state === "reserved" || (preorderOrder && current.stock_state === "not_applicable"));
+    if (cancellationReleasesStock) {
       const items = await client.query<Record<string, unknown>>(
         "SELECT * FROM order_items WHERE order_id=$1 FOR UPDATE",
         [orderId],
       );
-      for (const item of items.rows)
-        if (!item.is_preorder && item.variant_id) {
+      for (const item of items.rows) {
+        const inventoryBacked = preorderOrder || !item.is_preorder;
+        if (inventoryBacked && item.variant_id) {
           await client.query(
             "UPDATE variants SET stock=stock+$2,updated_at=now() WHERE id=$1",
             [item.variant_id, item.quantity],
           );
           restoredUnits += Number(item.quantity) || 0;
         }
+      }
     }
-    const stockState = restoring&&current.stock_state==="restored"?"reserved":
-      nextStatus === "cancelled" && current.stock_state === "reserved"
+    const stockState = restoring&&current.stock_state==="restored"?(preorderOrder?"not_applicable":"reserved"):
+      cancellationReleasesStock
         ? "restored"
         : nextStatus === "delivered" && current.stock_state === "reserved"
           ? "fulfilled"
@@ -343,8 +357,8 @@ export async function updateOrder(input: Record<string, unknown>) {
         courierSentDate: "courier_sent_date",
       } as const;
     const automaticCodPaid = !preorderOrder && current.payment_method === "cod" && nextStatus === "delivered",
-      cancellingPrepaidBank = nextStatus === "cancelled" && currentStatus !== "cancelled" && current.payment_method === "bank" && ["paid", "verified"].includes(nextPayment.toLowerCase()),
-      paymentStatus = automaticCodPaid ? "paid" : cancellingPrepaidBank ? "refund pending" : nextPayment;
+      cancellingPaidOrder = nextStatus === "cancelled" && currentStatus !== "cancelled" && ["paid", "verified"].includes(nextPayment.toLowerCase()),
+      paymentStatus = automaticCodPaid ? "paid" : cancellingPaidOrder ? "refund pending" : nextPayment;
     const updates = ["order_status=$2", "stock_state=$3", "payment_status=$4", "updated_at=now()"],
       values: unknown[] = [orderId, nextStatus, stockState, paymentStatus];
     if(nextStatus==="cancelled"&&currentStatus!=="cancelled"){values.push(cancellationReason);updates.push(`cancellation_reason=$${values.length}`);values.push(cancelledBy);updates.push(`cancelled_by=$${values.length}`);updates.push("cancelled_at=now()");values.push(currentStatus);updates.push(`cancelled_from_status=$${values.length}`);}

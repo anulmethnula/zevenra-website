@@ -349,6 +349,9 @@ export type CustomerOrder = {
   paymentReference?: string;
   paymentReceiptUrl?: string;
   paymentStatus?: string;
+  sourcePreorderRequestId?: string;
+  amountPaid?: number;
+  amountToCollect?: number;
   subtotal: number;
   discountCode?: string;
   discountAmount?: number;
@@ -433,6 +436,10 @@ export type PreorderRequest = {
   paymentVerifiedAt?: string;
   paymentRejectionReason?: string;
   paymentRejectedAt?: string;
+  cancelledAt?: string;
+  cancelledBy?: string;
+  cancellationReason?: string;
+  cancelledFromStatus?: string;
   paymentToken?: string;
   notes?: string;
   updatedAt: string;

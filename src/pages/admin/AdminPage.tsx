@@ -1956,6 +1956,7 @@ function Preorders() {
                       </button>
                     )}
                     {item.status==="in_transit"&&<p className="rounded-xl border border-amber-900/15 bg-amber-50/70 p-3 text-xs leading-5 text-amber-950">Already in transit. Receive the item first, then cancel it to release the reserved piece to stock safely.</p>}
+                    {item.status==="cancelled"&&item.cancellationReason&&<p className="rounded-xl border border-red-900/15 bg-red-50/60 p-3 text-xs leading-5 text-red-900">Cancelled: {item.cancellationReason}</p>}
                     {item.status==="notified"&&<div className="grid gap-2">
                       <p className="text-xs text-black/55">Reserved until {item.reservationExpiresAt?new Date(item.reservationExpiresAt).toLocaleString("en-LK"):"—"}</p>
                       <a href={wa} target="_blank" rel="noreferrer" className={"btn btn-dark justify-center "+(!claimLink?"pointer-events-none opacity-40":"")}>WhatsApp customer</a>
@@ -2955,11 +2956,18 @@ function Orders() {
                         Cancel order
                       </button>
                     )}
-                    {normalizedOrderStatus === "dispatched" && (
+                    {normalizedOrderStatus === "dispatched" && (!detail.fulfilmentCourierId || !detail.courierSentDate ? (
+                      <>
+                        <p className="rounded-xl border border-amber-900/15 bg-amber-50/70 p-3 text-xs leading-5 text-amber-950">Dispatch details are incomplete. Add the actual courier and handover time before delivery can be completed.</p>
+                        <button type="button" className="btn btn-dark w-full justify-center" disabled={savingId === order.orderId} onClick={() => { const existingId=detail.fulfilmentCourierId||""; setDispatchOrderId(order.orderId); setDispatchCourierId(selectDispatchCourierId(admin.fulfilmentCouriers,existingId)); setDispatchTrackingNumber(detail.trackingNumber||""); setDispatchTrackingUrl(detail.trackingUrl||""); setDispatchHandover(detail.courierSentDate ? sriLankaDateTimeLocal(new Date(detail.courierSentDate)) : sriLankaDateTimeLocal()); }}>
+                          Complete dispatch details
+                        </button>
+                      </>
+                    ) : (
                       <button type="button" className="btn btn-dark w-full justify-center" disabled={savingId === order.orderId} onClick={() => { if(window.confirm("Mark this order as delivered?")) void change(order.orderId,{orderStatus:"delivered"}); }}>
                         {savingId===order.orderId?"Updating…":"Mark delivered"}
                       </button>
-                    )}
+                    ))}
                     {normalizedOrderStatus === "delivered" && <p className="text-xs leading-5 text-black/50">Delivered. Use Return below only if the customer sends an item back.</p>}
                     {normalizedOrderStatus === "cancelled" && <p className="text-xs leading-5 text-black/50">This order is cancelled.</p>}
                   </div>

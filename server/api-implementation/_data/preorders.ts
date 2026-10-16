@@ -223,7 +223,7 @@ export async function listPreorders(status?: string) {
       `SELECT p.request_id,p.preorder_number,p.created_at,p.updated_at,p.customer_id,p.customer_name,p.phone,p.whatsapp,p.email,
               p.address1,p.address2,p.city,p.district,p.postal_code,p.product_id,p.variant_id,p.product_name,
               p.sku,p.color,p.size,p.quantity,p.requested_price,p.confirmed_price,p.status,p.batch_id,p.notes,
-              p.notified_at,p.reservation_expires_at,p.released_at,p.converted_order_id,p.payment_receipt_public_id,p.payment_submitted_at,p.payment_verified_at,o.order_number AS converted_order_number,o.order_status AS converted_order_status,o.delivery_fee AS converted_order_delivery_fee,
+              p.notified_at,p.reservation_expires_at,p.released_at,p.converted_order_id,p.payment_receipt_public_id,p.payment_submitted_at,p.payment_verified_at,p.cancelled_at,p.cancelled_by,p.cancellation_reason,p.cancelled_from_status,o.order_number AS converted_order_number,o.order_status AS converted_order_status,o.delivery_fee AS converted_order_delivery_fee,
               (SELECT al.details->>'reason' FROM audit_logs al WHERE al.entity_type='preorder' AND al.entity_id=p.request_id AND al.action='payment_rejected' ORDER BY al.created_at DESC LIMIT 1) AS rejection_reason,
               (SELECT COALESCE(al.details->>'adminTimestamp',al.created_at::text) FROM audit_logs al WHERE al.entity_type='preorder' AND al.entity_id=p.request_id AND al.action='payment_rejected' ORDER BY al.created_at DESC LIMIT 1) AS rejected_at
          FROM preorders p LEFT JOIN orders o ON o.order_id=p.converted_order_id${where}
@@ -271,7 +271,12 @@ export async function updatePreorder(input: Record<string, unknown>) {
     }
 
     const result = await client.query<Record<string, unknown>>(
-      `UPDATE preorders SET status=$2,confirmed_price=$3,batch_id=$4,notes=$5,customer_name=$6,phone=$7,whatsapp=$8,email=$9,address1=$10,address2=$11,city=$12,district=$13,postal_code=$14,payment_verified_at=CASE WHEN $2='paid' THEN now() ELSE payment_verified_at END,updated_at=now() WHERE request_id=$1 RETURNING *`,
+      `UPDATE preorders SET status=$2,confirmed_price=$3,batch_id=$4,notes=$5,customer_name=$6,phone=$7,whatsapp=$8,email=$9,address1=$10,address2=$11,city=$12,district=$13,postal_code=$14,
+       cancelled_at=CASE WHEN $2='cancelled' AND status<>'cancelled' THEN now() ELSE cancelled_at END,
+       cancelled_by=CASE WHEN $2='cancelled' AND status<>'cancelled' THEN 'owner' ELSE cancelled_by END,
+       cancellation_reason=CASE WHEN $2='cancelled' AND status<>'cancelled' THEN $15 ELSE cancellation_reason END,
+       cancelled_from_status=CASE WHEN $2='cancelled' AND status<>'cancelled' THEN status ELSE cancelled_from_status END,
+       payment_verified_at=CASE WHEN $2='paid' THEN now() ELSE payment_verified_at END,updated_at=now() WHERE request_id=$1 RETURNING *`,
       [
         input.requestId,
         nextStatus,
@@ -287,6 +292,7 @@ export async function updatePreorder(input: Record<string, unknown>) {
         input.city ?? current.city,
         input.district ?? current.district,
         input.postalCode ?? current.postal_code,
+        cancellationReason,
       ],
     );
     if (cancelling) {

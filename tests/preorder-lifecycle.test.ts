@@ -255,3 +255,13 @@ test("admin preorder cancellation is explicit and received reservations return t
   assert.match(update,/refundRequired: Boolean\(current\.payment_verified_at\)/);
   assert.match(update,/restockedUnits > 0/);
 });
+
+
+test("preorder cancellation stores durable cancellation evidence",async()=>{
+  const source=await readFile(new URL("../server/api-implementation/_data/preorders.ts",import.meta.url),"utf8");
+  assert.match(source,/cancelled_at=CASE WHEN \$2='cancelled'/);
+  assert.match(source,/cancellation_reason=CASE WHEN \$2='cancelled'/);
+  assert.match(source,/cancelled_from_status=CASE WHEN \$2='cancelled'/);
+  const migration=await readFile(new URL("../database/migrations/033_fulfilment_cancellation_integrity.sql",import.meta.url),"utf8");
+  assert.match(migration,/ADD COLUMN IF NOT EXISTS cancellation_reason/);
+});

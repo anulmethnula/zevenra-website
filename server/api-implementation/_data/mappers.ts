@@ -261,6 +261,10 @@ export function mapPreorder(row: Record<string, unknown>) {
     paymentVerifiedAt: text(row.payment_verified_at),
     paymentRejectionReason: text(row.rejection_reason),
     paymentRejectedAt: text(row.rejected_at),
+    cancelledAt: date(row.cancelled_at),
+    cancelledBy: text(row.cancelled_by),
+    cancellationReason: text(row.cancellation_reason),
+    cancelledFromStatus: text(row.cancelled_from_status),
     notes: text(row.notes),
   };
 }

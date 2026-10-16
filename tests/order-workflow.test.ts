@@ -141,8 +141,8 @@ test("admin return and cancellation mutations keep filters and inventory in sync
   assert.match(ui,/\["pending", "confirmed"\]\.includes\(normalizedOrderStatus\)/);
   assert.match(ui,/Cancel order/);
   assert.match(ui,/orderStatus:"cancelled",cancellationReason:reason,cancelledBy:"owner"/);
-  assert.match(backend,/cancellingPrepaidBank/);
-  assert.match(backend,/cancellingPrepaidBank \? "refund pending"/);
+  assert.match(backend,/cancellingPaidOrder/);
+  assert.match(backend,/cancellingPaidOrder \? "refund pending"/);
   assert.match(backend,/stock=stock\+\$2/);
 });
 
@@ -162,4 +162,33 @@ test("repeat owner cancellation is idempotent and preserves original cancellatio
   assert.match(source, /\["pending","confirmed","cancelled"\]\.includes\(currentStatus\)/);
   assert.match(source, /currentStatus!=="cancelled"&&!cancellationReason/);
   assert.match(source, /nextStatus==="cancelled"&&currentStatus!=="cancelled"\)\{values\.push\(cancellationReason\)/);
+});
+
+
+test("converted preorder cancellation releases its arrived unit and requests a refund",async()=>{
+  const backend=await readFile(new URL("../server/api-implementation/_data/orders-legacy.ts",import.meta.url),"utf8");
+  const customer=await readFile(new URL("../server/api-implementation/_data/order-cancellation.ts",import.meta.url),"utf8");
+  assert.match(backend,/preorderOrder && current\.stock_state === "not_applicable"/);
+  assert.match(backend,/inventoryBacked = preorderOrder \|\| !item\.is_preorder/);
+  assert.match(backend,/cancellingPaidOrder/);
+  assert.match(customer,/preorderOrder&&order\.stock_state==="not_applicable"/);
+  assert.match(customer,/paymentStatus=\["paid","verified"\].*"refund pending"/s);
+});
+
+test("delivery cannot complete with missing courier handover and legacy dispatch can be repaired",async()=>{
+  const backend=await readFile(new URL("../server/api-implementation/_data/orders-legacy.ts",import.meta.url),"utf8");
+  const ui=await readFile(new URL("../src/pages/admin/AdminPage.tsx",import.meta.url),"utf8");
+  assert.match(backend,/nextStatus==="delivered"/);
+  assert.match(backend,/Complete the courier handover details before marking this order delivered/);
+  assert.match(ui,/Dispatch details are incomplete/);
+  assert.match(ui,/Complete dispatch details/);
+});
+
+test("database migration guards future dispatch and cancellation integrity",async()=>{
+  const sql=await readFile(new URL("../database/migrations/033_fulfilment_cancellation_integrity.sql",import.meta.url),"utf8");
+  assert.match(sql,/enforce_order_workflow_integrity/);
+  assert.match(sql,/fulfilment_courier_id/);
+  assert.match(sql,/courier_sent_date/);
+  assert.match(sql,/Cancellation metadata is incomplete/);
+  assert.match(sql,/enforce_preorder_cancellation_integrity/);
 });
