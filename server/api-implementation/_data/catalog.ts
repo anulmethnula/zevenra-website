@@ -352,6 +352,40 @@ const definitions = {
   },
 } as const;
 
+const entityInputDefaults: Record<Entity, Record<string, unknown>> = {
+  categories: {
+    description: "",
+    imageUrl: "",
+    mobileImageUrl: "",
+    videoUrl: "",
+    active: true,
+    featured: false,
+    showInNavigation: false,
+    showOnHomepage: false,
+    sortOrder: 0,
+  },
+  collections: {
+    description: "",
+    heroImage: "",
+    mobileImage: "",
+    videoUrl: "",
+    ctaLabel: "",
+    active: true,
+    showInNavigation: false,
+    showOnHomepage: false,
+    sortOrder: 0,
+  },
+  size_charts: {
+    unit: "cm",
+    columns: [],
+    rows: [],
+    notes: "",
+    imageUrl: "",
+  },
+  navigation: { visible: true, sortOrder: 0 },
+  homepage_sections: {},
+};
+
 export async function saveEntity(
   table: Entity,
   input: Record<string, unknown>,
@@ -359,9 +393,9 @@ export async function saveEntity(
   const definition = definitions[table],
     id = String(input.id || randomUUID()),
     values = definition.keys.map((key) => {
-      const value = input[key];
+      const value = input[key] ?? entityInputDefaults[table][key];
       return ["columns", "rows"].includes(key)
-        ? JSON.stringify(value || [])
+        ? JSON.stringify(value ?? [])
         : (value ?? null);
     }),
     placeholders = values.map((_, index) => `$${index + 2}`).join(","),
