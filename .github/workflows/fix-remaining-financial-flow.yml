@@ -1,4 +1,4 @@
-name: Fix remaining financial flow
+name: Fix remaining financial flow v2
 
 on:
   push:
@@ -25,6 +25,8 @@ jobs:
           cache: npm
       - name: Apply repair
         run: python .github/scripts/fix_remaining_financial_flow.py
+      - name: Apply follow-up
+        run: python .github/scripts/fix_remaining_financial_flow_followup.py
       - name: Install dependencies
         run: npm ci
       - name: Full QA
