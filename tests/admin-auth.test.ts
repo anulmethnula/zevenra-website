@@ -85,3 +85,13 @@ test("regenerating recovery rejects the old code",async()=>{const db=new AuthDb(
 test("password recovery invalidates an older session version",async()=>{const db=new AuthDb(),password="Current12345",secret="session-secret";await loginAdmin("owner",password,{username:"owner",passwordHash:await hashAdminPassword(password)},db);const recovery=await generateAdminRecoveryCode(password,db),oldVersion=db.row!.session_version,oldCookie=`zevenra_session=${makeSession(secret,oldVersion)}`;assert.equal(validSession(requestWithCookie(oldCookie),secret,oldVersion),true);await recoverAdminPassword("owner",recovery.recoveryCode,"Recovered12345",db);assert.equal(validSession(requestWithCookie(oldCookie),secret,db.row!.session_version),false);});
 
 test("credential changes invalidate an older admin cookie",async()=>{const db=new AuthDb(),password="Current12345",secret="session-secret";await loginAdmin("owner",password,{username:"owner",passwordHash:await hashAdminPassword(password)},db);const oldCookie=`zevenra_session=${makeSession(secret,db.row!.session_version)}`;assert.equal(await validAdminSession(requestWithCookie(oldCookie),secret,db),true);await changeAdminPassword(password,"Updated12345",db);assert.equal(await validAdminSession(requestWithCookie(oldCookie),secret,db),false);});
+
+
+test("admin cookie parsing accepts compact semicolon separators", () => {
+  const secret = "test-admin-session-secret";
+  const token = makeSession(secret);
+  assert.equal(
+    validSession(requestWithCookie(`theme=dark;zevenra_session=${token};other=value`), secret),
+    true,
+  );
+});

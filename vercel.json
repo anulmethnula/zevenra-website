@@ -80,7 +80,7 @@
       ]
     },
     {
-    "source": "/media/(hero-final-v2\\.mp4|hero-desktop-v1\\.mp4|hero-mobile-v1\\.mp4|hero-mobile-final\\.mp4|hero-poster-v1\\.webp|hero-mobile-final-poster\\.webp)",
+      "source": "/media/(hero-final-v2\\.mp4|hero-desktop-v1\\.mp4|hero-mobile-v1\\.mp4|hero-mobile-final\\.mp4|hero-poster-v1\\.webp|hero-mobile-final-poster\\.webp)",
       "headers": [
         {
           "key": "Cache-Control",
@@ -99,7 +99,9 @@
     }
   ],
   "functions": {
-    "api/product-page.ts": { "includeFiles": "dist/index.html" }
+    "api/product-page.ts": {
+      "includeFiles": "dist/index.html"
+    }
   },
   "rewrites": [
     {
@@ -130,5 +132,8 @@
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
+  ],
+  "regions": [
+    "sin1"
   ]
 }

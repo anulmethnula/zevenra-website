@@ -4,12 +4,12 @@ import {
   ConfigurationError,
   json,
   methodNotAllowed,
+  validSession,
 } from "../_shared.js";
-import { validAdminSession } from "../_admin-auth.js";
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "GET") return methodNotAllowed(res, ["GET"]);
   try {
-    return await validAdminSession(req, authEnv().SESSION_SECRET)
+    return validSession(req, authEnv().SESSION_SECRET)
       ? json(res, { ok: true })
       : json(res, { error: "Session expired" }, 401);
   } catch (error) {

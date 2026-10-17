@@ -172,7 +172,7 @@ export function validSession(request: VercelRequest, secret: string,sessionVersi
   const header = request.headers.cookie;
   const cookie = (
     Array.isArray(header) ? header.join("; ") : header || ""
-  ).match(/(?:^|; )zevenra_session=([^;]+)/)?.[1];
+  ).match(/(?:^|;\s*)zevenra_session=([^;]+)/)?.[1];
   if (!cookie) return false;
   const [payload, sig] = cookie.split(".");
   if (!payload || !sig) return false;
@@ -213,7 +213,7 @@ export function readCustomerSession(
 ): CustomerIdentity | null {
   const header = request.headers.cookie,
     cookie = (Array.isArray(header) ? header.join("; ") : header || "").match(
-      /(?:^|; )zevenra_customer=([^;]+)/,
+      /(?:^|;\s*)zevenra_customer=([^;]+)/,
     )?.[1];
   if (!cookie) {
     if (required) throw new Error("CUSTOMER_AUTH_REQUIRED");
