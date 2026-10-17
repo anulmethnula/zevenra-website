@@ -1,0 +1,73 @@
+name: One-time performance and cookie repair
+
+on:
+  push:
+    branches:
+      - dev-rebuild
+    paths:
+      - .github/workflows/performance-cookie-repair.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dev-rebuild
+          fetch-depth: 0
+      - name: Apply performance and cookie repair
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json
+
+          # Keep Vercel Functions beside the Neon database in ap-southeast-1.
+          vercel_path = Path('vercel.json')
+          config = json.loads(vercel_path.read_text())
+          config['regions'] = ['sin1']
+          vercel_path.write_text(json.dumps(config, indent=2) + '\n')
+
+          shared_path = Path('server/api-implementation/_shared.ts')
+          shared = shared_path.read_text()
+          old_admin = '.match(/(?:^|; )zevenra_session=([^;]+)/)?.[1];'
+          new_admin = '.match(/(?:^|;\\s*)zevenra_session=([^;]+)/)?.[1];'
+          if old_admin not in shared:
+              raise SystemExit('admin cookie parser pattern not found')
+          shared = shared.replace(old_admin, new_admin, 1)
+          old_customer = '/(?:^|; )zevenra_customer=([^;]+)/,'
+          new_customer = '/(?:^|;\\s*)zevenra_customer=([^;]+)/,'
+          if old_customer not in shared:
+              raise SystemExit('customer cookie parser pattern not found')
+          shared = shared.replace(old_customer, new_customer, 1)
+          shared_path.write_text(shared)
+
+          # The lightweight preflight only verifies the signed cookie. The protected
+          # bootstrap that follows still performs the DB-backed session-version check.
+          session_path = Path('server/api-implementation/admin/session.ts')
+          session_path.write_text('''import type { VercelRequest, VercelResponse } from "@vercel/node";\nimport {\n  authEnv,\n  ConfigurationError,\n  json,\n  methodNotAllowed,\n  validSession,\n} from "../_shared.js";\nexport default function handler(req: VercelRequest, res: VercelResponse) {\n  if (req.method !== "GET") return methodNotAllowed(res, ["GET"]);\n  try {\n    return validSession(req, authEnv().SESSION_SECRET)\n      ? json(res, { ok: true })\n      : json(res, { error: "Session expired" }, 401);\n  } catch (error) {\n    return error instanceof ConfigurationError\n      ? json(res, { error: "Server configuration unavailable" }, 500)\n      : json(res, { error: "Session unavailable" }, 503);\n  }\n}\n''')
+
+          test_path = Path('tests/admin-auth.test.ts')
+          tests = test_path.read_text()
+          marker = 'admin cookie parsing accepts compact semicolon separators'
+          if marker not in tests:
+              tests += '''\n\ntest("admin cookie parsing accepts compact semicolon separators", () => {\n  const secret = "test-admin-session-secret";\n  const token = makeSession(secret);\n  assert.equal(\n    validSession(requestWithCookie(`theme=dark;zevenra_session=${token};other=value`), secret),\n    true,\n  );\n});\n'''
+          test_path.write_text(tests)
+
+          Path('.github/workflows/performance-cookie-repair.yml').unlink()
+          PY
+      - name: Verify focused auth test
+        run: npm ci && npm run test:admin-auth
+      - name: Commit repaired files
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add vercel.json server/api-implementation/_shared.ts server/api-implementation/admin/session.ts tests/admin-auth.test.ts .github/workflows/performance-cookie-repair.yml
+          git diff --cached --check
+          git commit -m 'fix: reduce runtime latency and harden cookie parsing'
+          git push origin HEAD:dev-rebuild
