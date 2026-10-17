@@ -43,7 +43,7 @@ test("correct normalized ID and phone return only the safe customer order", asyn
     { res, state } = response();
   await handler(request({ orderId: stored.order_id, phone: "+94 77-000-0000" }, { origin }, "198.51.100.2"), res);
   assert.equal(state.status, 200);
-  assert.deepEqual(Object.keys(state.body as object).sort(), ["kind","address1","address2","city","courierSentDate","createdAt","customerName","deliveryFee","fulfillmentMethod","deliveryMethodName","deliveryAreaGroupName","pickupBranchName","pickupBranchAddress","pickupInstructions","discountAmount","discountCode","district","fulfilmentCourierName","items","orderId","orderNumber","orderStatus","paymentMethod","paymentStatus","postalCode","subtotal","total","trackingNumber","trackingUrl"].sort());
+  assert.deepEqual(Object.keys(state.body as object).sort(), ["kind","address1","address2","city","courierSentDate","createdAt","customerName","deliveryFee","fulfillmentMethod","deliveryMethodName","deliveryAreaGroupName","pickupBranchName","pickupBranchAddress","pickupInstructions","discountAmount","discountCode","district","fulfilmentCourierName","items","orderId","orderNumber","orderStatus","paymentMethod","paymentStatus","preorderDelivery","amountPaid","amountToCollect","postalCode","subtotal","total","trackingNumber","trackingUrl"].sort());
   assert.equal((state.body as {kind:string}).kind,"order");
   const result = state.body as { items: Array<Record<string, unknown>> };
   assert.deepEqual(Object.keys(result.items[0]).sort(), ["color","imageUrl","isPreorder","name","productSlug","quantity","size","unitPrice"].sort());
@@ -236,6 +236,9 @@ test("invoice payment status reflects confirmed order payment state", () => {
   assert.equal(invoicePaymentStatus({ paymentMethod: "bank", paymentStatus: "pending_verification" }), "Pending verification");
   assert.equal(invoicePaymentStatus({ paymentMethod: "bank", paymentStatus: "verified" }), "Paid");
   assert.equal(invoicePaymentStatus({ paymentMethod: "bank", paymentStatus: "paid" }), "Paid");
+  assert.equal(invoicePaymentStatus({ paymentMethod: "bank", paymentStatus: "paid", preorderDelivery:true, amountToCollect:425 }), "Product paid · delivery fee due");
+  assert.equal(invoicePaymentStatus({ paymentMethod: "bank", paymentStatus: "paid", preorderDelivery:true, amountToCollect:0 }), "Paid");
+  assert.equal(invoicePaymentStatus({ paymentMethod: "bank", paymentStatus: "refund pending", preorderDelivery:true, amountToCollect:0 }), "Refund pending");
 });
 
 test("one invoice helper supports tracked and account order snapshots",()=>{const tracked={kind:"order" as const,...({orderId:"ZEV-1",createdAt:"2026-01-01",customerName:"A",address1:"",address2:"",city:"",district:"",postalCode:"",orderStatus:"confirmed",paymentMethod:"bank",paymentStatus:"pending",deliveryZoneName:"",fulfilmentCourierName:"",trackingNumber:"",trackingUrl:"",courierSentDate:"",subtotal:1000,discountCode:"",discountAmount:0,deliveryFee:0,total:1000,items:[{name:"Top",color:"Black",size:"M",quantity:1,unitPrice:1000,isPreorder:false}]})};assert.equal(normalizeInvoiceOrder(tracked).items[0].unitPrice,1000);});
@@ -259,7 +262,30 @@ test("guest tracking query returns public order and fulfillment fields", async (
   const source = await readFile(new URL("../server/api-implementation/_data/orders-legacy.ts", import.meta.url), "utf8");
   const tracking = await readFile(new URL("../src/pages/TrackOrderPage.tsx", import.meta.url), "utf8");
   assert.match(source, /SELECT o\.order_id,o\.order_number,o\.created_at/);
+  assert.match(source, /o\.source_preorder_request_id,o\.amount_paid,o\.amount_to_collect/);
   assert.match(source, /o\.fulfillment_method,o\.delivery_method_name,o\.delivery_area_group_name,o\.pickup_branch_name/);
   assert.match(tracking, /removeRecentGuestOrder\(result\.orderId\)/);
   assert.match(tracking, /Pay at pickup/);
+  assert.match(tracking, /Amount to collect/);
+});
+
+test("converted preorder tracking exposes balances without leaking the technical preorder id",async()=>{
+  const converted={...stored,source_preorder_request_id:"PRE-TECHNICAL-SECRET",amount_paid:1700,amount_to_collect:425,subtotal:1700,delivery_fee:425,total:2125,payment_method:"bank",payment_status:"paid"};
+  const handler=createOrderTrackHandler(async()=>converted),result=response();
+  await handler(request({orderId:stored.order_id,phone:"0770000000"},{origin},"198.51.104.9"),result.res);
+  const body=result.state.body as Record<string,unknown>;
+  assert.equal(body.preorderDelivery,true);
+  assert.equal(body.amountPaid,1700);
+  assert.equal(body.amountToCollect,425);
+  assert.equal("sourcePreorderRequestId" in body,false);
+  assert.equal("source_preorder_request_id" in body,false);
+  assert.equal(JSON.stringify(body).includes("PRE-TECHNICAL-SECRET"),false);
+});
+
+test("account and invoice surfaces show the converted preorder delivery balance",async()=>{
+  const [account,invoice]=await Promise.all([readFile(new URL("../src/pages/CustomerOrdersPage.tsx",import.meta.url),"utf8"),readFile(new URL("../src/utils/invoicePdf.ts",import.meta.url),"utf8")]);
+  assert.match(account,/Amount to collect/);
+  assert.match(account,/Product prepaid/);
+  assert.match(invoice,/Amount to collect/);
+  assert.match(invoice,/Product prepaid · courier fee on delivery/);
 });

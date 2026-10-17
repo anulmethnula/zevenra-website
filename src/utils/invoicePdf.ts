@@ -1,7 +1,7 @@
 import type { CustomerOrder, GuestTrackedOrder, Order } from "../types";
 import { siteConfig } from "../config/site";
 
-export type InvoiceOrder={orderId:string;orderNumber?:number;createdAt:string;customerName:string;phone?:string;email?:string;address1?:string;address2?:string;city?:string;district?:string;postalCode?:string;deliveryMethodName?:string;fulfillmentMethod?:string;pickupBranchName?:string;pickupBranchAddress?:string;fulfilmentCourierName?:string;courierName?:string;paymentMethod:string;paymentStatus?:string;subtotal:number;discountAmount?:number;deliveryFee:number;total:number;items:Array<{name:string;color?:string;size?:string;quantity:number;unitPrice:number}>};
+export type InvoiceOrder={orderId:string;orderNumber?:number;createdAt:string;customerName:string;phone?:string;email?:string;address1?:string;address2?:string;city?:string;district?:string;postalCode?:string;deliveryMethodName?:string;fulfillmentMethod?:string;pickupBranchName?:string;pickupBranchAddress?:string;fulfilmentCourierName?:string;courierName?:string;paymentMethod:string;paymentStatus?:string;preorderDelivery?:boolean;amountPaid?:number;amountToCollect?:number;subtotal:number;discountAmount?:number;deliveryFee:number;total:number;items:Array<{name:string;color?:string;size?:string;quantity:number;unitPrice:number}>};
 export type InvoiceOrderSource=Order|GuestTrackedOrder|CustomerOrder|InvoiceOrder;
 
 const lkr = (value: number) =>
@@ -9,11 +9,20 @@ const lkr = (value: number) =>
 
 const clean = (value: unknown) => String(value ?? "").trim();
 
-export function normalizeInvoiceOrder(order:InvoiceOrderSource):InvoiceOrder{return{orderId:order.orderId,orderNumber:"orderNumber" in order?order.orderNumber:undefined,createdAt:order.createdAt,customerName:order.customerName||"",phone:"phone" in order?order.phone:"",email:"email" in order?order.email:"",address1:order.address1,address2:order.address2,city:order.city,district:order.district,postalCode:order.postalCode,deliveryMethodName:"deliveryMethodName" in order?order.deliveryMethodName:"",fulfillmentMethod:"fulfillmentMethod" in order?order.fulfillmentMethod:"",pickupBranchName:"pickupBranchName" in order?order.pickupBranchName:"",pickupBranchAddress:"pickupBranchAddress" in order?order.pickupBranchAddress:"",fulfilmentCourierName:order.fulfilmentCourierName,courierName:"courierName" in order?order.courierName:"",paymentMethod:order.paymentMethod,paymentStatus:order.paymentStatus,subtotal:order.subtotal,discountAmount:order.discountAmount,deliveryFee:order.deliveryFee,total:order.total,items:order.items.map(item=>({name:item.name,color:item.color,size:item.size,quantity:item.quantity,unitPrice:item.unitPrice}))};}
+export function normalizeInvoiceOrder(order:InvoiceOrderSource):InvoiceOrder{
+  const preorderDelivery="sourcePreorderRequestId" in order?Boolean(order.sourcePreorderRequestId):"preorderDelivery" in order?Boolean(order.preorderDelivery):false,
+    amountPaid="amountPaid" in order?Number(order.amountPaid||0):undefined,
+    amountToCollect="amountToCollect" in order?Number(order.amountToCollect||0):undefined;
+  return{orderId:order.orderId,orderNumber:"orderNumber" in order?order.orderNumber:undefined,createdAt:order.createdAt,customerName:order.customerName||"",phone:"phone" in order?order.phone:"",email:"email" in order?order.email:"",address1:order.address1,address2:order.address2,city:order.city,district:order.district,postalCode:order.postalCode,deliveryMethodName:"deliveryMethodName" in order?order.deliveryMethodName:"",fulfillmentMethod:"fulfillmentMethod" in order?order.fulfillmentMethod:"",pickupBranchName:"pickupBranchName" in order?order.pickupBranchName:"",pickupBranchAddress:"pickupBranchAddress" in order?order.pickupBranchAddress:"",fulfilmentCourierName:order.fulfilmentCourierName,courierName:"courierName" in order?order.courierName:"",paymentMethod:order.paymentMethod,paymentStatus:order.paymentStatus,preorderDelivery,amountPaid,amountToCollect,subtotal:order.subtotal,discountAmount:order.discountAmount,deliveryFee:order.deliveryFee,total:order.total,items:order.items.map(item=>({name:item.name,color:item.color,size:item.size,quantity:item.quantity,unitPrice:item.unitPrice}))};
+}
 
-export function invoicePaymentStatus(order: Pick<InvoiceOrder, "paymentMethod" | "paymentStatus" | "fulfillmentMethod">) {
+export function invoicePaymentStatus(order: Pick<InvoiceOrder, "paymentMethod" | "paymentStatus" | "fulfillmentMethod" | "preorderDelivery" | "amountToCollect">) {
+  const status=clean(order.paymentStatus).toLowerCase();
+  if(status==="refund pending")return "Refund pending";
+  if(status==="refunded")return "Refunded";
+  if(order.preorderDelivery)return Number(order.amountToCollect||0)>0?"Product paid · delivery fee due":"Paid";
   if (order.paymentMethod === "cod") return order.fulfillmentMethod === "pickup" ? "Pay at pickup" : "Pay on delivery";
-  return ["paid", "verified"].includes(clean(order.paymentStatus).toLowerCase()) ? "Paid" : "Pending verification";
+  return ["paid", "verified"].includes(status) ? "Paid" : "Pending verification";
 }
 
 export async function createInvoicePdf(input: InvoiceOrderSource,storeContact=siteConfig.whatsapp) {
@@ -155,10 +164,15 @@ export async function createInvoicePdf(input: InvoiceOrderSource,storeContact=si
     y = 20;
   }
   section("PAYMENT", y);
-  y = details([
-    ["Method", order.paymentMethod === "cod" ? "Cash on delivery" : "Bank transfer"],
+  const paymentRows:Array<[string,string]>=[
+    ["Method", order.preorderDelivery ? "Product prepaid · courier fee on delivery" : order.paymentMethod === "cod" ? "Cash on delivery" : "Bank transfer"],
     ["Status", paymentStatus],
-  ], y + 8);
+  ];
+  if(order.preorderDelivery){
+    paymentRows.push(["Amount already paid",lkr(Number(order.amountPaid??order.subtotal))]);
+    paymentRows.push(["Amount to collect",lkr(Number(order.amountToCollect||0))]);
+  }
+  y = details(paymentRows, y + 8);
   if (pendingBankPayment) {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.5);

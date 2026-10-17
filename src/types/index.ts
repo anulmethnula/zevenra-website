@@ -205,6 +205,9 @@ export type GuestTrackedOrder = {
   orderStatus: OrderStatus;
   paymentMethod: string;
   paymentStatus: string;
+  preorderDelivery?: boolean;
+  amountPaid?: number;
+  amountToCollect?: number;
   fulfillmentMethod?: "flat" | "area_group" | "pickup";
   deliveryMethodName?: string;
   deliveryAreaGroupName?: string;

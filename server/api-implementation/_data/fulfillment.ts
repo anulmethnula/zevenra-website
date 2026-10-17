@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { query, withTransaction, type DatabaseClient } from "../_db.js";
 import { normalizeLocation } from "../../../shared/delivery-match.js";
-import { resolveAreaGroup, type AreaGroup, type AreaLocation, type DistrictDefault } from "../../../shared/fulfillment.js";
+import { resolveAreaGroup, selectImplicitFulfillmentMethod, type AreaGroup, type AreaLocation, type DistrictDefault } from "../../../shared/fulfillment.js";
 
 const text=(v:unknown)=>String(v??"");
 const money=(v:unknown)=>v==null?null:Number(v);
@@ -68,7 +68,7 @@ export async function saveFulfillmentConfig(input:Record<string,unknown>){
 }
 
 export async function resolveFulfillment(client:DatabaseClient,input:{fulfillmentMethod?:string;district?:string;city?:string;postalCode?:string;pickupLocationId?:string}){
-  const x=await load(client), active=x.methods.filter(m=>m.active), requested=input.fulfillmentMethod||(active.length===1?active[0].type:(input.district?"area_group":"")), selected=x.methods.find(m=>m.type===requested&&m.active);
+  const x=await load(client), requested=selectImplicitFulfillmentMethod(x.methods,input), selected=x.methods.find(m=>m.type===requested&&m.active);
   if(!selected)throw new Error("FULFILLMENT_METHOD_UNAVAILABLE");
   if(selected.type==="pickup"){const branch=x.pickupLocations.find(p=>p.id===input.pickupLocationId&&p.active);if(!branch)throw new Error("PICKUP_LOCATION_UNAVAILABLE");return {method:"pickup",methodName:selected.displayName,fee:0,ratePlan:"",areaGroupId:"",areaGroupName:"",pickup:branch,minimumDeliveryDays:null,maximumDeliveryDays:null};}
   if(selected.type==="flat"){if(selected.fee==null)throw new Error("FULFILLMENT_METHOD_UNAVAILABLE");return {method:"flat",methodName:selected.displayName,fee:selected.fee,ratePlan:"flat",areaGroupId:"",areaGroupName:"",pickup:null,minimumDeliveryDays:selected.minimumDeliveryDays,maximumDeliveryDays:selected.maximumDeliveryDays};}

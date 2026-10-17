@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { normalizeLocation } from "../shared/delivery-match.ts";
-import { resolveAreaGroup, type AreaGroup, type AreaLocation } from "../shared/fulfillment.ts";
+import { resolveAreaGroup, selectImplicitFulfillmentMethod, type AreaGroup, type AreaLocation } from "../shared/fulfillment.ts";
 
 const groups:AreaGroup[]=[
  {id:"colombo-city",name:"Colombo City 01–15",fee:1,active:true,fallback:false,sortOrder:1},
@@ -24,3 +24,16 @@ test("Colombo postcode endpoints and aliases resolve",()=>{assert.equal(match("C
 test("explicit, Western defaults, major city, and final fallback resolve deterministically",()=>{assert.equal(match("Colombo","Dehiwala"),"colombo-suburbs");assert.equal(match("Gampaha","Tiny Village"),"western-other");assert.equal(match("Kalutara","Tiny Village"),"western-other");assert.equal(match("Kandy","Kandy"),"major-outstation");assert.equal(match("Badulla","Tiny Village"),"other-outstation");});
 test("same town names remain district scoped",()=>{assert.equal(match("Colombo","Springfield"),"colombo-suburbs");assert.equal(match("Galle","Springfield"),"major-outstation");});
 test("Unicode-safe normalization preserves Sinhala and Tamil combining marks",()=>{assert.equal(normalizeLocation("කොළඹ"),"කොළඹ");assert.equal(normalizeLocation("கொழும்பு"),"கொழும்பு");});
+
+
+test("manual orders choose the only active delivery method instead of inactive area groups",()=>{
+  const methods=[{type:"flat",active:true},{type:"area_group",active:false},{type:"pickup",active:true}];
+  assert.equal(selectImplicitFulfillmentMethod(methods,{district:"Colombo",city:"Colombo",postalCode:"00100"}),"flat");
+});
+
+test("area group is preferred when it is active and the delivery address is complete",()=>{
+  const methods=[{type:"flat",active:true},{type:"area_group",active:true},{type:"pickup",active:true}];
+  assert.equal(selectImplicitFulfillmentMethod(methods,{district:"Colombo",city:"Colombo",postalCode:"00100"}),"area_group");
+  assert.equal(selectImplicitFulfillmentMethod(methods,{district:"Colombo",city:"Colombo",postalCode:""}),"flat");
+  assert.equal(selectImplicitFulfillmentMethod(methods,{fulfillmentMethod:"pickup",district:"Colombo",city:"Colombo",postalCode:"00100"}),"pickup");
+});

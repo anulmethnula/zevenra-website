@@ -3,6 +3,16 @@ import { normalizeLocation, normalizePostalCode } from "./delivery-match.js";
 export type AreaGroup = { id:string; name:string; fee:number|null; active:boolean; fallback:boolean; sortOrder:number };
 export type AreaLocation = { id:string; groupId:string; district:string; town:string; postcode?:string; aliases:string[]; active:boolean };
 export type DistrictDefault = { district:string; groupId:string };
+export type FulfillmentMethodChoice = { type:string; active:boolean };
+
+export function selectImplicitFulfillmentMethod(methods:FulfillmentMethodChoice[], input:{fulfillmentMethod?:string;district?:string;city?:string;postalCode?:string}) {
+  const explicit=String(input.fulfillmentMethod||"").trim();
+  if(explicit)return explicit;
+  const active=methods.filter(item=>item.active),area=active.find(item=>item.type==="area_group"),flat=active.find(item=>item.type==="flat"),completeAddress=Boolean(String(input.district||"").trim()&&String(input.city||"").trim()&&/^\d{5}$/.test(String(input.postalCode||"").trim()));
+  if(area&&completeAddress)return "area_group";
+  if(flat)return "flat";
+  return active.length===1?active[0].type:"";
+}
 
 export function resolveAreaGroup(groups:AreaGroup[], locations:AreaLocation[], defaults:DistrictDefault[], address:{district:string;town:string;postcode?:string}) {
   const district=normalizeLocation(address.district), town=normalizeLocation(address.town), postcode=normalizePostalCode(address.postcode);

@@ -223,11 +223,15 @@ function OrdersView({
             <span>
               <small>Payment</small>
               <b>
-                {order.paymentMethod === "cod"
-                  ? (order.fulfillmentMethod === "pickup" ? "Pay at pickup" : "Cash on delivery")
-                  : "Bank transfer"}
+                {order.sourcePreorderRequestId
+                  ? "Product prepaid"
+                  : order.paymentMethod === "cod"
+                    ? (order.fulfillmentMethod === "pickup" ? "Pay at pickup" : "Cash on delivery")
+                    : "Bank transfer"}
               </b>
-              {order.paymentStatus && <small>{order.paymentStatus}</small>}
+              {order.sourcePreorderRequestId && !["refund pending","refunded"].includes(String(order.paymentStatus||"").toLowerCase())
+                ? <small>{Number(order.amountToCollect||0)>0 ? `${money(Number(order.amountToCollect))} delivery due` : "No balance due"}</small>
+                : order.paymentStatus && <small>{order.paymentStatus}</small>}
             </span>
             <span
               className={
@@ -324,37 +328,23 @@ function OrdersView({
                 )}
               </section>
               <dl>
-                <div>
-                  <dt>Subtotal</dt>
-                  <dd>{money(order.subtotal)}</dd>
-                </div>
-                {Number(order.discountAmount || 0)>0&&<div><dt>Discount{order.discountCode?` (${order.discountCode})`:""}</dt><dd>-{money(Number(order.discountAmount))}</dd></div>}
-                <div>
-                  <dt>
-                    {order.deliveryMethodName || "Delivery"}
-                    {order.deliveryAreaGroupName ? ` · ${order.deliveryAreaGroupName}` : order.pickupBranchName ? ` · ${order.pickupBranchName}` : ""}
-                  </dt>
-                  <dd>
-                    {order.deliveryFee
-                      ? money(order.deliveryFee)
-                      : "Complimentary"}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Total</dt>
-                  <dd>{money(order.total)}</dd>
-                </div>
-                <div>
-                  <dt>Order status</dt>
-                  <dd>{orderStatusLabel(order.orderStatus)}</dd>
-                </div>
-                <div>
-                  <dt>Payment status</dt>
-                  <dd>{order.paymentStatus || "—"}</dd>
-                </div>
+                {order.sourcePreorderRequestId ? <>
+                  <div><dt>Product total</dt><dd>{money(order.subtotal)}</dd></div>
+                  <div><dt>Amount already paid</dt><dd>{money(Number(order.amountPaid??order.subtotal))}</dd></div>
+                  <div><dt>{order.deliveryMethodName || "Delivery fee"}</dt><dd>{order.deliveryFee ? money(order.deliveryFee) : "Complimentary"}</dd></div>
+                  <div><dt>Amount to collect</dt><dd>{money(Number(order.amountToCollect||0))}</dd></div>
+                  <div><dt>Order total value</dt><dd>{money(order.total)}</dd></div>
+                </> : <>
+                  <div><dt>Subtotal</dt><dd>{money(order.subtotal)}</dd></div>
+                  {Number(order.discountAmount || 0)>0&&<div><dt>Discount{order.discountCode?` (${order.discountCode})`:""}</dt><dd>-{money(Number(order.discountAmount))}</dd></div>}
+                  <div><dt>{order.deliveryMethodName || "Delivery"}{order.deliveryAreaGroupName ? ` · ${order.deliveryAreaGroupName}` : order.pickupBranchName ? ` · ${order.pickupBranchName}` : ""}</dt><dd>{order.deliveryFee ? money(order.deliveryFee) : "Complimentary"}</dd></div>
+                  <div><dt>Total</dt><dd>{money(order.total)}</dd></div>
+                </>}
+                <div><dt>Order status</dt><dd>{orderStatusLabel(order.orderStatus)}</dd></div>
+                <div><dt>Payment status</dt><dd>{order.paymentStatus || "—"}</dd></div>
               </dl>
               <DocumentButton label="DOWNLOAD INVOICE" run={()=>downloadInvoicePdf(order)}/>
-              {order.paymentMethod==="cod"&&["pending","confirmed"].includes(order.orderStatus)?<div className="mt-4 border border-red-900/15 bg-red-950/[.03] p-4"><p className="text-xs font-semibold uppercase tracking-wider text-red-900">Cancel order</p>{order.sourcePreorderRequestId&&<p className="mt-2 text-xs leading-5 text-red-900/75">This delivery order came from a paid pre-order. Cancelling releases the reserved piece to stock and moves the prepaid amount to refund pending.</p>}<select className="field mt-3" value={cancelReason} onChange={event=>setCancelReason(event.target.value)}><option>Changed my mind</option><option>Ordered by mistake</option><option>Need to change the order</option><option>Other</option></select><button type="button" className="btn mt-3 text-red-900" disabled={cancelling===order.orderId} onClick={()=>void cancel(order)}>{cancelling===order.orderId?"CANCELLING…":"CANCEL ORDER"}</button>{cancelError?<p role="alert" className="mt-2 text-xs text-red-900">{cancelError}</p>:null}</div>:order.paymentMethod==="bank"&&!(["delivered","cancelled"].includes(order.orderStatus))?<p className="mt-4 text-xs text-ink/55">Contact ZEVENRA for cancellation assistance.</p>:order.orderStatus==="dispatched"?<p className="mt-4 text-xs text-ink/55">This order has already been dispatched. Contact ZEVENRA if you need help.</p>:null}
+              {order.paymentMethod==="cod"&&["pending","confirmed"].includes(order.orderStatus)?<div className="mt-4 border border-red-900/15 bg-red-950/[.03] p-4"><p className="text-xs font-semibold uppercase tracking-wider text-red-900">Cancel order</p>{order.sourcePreorderRequestId&&<p className="mt-2 text-xs leading-5 text-red-900/75">This delivery order came from a paid pre-order. Cancelling releases the reserved piece to stock and moves the prepaid amount to refund pending.</p>}<select className="field mt-3" value={cancelReason} onChange={event=>setCancelReason(event.target.value)}><option>Changed my mind</option><option>Ordered by mistake</option><option>Need to change the order</option><option>Other</option></select><button type="button" className="btn mt-3 text-red-900" disabled={cancelling===order.orderId} onClick={()=>void cancel(order)}>{cancelling===order.orderId?"CANCELLING…":"CANCEL ORDER"}</button>{cancelError?<p role="alert" className="mt-2 text-xs text-red-900">{cancelError}</p>:null}</div>:order.paymentMethod==="bank"&&!(["delivered","cancelled"].includes(order.orderStatus))?<p className="mt-4 text-xs text-ink/55">{order.sourcePreorderRequestId?"This order came from a paid pre-order. Contact ZEVENRA for cancellation and refund assistance.":"Contact ZEVENRA for cancellation assistance."}</p>:order.orderStatus==="dispatched"?<p className="mt-4 text-xs text-ink/55">This order has already been dispatched. Contact ZEVENRA if you need help.</p>:null}
               {order.orderStatus==="cancelled"&&order.cancellationReason?<p className="mt-4 text-xs text-red-900">Cancelled: {order.cancellationReason}</p>:null}
             </div>
           )}

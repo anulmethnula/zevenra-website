@@ -218,7 +218,7 @@ export async function findGuestOrder(orderId: string, phone: string) {
   const row = (
     await query<Record<string, unknown>>(
       `SELECT o.order_id,o.order_number,o.created_at,o.customer_name,o.address1,o.address2,o.city,o.district,o.postal_code,o.order_status,o.discount_code,o.discount_amount,
-        o.payment_method,o.payment_status,o.fulfillment_method,o.delivery_method_name,o.delivery_area_group_name,o.pickup_branch_name,o.pickup_branch_address,o.pickup_instructions,o.delivery_zone_name,o.subtotal,o.delivery_fee,o.total,
+        o.payment_method,o.payment_status,o.source_preorder_request_id,o.amount_paid,o.amount_to_collect,o.fulfillment_method,o.delivery_method_name,o.delivery_area_group_name,o.pickup_branch_name,o.pickup_branch_address,o.pickup_instructions,o.delivery_zone_name,o.subtotal,o.delivery_fee,o.total,
         o.fulfilment_courier_name,o.tracking_number,o.tracking_url,o.courier_sent_date,
         COALESCE((SELECT jsonb_agg(jsonb_build_object(
           'name',oi.product_name,'color',oi.color,'size',oi.size,'quantity',oi.quantity,
@@ -358,9 +358,11 @@ export async function updateOrder(input: Record<string, unknown>) {
       } as const;
     const automaticCodPaid = !preorderOrder && current.payment_method === "cod" && nextStatus === "delivered",
       cancellingPaidOrder = nextStatus === "cancelled" && currentStatus !== "cancelled" && ["paid", "verified"].includes(nextPayment.toLowerCase()),
-      paymentStatus = automaticCodPaid ? "paid" : cancellingPaidOrder ? "refund pending" : nextPayment;
+      paymentStatus = automaticCodPaid ? "paid" : cancellingPaidOrder ? "refund pending" : nextPayment,
+      amountToCollect = preorderOrder ? (["delivered","cancelled"].includes(nextStatus) ? 0 : Number(current.delivery_fee)||0) : Number(current.amount_to_collect)||0;
     const updates = ["order_status=$2", "stock_state=$3", "payment_status=$4", "updated_at=now()"],
       values: unknown[] = [orderId, nextStatus, stockState, paymentStatus];
+    if(preorderOrder&&Number(current.amount_to_collect||0)!==amountToCollect){values.push(amountToCollect);updates.push(`amount_to_collect=$${values.length}`);}
     if(nextStatus==="cancelled"&&currentStatus!=="cancelled"){values.push(cancellationReason);updates.push(`cancellation_reason=$${values.length}`);values.push(cancelledBy);updates.push(`cancelled_by=$${values.length}`);updates.push("cancelled_at=now()");values.push(currentStatus);updates.push(`cancelled_from_status=$${values.length}`);}
     if(restoring)updates.push("cancelled_at=NULL,cancelled_by=NULL,cancellation_reason=NULL");
     for (const key of fields)
@@ -385,7 +387,7 @@ export async function updateOrder(input: Record<string, unknown>) {
     );
     await client.query(
       "INSERT INTO audit_logs(actor,action,entity_type,entity_id,details) VALUES('owner','order_update','order',$1,$2::jsonb)",
-      [orderId, JSON.stringify({ before: { orderStatus: currentStatus, paymentStatus: current.payment_status, stockState: current.stock_state }, after: { orderStatus: nextStatus, paymentStatus, stockState }, restoredUnits })],
+      [orderId, JSON.stringify({ before: { orderStatus: currentStatus, paymentStatus: current.payment_status, stockState: current.stock_state }, after: { orderStatus: nextStatus, paymentStatus, stockState, amountToCollect }, restoredUnits })],
     );
     if (automaticCodPaid && current.payment_status !== "paid")
       await client.query("INSERT INTO audit_logs(actor,action,entity_type,entity_id,details) VALUES('system','cod_payment_paid','order',$1,$2::jsonb)", [orderId, JSON.stringify({ trigger: "delivered" })]);
