@@ -196,3 +196,12 @@ test("database migration guards future dispatch and cancellation integrity",asyn
   assert.match(sql,/Cancellation metadata is incomplete/);
   assert.match(sql,/enforce_preorder_cancellation_integrity/);
 });
+
+
+test("admin section loads cancel stale bootstrap requests",async()=>{
+  const store=await readFile(new URL("../src/features/store/StoreContext.tsx",import.meta.url),"utf8");
+  assert.match(store,/adminLoadController = useRef<AbortController \| null>\(null\)/);
+  assert.match(store,/previousAdminLoad\?\.abort\(\)/);
+  assert.match(store,/adminApi\.get<AdminBootstrap>\("bootstrap", \{ section \}, controller\.signal\)/);
+  assert.match(store,/if \(controller\.signal\.aborted\) return/);
+});

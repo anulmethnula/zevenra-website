@@ -399,7 +399,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ? emptyAdmin
         : emptyAdmin,
     ),
-    timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+    timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({}),
+    adminLoadController = useRef<AbortController | null>(null);
   const applyPublic = useCallback(
     (payload: PublicPayload) => setData(current=>mergePublic(current,payload)),
     [],
@@ -423,7 +424,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const pending = timers.current;
     void loadPublic();
-    return () => Object.values(pending).forEach(clearTimeout);
+    return () => {
+      Object.values(pending).forEach(clearTimeout);
+      const activeAdminLoad = adminLoadController.current;
+      adminLoadController.current = null;
+      activeAdminLoad?.abort();
+    };
   }, [loadPublic]);
   const refreshEntity = useCallback(async (entity: Entity) => {
     if (entity === "products") {
@@ -485,10 +491,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
   const loadAdmin = useCallback(async (section = location.pathname) => {
     if (demo) return;
+    const previousAdminLoad = adminLoadController.current;
+    adminLoadController.current = null;
+    previousAdminLoad?.abort();
+    const controller = new AbortController();
+    adminLoadController.current = controller;
     setAdminLoading(true);
     setAdminError("");
     try {
-      const payload = await adminApi.get<AdminBootstrap>("bootstrap", { section });
+      const payload = await adminApi.get<AdminBootstrap>("bootstrap", { section }, controller.signal);
       const clean = cleanCatalogue({
         products: (payload.products || []).map(normalizeProduct),
         categories: (payload.categories || []).map(normalizeCategory),
@@ -514,9 +525,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       });
       setAdminReady(true);
     } catch (reason) {
+      if (controller.signal.aborted) return;
       setAdminError(message(reason));
     } finally {
-      setAdminLoading(false);
+      if (adminLoadController.current === controller) {
+        adminLoadController.current = null;
+        setAdminLoading(false);
+      }
     }
   }, []);
   const demoCommit = (next: StoreData) => {
