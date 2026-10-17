@@ -80,6 +80,16 @@ test("payment-first preorder uses snapshotted price and verified protected recei
   assert.doesNotMatch(conversion,/Number\(preorder\.confirmed_price\)/);
 });
 
+test("preorder delivery checkout never charges the paid product a second time",async()=>{
+  const [page,data]=await Promise.all([readFile(new URL("../src/pages/PreorderCompletePage.tsx",import.meta.url),"utf8"),readFile(new URL("../server/api-implementation/_data/preorders.ts",import.meta.url),"utf8")]);
+  assert.match(page,/Product payment received ✓/);
+  assert.match(page,/Amount to collect/);
+  assert.doesNotMatch(page,/setPayment\(|checked=\{payment===/);
+  const conversion=data.slice(data.indexOf("export async function convertPreorderToOrder"));
+  assert.match(conversion,/const paymentMethod = "bank" as const/);
+  assert.doesNotMatch(conversion,/assertPaymentMethodAvailable\(client,paymentMethod\)/);
+});
+
 test("new preorder submission requires a protected payment receipt",()=>{
   const base={customerName:"Test Customer",whatsapp:"0771234567",address1:"12 Main Street",city:"Colombo",district:"Colombo",postalCode:"00100",productId:"product",variantId:"variant",quantity:1};
   assert.equal(preorderSchema.safeParse(base).success,false);
@@ -111,10 +121,10 @@ test("preorder conversion requires a complete address and exact postal code", ()
 });
 
 test("preorder conversion requires explicit fulfillment and a branch for pickup",()=>{
-  assert.equal(preorderConversionSchema.safeParse({requestId:"PRE-1",paymentMethod:"cod"}).success,false);
-  assert.equal(preorderConversionSchema.safeParse({requestId:"PRE-1",paymentMethod:"cod",fulfillmentMethod:"flat"}).success,true);
-  assert.equal(preorderConversionSchema.safeParse({requestId:"PRE-1",paymentMethod:"bank",fulfillmentMethod:"pickup"}).success,false);
-  assert.equal(preorderConversionSchema.safeParse({requestId:"PRE-1",paymentMethod:"bank",fulfillmentMethod:"pickup",pickupLocationId:"branch"}).success,true);
+  assert.equal(preorderConversionSchema.safeParse({requestId:"PRE-1"}).success,false);
+  assert.equal(preorderConversionSchema.safeParse({requestId:"PRE-1",fulfillmentMethod:"flat"}).success,true);
+  assert.equal(preorderConversionSchema.safeParse({requestId:"PRE-1",fulfillmentMethod:"pickup"}).success,false);
+  assert.equal(preorderConversionSchema.safeParse({requestId:"PRE-1",fulfillmentMethod:"pickup",pickupLocationId:"branch"}).success,true);
 });
 
 test("confirmed preorder price must be a positive whole LKR amount", () => {
@@ -133,8 +143,9 @@ test("preorder conversion rejects arbitrary payment method values", () => {
   assert.throws(() => normalizePreorderPaymentMethod("crypto"));
 });
 
-test("customer preorder completion accepts COD and bank checkout",()=>{
+test("customer preorder completion does not require a second payment choice",()=>{
   const base={token:"x".repeat(32),customerName:"Test Customer",phone:"0771234567",fulfillmentMethod:"pickup",pickupLocationId:"branch"};
+  assert.equal(preorderClaimCheckoutSchema.safeParse(base).success,true);
   assert.equal(preorderClaimCheckoutSchema.safeParse({...base,paymentMethod:"cod"}).success,true);
   assert.equal(preorderClaimCheckoutSchema.safeParse({...base,paymentMethod:"bank"}).success,true);
 });
@@ -185,7 +196,8 @@ test("claim lookup and checkout enforce one-time notified reservations",async()=
   assert.match(source,/status='notified'.*released_at IS NULL.*converted_order_id IS NULL.*reservation_expires_at>now\(\)/s);
   assert.match(source,/status IN\('ready','notified'\)/);
   assert.match(source,/claim_token_hash=NULL,reservation_expires_at=NULL/);
-  assert.match(source,/Number\(preorder\.confirmed_price\)/);
+  assert.match(source,/Number\(preorder\.requested_price\)\*Number\(preorder\.quantity\)/);
+  assert.doesNotMatch(source,/Number\(preorder\.confirmed_price\)\*Number\(preorder\.quantity\)/);
   const conversion=source.slice(source.indexOf("export async function convertPreorderToOrder"));
   assert.doesNotMatch(conversion,/stock=stock-/);
 });

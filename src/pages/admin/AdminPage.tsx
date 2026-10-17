@@ -1718,7 +1718,6 @@ function Preorders() {
       });
       const order = await adminApi.post<Order>("convertPreorderToOrder", {
         requestId: item.requestId,
-        paymentMethod:"bank",
         fulfillmentMethod:selected.method,
         pickupLocationId:selected.method==="pickup"?selected.pickupLocationId:undefined,
       });
@@ -2133,7 +2132,7 @@ function downloadOrdersCsv(rows: Order[]) {
     "Checkout Courier",
     "Fulfilment Courier",
     "Tracking Number",
-    "COD Amount",
+    "Amount to Collect",
     "Total",
     "Order Status",
     "Payment Status",
@@ -2153,7 +2152,7 @@ function downloadOrdersCsv(rows: Order[]) {
       order.deliveryMethodName || "",
       order.fulfilmentCourierName || "",
       order.trackingNumber || "",
-      order.paymentMethod === "cod" ? Number(order.total) || 0 : 0,
+      order.sourcePreorderRequestId ? Number(order.amountToCollect ?? order.deliveryFee) || 0 : order.paymentMethod === "cod" ? Number(order.total) || 0 : 0,
       Number(order.total) || 0,
       order.orderStatus,
       order.paymentStatus,

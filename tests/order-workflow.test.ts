@@ -144,6 +144,8 @@ test("admin return and cancellation mutations keep filters and inventory in sync
   assert.match(backend,/cancellingPaidOrder/);
   assert.match(backend,/cancellingPaidOrder \? "refund pending"/);
   assert.match(backend,/stock=stock\+\$2/);
+  assert.match(ui,/"Amount to Collect"/);
+  assert.match(ui,/order\.sourcePreorderRequestId \? Number\(order\.amountToCollect \?\? order\.deliveryFee\) \|\| 0/);
 });
 
 test("delivery cleanup creates an empty actual-courier registry and drops the legacy model",async()=>{

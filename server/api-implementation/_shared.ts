@@ -488,7 +488,7 @@ export const preorderPaymentSchema = z.object({
 }).strict();
 export const preorderConversionSchema = z.object({
   requestId: z.string().trim().min(1).max(100),
-  paymentMethod: z.enum(["cod", "bank"]),
+  paymentMethod: z.enum(["cod", "bank"]).optional(),
   fulfillmentMethod: z.enum(["flat", "area_group", "pickup"]),
   pickupLocationId: z.string().trim().max(100).optional(),
 }).strict().superRefine((value,ctx)=>{
@@ -508,7 +508,7 @@ export const preorderClaimCheckoutSchema = z.object({
   city:z.string().trim().max(80).optional(),
   district:z.enum(sriLankaDistricts).or(z.literal("")).optional(),
   postalCode:optionalPostalSchema,
-  paymentMethod:z.enum(["cod","bank"]),
+  paymentMethod:z.enum(["cod","bank"]).optional(),
 }).strict().superRefine((value,ctx)=>{
   if(value.fulfillmentMethod==="pickup"&&!value.pickupLocationId)ctx.addIssue({code:z.ZodIssueCode.custom,path:["pickupLocationId"],message:"Choose a pickup branch."});
   if(value.fulfillmentMethod!=="pickup"&&(!value.address1||value.address1.length<5||!value.city||!value.district||!value.postalCode))ctx.addIssue({code:z.ZodIssueCode.custom,path:["address1"],message:"Enter a complete delivery address."});

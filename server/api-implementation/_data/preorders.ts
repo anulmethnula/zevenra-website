@@ -4,7 +4,6 @@ import { normalizeSriLankanPhoneForLookup } from "../_order-track-normalization.
 import { mapOrder, mapPreorder } from "./mappers.js";
 import {
   isPreorderTransitionAllowed,
-  normalizePreorderPaymentMethod,
   preorderDeliveryAddressReady,
   preorderActiveStatuses,
   resolvePreorderConfirmedPrice,
@@ -85,7 +84,7 @@ export async function getPreorderClaim(token:string){
   )).rows[0];
   if(!row)return null;
   const media=Array.isArray(row.media)?row.media as Array<Record<string,unknown>>:[];
-  return{requestId:String(row.request_id),preorderNumber:Number(row.preorder_number)||undefined,status:String(row.status),customerName:String(row.customer_name),phone:String(row.phone),whatsapp:String(row.whatsapp),email:String(row.email||""),address1:String(row.address1||""),address2:String(row.address2||""),city:String(row.city||""),district:String(row.district||""),postalCode:String(row.postal_code||""),productId:String(row.product_id),variantId:String(row.variant_id),productName:String(row.product_name),color:String(row.color),size:String(row.size),quantity:Number(row.quantity),confirmedPrice:Number(row.confirmed_price||row.requested_price),reservationExpiresAt:String(row.reservation_expires_at||""),imageUrl:String(media.find(item=>item.type==="image")?.url||""),paymentIssueReason:String(row.payment_issue_reason||"")};
+  return{requestId:String(row.request_id),preorderNumber:Number(row.preorder_number)||undefined,status:String(row.status),customerName:String(row.customer_name),phone:String(row.phone),whatsapp:String(row.whatsapp),email:String(row.email||""),address1:String(row.address1||""),address2:String(row.address2||""),city:String(row.city||""),district:String(row.district||""),postalCode:String(row.postal_code||""),productId:String(row.product_id),variantId:String(row.variant_id),productName:String(row.product_name),color:String(row.color),size:String(row.size),quantity:Number(row.quantity),confirmedPrice:Number(row.requested_price),reservationExpiresAt:String(row.reservation_expires_at||""),imageUrl:String(media.find(item=>item.type==="image")?.url||""),paymentIssueReason:String(row.payment_issue_reason||"")};
 }
 
 export async function findGuestPreorder(requestId:string,phone:string){
@@ -105,7 +104,7 @@ export async function quotePreorderClaim(input:Record<string,unknown>){
   return withTransaction(async(client)=>{
     const preorder=(await client.query<Record<string,unknown>>("SELECT * FROM preorders WHERE claim_token_hash=$1 AND status='notified' AND released_at IS NULL AND converted_order_id IS NULL AND reservation_expires_at>now()",[hashPreorderClaimToken(String(input.token||""))])).rows[0];
     if(!preorder)throw new Error("Pre-order claim unavailable");
-    const delivery=await deliverySnapshot(client,{fulfillmentMethod:String(input.fulfillmentMethod||"") as "flat"|"area_group"|"pickup",pickupLocationId:String(input.pickupLocationId||"")||undefined,city:String(input.city||""),district:String(input.district||""),postalCode:String(input.postalCode||"")},Number(preorder.confirmed_price)*Number(preorder.quantity),false);
+    const delivery=await deliverySnapshot(client,{fulfillmentMethod:String(input.fulfillmentMethod||"") as "flat"|"area_group"|"pickup",pickupLocationId:String(input.pickupLocationId||"")||undefined,city:String(input.city||""),district:String(input.district||""),postalCode:String(input.postalCode||"")},Number(preorder.requested_price)*Number(preorder.quantity),false);
     return{fee:delivery.fee,minimumDeliveryDays:delivery.minimumDeliveryDays,maximumDeliveryDays:delivery.maximumDeliveryDays,fulfillmentMethod:delivery.method,methodName:delivery.methodName,areaGroupName:delivery.areaGroupName,pickupLocationId:delivery.pickup?.id||""};
   });
 }
@@ -358,9 +357,7 @@ export async function convertPreorderToOrder(input: Record<string, unknown>) {
       throw new Error(
         "Complete the delivery address with a valid 5-digit postal code before conversion.",
       );
-
-    const paymentMethod = normalizePreorderPaymentMethod(input.paymentMethod);
-    await assertPaymentMethodAvailable(client,paymentMethod);
+    const paymentMethod = "bank" as const;
     const price = Number(preorder.requested_price),
       subtotal = price * Number(preorder.quantity),
       delivery = await deliverySnapshot(
