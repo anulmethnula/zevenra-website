@@ -1,0 +1,41 @@
+name: Fix remaining financial flow
+
+on:
+  push:
+    branches:
+      - dev-rebuild
+    paths:
+      - .github/workflows/fix-remaining-financial-flow.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dev-rebuild
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Apply repair
+        run: python .github/scripts/fix_remaining_financial_flow.py
+      - name: Install dependencies
+        run: npm ci
+      - name: Full QA
+        run: npm run qa
+      - name: Production dependency audit
+        run: npm audit --omit=dev --audit-level=high
+      - name: Commit fixes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add shared/fulfillment.ts server/api-implementation/_data/fulfillment.ts server/api-implementation/_data/orders-legacy.ts server/api-implementation/order-track.ts src/types/index.ts src/pages/TrackOrderPage.tsx src/pages/CustomerOrdersPage.tsx src/utils/invoicePdf.ts database/migrations/035_preorder_delivery_balance_integrity.sql tests/fulfillment.test.ts tests/order-track.test.ts tests/order-workflow.test.ts
+          git diff --cached --check
+          git commit -m 'fix: complete financial and fulfillment flow integrity'
+          git push origin HEAD:dev-rebuild
